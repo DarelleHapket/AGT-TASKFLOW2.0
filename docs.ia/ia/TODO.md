@@ -1,7 +1,7 @@
 # TODO.md — Poste A (Josué) | AGT TaskFlow
-**Périmètre** : Tâches · PERT · Gantt · Projets · Activités
-**Mis à jour** : Session A-01 — 16 juillet 2026
-**Référence CDC** : version 1.0 BROUILLON, 14 juillet 2026
+**Périmètre :** Tâches · PERT · Gantt · Projets · Activités
+**Mis à jour :** Session A-01 — 16 juillet 2026
+**Référence CDC :** version 1.0 BROUILLON, 14 juillet 2026
 
 > **Légende**
 > - `[ ]` À faire
@@ -9,241 +9,217 @@
 > - `[x]` Terminé
 > - **P1** Indispensable au lancement · **P2** Version 1.0 · **P3** Futur
 > - 🔗 Dépend du Poste B (Darelle)
+> - ⚠️ Fichier transversal — signaler au Poste B
 
 ---
 
-## Étape 0 — Audit du code réel sur la machine (priorité absolue)
+## Étape 0 — Audit du code réel ✅ Complété en session A-01
 
-> Le dump `taskflow_dump.db` analysé en session A-01 **peut être antérieur
-> aux dernières migrations**. Certains champs vus dans le frontend
-> (`priority`, `is_archived`, `start_date`, `end_date`, `due_date`)
-> sont absents du dump mais référencés dans l'UI.
-> Avant tout développement, valider l'état réel.
-
-- [ ] Lire `backend/database.py` en entier et noter chaque `ALTER TABLE` ou colonne ajoutée après le schéma initial
-- [ ] Lire `backend/routes/tasks.py` en entier et lister tous les champs lus/écrits
-- [ ] Lire `frontend/src/utils/pert.js` et confirmer que le calcul PERT est 100 % côté frontend
-- [ ] Lire `frontend/src/hooks/useData.js` et confirmer comment `pert` est calculé et distribué
-- [ ] Lire `frontend/src/components/tasks/TaskModal.jsx` et lister tous les champs du formulaire
-- [ ] Lire `frontend/src/api/client.js` et lister tous les endpoints appelés (vérifier absence endpoint PERT backend)
-- [ ] Exécuter `.schema tasks` sur la vraie DB Docker et coller le résultat → confirmer les champs présents
+- [x] Lire `backend/database.py` — migrations v2 confirmées : `priority`, `start_date`, `end_date`, `due_date`, `is_archived`, `archived_at`, `chef_id` dans `projects` tous présents
+- [x] Lire `backend/routes/tasks.py` — tous les champs lus/écrits correctement, guards manquants confirmés
+- [x] Lire `frontend/src/utils/pert.js` — calcul PERT 100 % frontend confirmé (robuste, détection de cycles DFS)
+- [x] Lire `frontend/src/hooks/useData.js` — `pert = computePERT(tasks)` côté client confirmé
+- [x] Lire `frontend/src/components/tasks/TasksView.jsx` — logique `isAdmin` inversée confirmée et corrigée
+- [x] Lire `backend/utils/auth.py` — `@require_auth` et `@require_admin` disponibles, `current_user` injecté
+- [ ] Lire `frontend/src/components/tasks/TaskModal.jsx` — **Bug B-01 ouvert** : sémantique `isAdmin` à vérifier
+- [ ] Lire `frontend/src/api/client.js` — vérifier absence endpoint PERT backend et liste complète des appels
 
 ---
 
-## Étape 1 — Stabilisation BDD : champs manquants dans `tasks` — P1
+## Étape 1 — Stabilisation BDD : champs manquants dans `tasks` ✅ Validé en session A-01
 
-> **CDC BF-07** : une tâche doit avoir `priorité`, `statut`, `durée`, `dépendances`.
-> Les dates sont optionnelles mais utilisées dans les filtres UI.
+> Tous les champs existent dans le code réel. Le dump était antérieur aux migrations v2.
 
 ### 1.1 Champ `priority` [P1]
-- [ ] Vérifier si `priority TEXT DEFAULT 'normal'` existe dans `tasks`
-- [ ] Sinon : ajouter `ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'normal'`
-- [ ] Mettre à jour `database.py` (schéma initial) pour inclure `priority`
-- [ ] Mettre à jour `routes/tasks.py` : lecture + écriture de `priority` dans GET / POST / PUT
-- [ ] Vérifier que `TaskModal.jsx` envoie le champ `priority` (valeurs : `low`, `normal`, `high`)
-- [ ] Vérifier que `FilterBar.jsx` filtre correctement sur `priority`
+- [x] Vérifié présent dans schéma initial `tasks` (valeur défaut `'normale'`)
+- [x] Lu et écrit dans GET / POST / PUT de `tasks.py`
+- [ ] Vérifier que `TaskModal.jsx` expose bien le champ `priority` en saisie
 
-### 1.2 Champ `is_archived` [P2]
-- [ ] Vérifier si `is_archived INTEGER DEFAULT 0` existe dans `tasks`
-- [ ] Sinon : ajouter via migration dans `database.py`
-- [ ] Mettre à jour `routes/tasks.py` : endpoints `PATCH /tasks/<id>/archive` et `PATCH /tasks/<id>/unarchive`
-- [ ] Vérifier que `App.jsx` filtre correctement sur `is_archived`
+### 1.2 Champ `is_archived` + `archived_at` [P2]
+- [x] Vérifié présent via migrations v2 Bloc 1 et 2
+- [x] Endpoints `PATCH /archive` et `PATCH /unarchive` existants et protégés (session A-01)
 
 ### 1.3 Champs de dates : `start_date`, `end_date`, `due_date` [P2]
-- [ ] Vérifier si ces trois colonnes existent dans `tasks`
-- [ ] Sinon : migration `ALTER TABLE tasks ADD COLUMN ...`
-- [ ] Mettre à jour `routes/tasks.py` pour les inclure dans GET / POST / PUT
-- [ ] Vérifier que `TaskModal.jsx` les expose en saisie optionnelle (CDC BF-07 : "Les dates sont optionnelles")
-- [ ] Vérifier que les filtres temporels de `App.jsx` / `FilterBar.jsx` fonctionnent correctement
+- [x] Vérifié présents via migrations v2 Bloc 1
+- [x] Lus et écrits dans GET / POST / PUT de `tasks.py`
+- [ ] Vérifier que `TaskModal.jsx` expose les dates en saisie optionnelle
 
 ---
 
-## Étape 2 — PERT côté backend — P1
+## Étape 2 — PERT côté backend [P1] ← Priorité session A-02
 
-> **CDC §4.2.2 — Flux de calcul PERT** :
-> *"Le backend recalcule automatiquement le graphe PERT (passe forward puis backward).
-> ES, EF, LS, LF et la marge sont mis à jour pour chaque tâche liée."*
->
-> **Situation actuelle** : le calcul est entièrement dans `utils/pert.js` (frontend).
-> Le CDC exige un moteur PERT côté serveur.
-> **Impact transversal** : à coordonner avec le Poste B (contrat API).
+> **CDC §4.2.2** : *"Le backend recalcule automatiquement le graphe PERT."*
+> Actuellement 100 % frontend. Écart architectural le plus structurant.
 
-### 2.1 Moteur PERT backend — `routes/tasks.py` ou `utils/pert.py` [P1]
-- [ ] Créer `backend/utils/pert.py` avec les fonctions :
-  - `compute_pert(tasks, dependencies)` → renvoie `{ES, EF, LS, LF, slack}` par tâche
-  - `forward_pass(tasks, deps)` → calcul des ES/EF
-  - `backward_pass(tasks, deps, max_ef)` → calcul des LS/LF
-- [ ] Appeler `compute_pert()` automatiquement après chaque `POST /tasks/`, `PUT /tasks/<id>`, `DELETE /tasks/<id>`, `POST/DELETE /tasks/<id>/dependencies`
-- [ ] Stocker les valeurs PERT calculées dans la réponse JSON de chaque tâche (champs `es`, `ef`, `ls`, `lf`, `slack`, `is_critical`)
-- [ ] **Option A** (recommandée) : calculer à la volée et inclure dans le GET `/api/tasks/` → pas de colonne supplémentaire
-- [ ] **Option B** : persister `es`, `ef`, `ls`, `lf`, `slack` dans la table `tasks` → migration nécessaire
+### 2.1 Moteur PERT backend — `backend/utils/pert.py` [P1]
+- [ ] Créer `backend/utils/pert.py` avec `compute_pert()`, `forward_pass()`, `backward_pass()`, détection de cycles
+- [ ] Appeler `compute_pert()` après chaque POST / PUT / DELETE sur `/tasks/`
+- [ ] Inclure les champs PERT dans la réponse JSON : `es`, `ef`, `ls`, `lf`, `slack`, `critical`
 
 ### 2.2 Contrat API — 🔗 coordination Poste B [P1]
-- [ ] Définir avec Darelle le format exact du champ PERT dans la réponse JSON
-  - Proposition : chaque tâche retourne `"pert": {"es": 0, "ef": 2, "ls": 1, "lf": 3, "slack": 1, "critical": false}`
-- [ ] Documenter dans `docs/ia/` le contrat API arrêté
+- [ ] Définir avec Darelle le format exact des champs PERT dans le JSON
+- [ ] Documenter dans `docs/ia/` le contrat arrêté
 
 ### 2.3 Frontend : brancher sur le PERT backend [P1]
-- [ ] Modifier `useData.js` : si le backend renvoie les champs PERT dans les tâches, ne plus appeler `computePERT()` côté frontend
-- [ ] Garder `utils/pert.js` comme fallback (vue DailyOrder, comparaisons jour par jour)
-- [ ] Mettre à jour `PERTView.jsx` pour utiliser les valeurs PERT du backend en priorité
-- [ ] Mettre à jour `GanttView.jsx` idem
-- [ ] ⚠️ **Fichier transversal** `useData.js` → signaler tout changement au Poste B
+- [ ] Modifier `useData.js` ⚠️ : ne plus appeler `computePERT()` si le backend fournit les valeurs
+- [ ] Garder `utils/pert.js` comme fallback pour la vue DailyOrder
+- [ ] Mettre à jour `PERTView.jsx` et `GanttView.jsx`
 
 ### 2.4 Tests PERT [P1]
-- [ ] Cas 1 : graphe linéaire (A→B→C) → chemin critique = A, B, C, slack = 0 partout
+- [ ] Cas 1 : graphe linéaire A→B→C → slack = 0 partout
 - [ ] Cas 2 : deux chemins parallèles → seul le plus long est critique
 - [ ] Cas 3 : pas de dépendances → ES=0, slack maximal
-- [ ] Cas 4 : cycle détecté → retourner une erreur 400 explicite
+- [ ] Cas 4 : cycle détecté → 400 avec liste des IDs impliqués
 
 ---
 
-## Étape 3 — Tâches : contrôle d'accès par rôle — P1
+## Étape 3 — Tâches : contrôle d'accès par rôle [P1]
 
-> **CDC BF-08** : Chef de projet = modifie tout ; Membre = statut seulement ; Admin = lecture seule.
-> 🔗 **Dépend du Poste B** : la table `users` avec les rôles doit exister.
+> D-01 : Admin 403 sur écritures ✅ fait (session A-01).
+> D-03 : Distinction Chef vs Membre → à faire ici.
+> 🔗 Dépend du Poste B : `members.role` opérationnel.
 
-### 3.1 Backend : guards dans `routes/tasks.py` [P1]
-- [ ] Vérifier que `utils/auth.py` expose le rôle de l'utilisateur connecté (`admin`, `chef`, `membre`)
-- [ ] `POST /tasks/` → réservé Chef de projet (ou Admin en lecture simulée)
-- [ ] `PUT /tasks/<id>` → Chef de projet : tous les champs ; Membre : `status` seulement
-- [ ] `DELETE /tasks/<id>` → Chef de projet uniquement
-- [ ] `PATCH /tasks/<id>/archive` → Chef de projet uniquement
-- [ ] Retourner `403 Forbidden` avec message clair si accès non autorisé (CDC BNF-05)
+### 3.1 Backend : guard Chef dans `routes/tasks.py` [P1]
+- [~] `@require_auth` + admin 403 fait (session A-01)
+- [ ] Ajouter helper `is_chef_of_project(conn, project_id, user_id)` basé sur `projects.chef_id`
+- [ ] `POST /tasks/` → vérifier appelant = chef du `project_id` soumis
+- [ ] `PUT /tasks/<id>` → chef : tous les champs ; membre (responsable) : `status` seulement
+- [ ] `DELETE`, `PATCH archive/unarchive` → chef uniquement
 
-### 3.2 Frontend : adapter `TasksView.jsx` et `TaskModal.jsx` [P1]
-- [ ] Si `user.role === 'membre'` : masquer boutons Modifier, Supprimer, Archiver
-- [ ] Si `user.role === 'membre'` : `TaskModal` en mode lecture + seul champ `status` éditable
-- [ ] Si `user.role === 'admin'` : vue lecture seule (pas de bouton créer/modifier)
-- [ ] Si `user.role === 'chef'` : accès complet
+### 3.2 Frontend : adapter `TaskModal.jsx` [P1]
+- [ ] **Audit `TaskModal.jsx` d'abord** (Bug B-01 — envoyer le fichier)
+- [ ] Admin → formulaire entier en lecture seule
+- [ ] Membre non-chef → seul champ `status` éditable
+- [ ] Chef → formulaire complet
 
 ---
 
-## Étape 4 — Gantt : conformité CDC — P1 / P2
+## Étape 4 — Gantt : conformité CDC [P1 / P2]
 
-> **CDC BF-17** : barres ES→EF positionnées en coupons, chemin critique rouge,
-> couleur du membre responsable, consultable par tous.
+> **CDC BF-17** : barres ES→EF en coupons, critique rouge, couleur du membre responsable.
 
 ### 4.1 Vérification de l'existant [P1]
-- [ ] Lire `GanttView.jsx` entier : confirmer que les barres utilisent `pert.ES` et `pert.EF`
-- [ ] Confirmer que les tâches critiques (slack=0) s'affichent bien en rouge
-- [ ] Confirmer que les autres tâches utilisent la couleur du membre responsable
+- [ ] Lire `GanttView.jsx` (envoyer le fichier)
+- [ ] Confirmer barres ES/EF, critique rouge, couleur responsable
 
-### 4.2 Améliorations CDC manquantes [P1]
-- [ ] Ajouter les **flèches de dépendances** entre les barres du Gantt (CDC BF-11 : visualiser les précédences)
-- [ ] Ajouter un **filtre par membre** dans la vue Gantt (CDC BF-17 : "consultable par tous")
-- [ ] Ajouter un **filtre par projet** si absent
+### 4.2 Améliorations manquantes [P1 / P2]
+- [ ] Flèches de dépendances entre barres [P2]
+- [ ] Filtre par membre dans la vue Gantt [P1]
+- [ ] Filtre par projet si absent [P1]
 
 ### 4.3 Étiquettes et légende [P2]
-- [ ] Afficher l'identifiant de la tâche sur chaque barre ou en tooltip
-- [ ] Afficher la marge (`slack`) en info-bulle au survol
-- [ ] Ajouter une légende : rouge = critique, couleur = responsable
+- [ ] ID tâche sur chaque barre ou tooltip
+- [ ] Marge (`slack`) en info-bulle
+- [ ] Légende : rouge = critique, couleur = responsable
 
 ---
 
-## Étape 5 — Projets : Chef de projet — P1
+## Étape 5 — Projets : Chef de projet [P1]
 
-> **CDC BF-18** : l'Admin crée un projet et y désigne un Membre comme Chef.
-> 🔗 **Dépend du Poste B** : table `users` et notion de compte Membre.
+> **D-02** : Chef stocké dans `projects.chef_id` (déjà en DB via migration v2).
+> Pas de table `project_members` — membres du projet = DISTINCT responsible des tâches.
+> 🔗 Dépend du Poste B : comptes membres opérationnels.
 
-### 5.1 Table d'association `project_members` [P1]
-- [ ] Créer la table `project_members(project_id, user_id, role)` dans `database.py`
-  - `role` : `'chef'` ou `'membre'`
-- [ ] Endpoints dans `routes/projects.py` :
-  - `POST /projects/<id>/members` → ajouter un membre ou désigner un chef
-  - `DELETE /projects/<id>/members/<user_id>` → retirer un membre
-  - `GET /projects/<id>/members` → lister les membres et leurs rôles
+### 5.1 Backend : endpoint désignation Chef [P1]
+- [x] Colonne `projects.chef_id` présente (migration v2)
+- [ ] `PATCH /projects/<id>/chef` → Admin uniquement, body `{"chef_id": N}`
+- [ ] Inclure `chef_id` et `chef_name` dans la réponse GET `/projects/`
 
 ### 5.2 Frontend `ProjectsView.jsx` [P1]
-- [ ] Afficher la liste des membres par projet
-- [ ] Bouton Admin : "Désigner Chef de projet" (select membre → attribuer rôle chef)
-- [ ] Afficher le Chef de projet courant sur chaque ligne de projet
+- [ ] Lire `ProjectsView.jsx` (envoyer le fichier)
+- [ ] Afficher le Chef de projet sur chaque ligne
+- [ ] Si `isAdmin` → bouton "Désigner Chef"
 
-### 5.3 Guard d'accès aux projets [P1]
-- [ ] Un Chef de projet ne voit que les tâches / activités de ses projets
-- [ ] L'Admin voit tout en lecture seule
-- [ ] 🔗 Coordonner avec Poste B pour le middleware d'auth
+### 5.3 Guard Chef dans `tasks.py` et `activities.py` [P1]
+- [ ] Utiliser `is_chef_of_project()` (Étape 3.1) pour tous les guards d'écriture
 
 ---
 
-## Étape 6 — Activités : guard rôle et hiérarchie — P1
+## Étape 6 — Activités : guard rôle et hiérarchie [P1]
 
-> **CDC BF-19** : Chef de projet crée/modifie/supprime ses activités.
-> La hiérarchie Projet → Activité → Tâche doit être respectée.
+> **CDC BF-19** : Chef de projet gère ses activités.
 
 ### 6.1 Backend `routes/activities.py` [P1]
-- [ ] `POST /activities/` → réservé Chef de projet du projet concerné
-- [ ] `PUT /activities/<id>` → Chef de projet uniquement
-- [ ] `DELETE /activities/<id>` → Chef de projet uniquement (cascade sur les tâches liées)
-- [ ] Retourner `403` si l'appelant n'est pas chef du projet rattaché
+- [ ] Lire `activities.py` (envoyer le fichier)
+- [ ] Ajouter `@require_auth` + admin 403 + guard `is_chef_of_project()`
+- [ ] Vérifier cascade suppression via `ON DELETE CASCADE`
 
-### 6.2 Frontend `ActivitiesView.jsx` [P1]
-- [ ] Masquer les boutons créer/modifier/supprimer si `user.role !== 'chef'`
-- [ ] Vérifier que la suppression cascade correctement sur les tâches liées
+### 6.2 Frontend `ActivitiesView.jsx` [P2]
+- [ ] Masquer boutons créer/modifier/supprimer si `isAdmin`
 
 ---
 
-## Étape 7 — Filtres & recherche avancée — P1
+## Étape 7 — Filtres & recherche avancée [P1]
 
-> **CDC BF-12** : filtrer par projet, membre, statut, priorité, période ou texte libre,
-> sans rechargement de page.
+> **CDC BF-12** : filtrer par projet, membre, statut, priorité, période, texte.
 
-- [ ] Vérifier que le filtre `priority` fonctionne de bout en bout (DB → API → UI) après Étape 1.1
-- [ ] Vérifier que le filtre `period` (date_from / date_to) fonctionne après Étape 1.3
-- [ ] Vérifier que le filtre `show_critical` utilise bien les valeurs PERT (slack=0)
-- [ ] Vérifier que `show_overdue` fonctionne avec `due_date` après Étape 1.3
-- [ ] Ajouter le filtre `priority` dans la vue Gantt si absent
-- [ ] Tester la recherche texte libre sur `id`, `description`, `project_name`, `activity_name`
+- [x] Filtre `priority` fonctionnel : DB ✅, API ✅
+- [x] Filtres dates (`date_from`, `date_to`, `single_date`) fonctionnels dans `tasks.py`
+- [x] Filtre `show_archived` fonctionnel
+- [x] Recherche texte sur `id`, `description`, `project_name`, `activity_name`
+- [ ] Vérifier filtre `show_critical` → dépend du PERT backend (Étape 2)
+- [ ] Vérifier filtre `show_overdue` → vérifier saisie `due_date` dans `TaskModal`
+- [ ] Ajouter filtre `priority` dans la vue Gantt si absent
 
 ---
 
-## Étape 8 — Performance & qualité — P1 / P2
-
-> **CDC BNF-01** : réponse < 500 ms pour 500 tâches, 5 utilisateurs simultanés.
-> **CDC BNF-03** : tous les endpoints protégés par JWT.
+## Étape 8 — Performance & qualité [P1 / P2]
 
 ### 8.1 Protection JWT des endpoints Poste A [P1]
-- [ ] Vérifier que CHAQUE endpoint de `tasks.py`, `projects.py`, `activities.py` exige un token JWT valide
-- [ ] Tester avec un token expiré → retourner `401` proprement (CDC BF-06)
+- [x] `tasks.py` — toutes les routes protégées (session A-01)
+- [ ] `projects.py` — audit et ajout `@require_auth`
+- [ ] `activities.py` — audit et ajout `@require_auth`
+- [ ] Tester token expiré → `401` propre (CDC BF-06)
 
 ### 8.2 Performance PERT [P1]
-- [ ] S'assurer que le calcul PERT backend (Étape 2) reste < 100 ms pour 100 tâches
-- [ ] Si > 100 ms : mettre en cache le résultat PERT par projet (invalider au prochain write)
+- [ ] Mesurer temps de calcul PERT backend après Étape 2
+- [ ] Si > 100 ms pour 100 tâches : mettre en cache par projet
 
 ### 8.3 Messages d'erreur en français [P2]
-- [ ] Revoir tous les messages d'erreur retournés par `tasks.py`, `projects.py`, `activities.py`
-- [ ] Les formulaires frontend doivent afficher des messages compréhensibles (CDC BNF-05)
+- [x] `tasks.py` — messages en français (session A-01)
+- [ ] `projects.py` — messages en français
+- [ ] `activities.py` — messages en français
+
+---
+
+## Bugs ouverts
+
+| ID | Fichier | Description | Priorité |
+|---|---|---|---|
+| B-01 | `TaskModal.jsx` | Sémantique `isAdmin` à auditer : admin doit voir formulaire en lecture seule | Haute |
+| B-02 | `App.jsx` ⚠️ transversal | Cloche `<Bell>` et `diffCounts` encore gatés sur `isAdmin=true` — doit être `!isAdmin` per CDC BF-24 | Moyenne |
 
 ---
 
 ## Résumé des dépendances inter-postes
 
 | Sujet | Poste A (Josué) | Poste B (Darelle) | Statut |
-|-------|-----------------|-------------------|--------|
-| Table `users` + JWT | Consomme le token | Crée et gère | 🔗 Attendre Poste B |
-| Table `project_members` | Crée (Étape 5.1) | Lit pour les rôles | À synchroniser |
-| Contrat JSON PERT | Produit le calcul (Étape 2.2) | Consomme dans rapports | À définir ensemble |
-| `useData.js` | Brancher PERT backend (Étape 2.3) | Hook partagé | ⚠️ Fichier transversal |
-| `client.js` | Ajouter endpoints PERT / project_members | Ajouter endpoints auth | ⚠️ Fichier transversal |
-| `App.jsx` | Adapter guards UI rôles | Gérer login/logout | ⚠️ Fichier transversal |
+|---|---|---|---|
+| `@require_auth` / JWT | Consomme | Crée et maintient | ✅ Opérationnel |
+| `projects.chef_id` | Crée endpoint PATCH (Étape 5.1) | Lit pour rapports | À faire |
+| Contrat JSON PERT | Produit le calcul (Étape 2) | Consomme dans rapports | À définir |
+| `useData.js` ⚠️ | Brancher PERT backend (Étape 2.3) | Hook partagé | En attente Étape 2 |
+| `App.jsx` ⚠️ | Bug B-02 : cloche non-admin | Shell partagé | À coordonner |
 
 ---
 
-## Ordre de traitement recommandé
+## Ordre de traitement recommandé (sessions suivantes)
 
 ```
-Étape 0  →  Étape 1  →  Étape 7 (vérification filtres)
-                ↓
-           Étape 2 (PERT backend)  →  Étape 4 (Gantt)
-                ↓
-    🔗 Attendre Poste B (users/JWT)
-                ↓
-           Étape 3 (rôles tâches)  →  Étape 5 (projets)  →  Étape 6 (activités)
-                ↓
-           Étape 8 (qualité)
+A-02 : Bug B-01 (TaskModal audit + fix)
+     → Étape 2 (PERT backend)
+     → Étape 8.1 (projects.py + activities.py JWT guards)
+
+A-03 : Étape 3 (guards chef/membre dans tasks.py)
+     → Étape 5 (projets : chef_id endpoint + UI)
+     → Étape 6 (activités : guards)
+
+A-04 : Étape 4 (Gantt améliorations)
+     → Étape 7 (filtres complets)
+     → Étape 8 (qualité, perf)
 ```
 
 ---
 
 *Ce fichier ne doit pas être réorganisé sans accord explicite de Josué.*
-*Décisions numérotées D-xx en continu commun avec le Poste B.*
+*Décisions numérotées D-xx en continu commun avec le Poste B (dernière en date : D-03).*

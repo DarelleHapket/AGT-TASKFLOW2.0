@@ -6,15 +6,15 @@
  ██║  ██║╚██████╔╝   ██║          ██║   ██║  ██║███████║██║  ██╗██║     ███████╗╚██████╔╝╚███╔███╔╝
  ╚═╝  ╚═╝ ╚═════╝    ╚═╝          ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝
 [0m
-[1m  Rapport généré le : 16/07/2026 à 11:45:37[0m
-[1m  Projet scanné     : /home/darelle/Stage-AGT-4GI/AGT-TASKFLOW-main[0m
-[1m  Rapport sauvé     : /home/darelle/Stage-AGT-4GI/AGT-TASKFLOW-main/rapport_agt_taskflow_20260716_114537.txt[0m
+[1m  Rapport généré le : 16/07/2026 à 15:48:40[0m
+[1m  Projet scanné     : /media/josue-moffo/Secondaire/School/El_M/STAGE/AG-technologies/Projet/AGT-TASKFLOW2.0[0m
+[1m  Rapport sauvé     : /media/josue-moffo/Secondaire/School/El_M/STAGE/AG-technologies/Projet/AGT-TASKFLOW2.0/rapport_agt_taskflow_20260716_154840.txt[0m
 
 
 [0;34m[1m══════════════════════════════════════════[0m
 [0;34m[1m  0. VÉRIFICATION DU RÉPERTOIRE[0m
 [0;34m[1m══════════════════════════════════════════[0m
-[0;32m[1m[OK][0m Répertoire trouvé : /home/darelle/Stage-AGT-4GI/AGT-TASKFLOW-main
+[0;32m[1m[OK][0m Répertoire trouvé : /media/josue-moffo/Secondaire/School/El_M/STAGE/AG-technologies/Projet/AGT-TASKFLOW2.0
 
 [0;34m[1m══════════════════════════════════════════[0m
 [0;34m[1m  1. STRUCTURE GLOBALE DU PROJET[0m
@@ -43,7 +43,11 @@
 ./backend/utils/auth.py
 ./docker-compose.yml
 ./docs.ia
+./docs.ia/Bilan
+./docs.ia/Bilan/session_A-01.md
 ./docs.ia/ia
+./docs.ia/ia/CHANGES_SHARED.md
+./docs.ia/ia/CHANGES_SHARED_to_B.md
 ./docs.ia/ia/INDEX.md
 ./docs.ia/ia/PROMPT.md
 ./docs.ia/ia/TODO.md
@@ -82,8 +86,9 @@
 ./frontend/src/utils
 ./frontend/src/utils/pert.js
 ./frontend/vite.config.js
+./.git
+./.gitignore
 ./lancement_log.txt
-./rapport_agt_taskflow_20260716_111251.txt
 ./rapport_agt_taskflow_20260716_114537.txt
 ./README.md
 ./scan_agt_taskflow.sh
@@ -102,6 +107,20 @@
 [0;34m[1m══════════════════════════════════════════[0m
 [0;34m[1m  3. README.md[0m
 [0;34m[1m══════════════════════════════════════════[0m
+## 🤝 Conventions de travail à deux
+
+Fichiers partagés : `docs/ia/INDEX.md`, `docs/ia/TODO.md`, `frontend/src/api/client.js`.
+
+**Règles pour éviter les conflits Git :**
+
+- `INDEX.md` : on n'AJOUTE qu'une ligne à la fin, on ne modifie JAMAIS une ligne existante.
+  Préfixe `A-` = backend, `B-` = frontend.
+- Toujours `git pull` avant d'ajouter sa ligne, et push juste après.
+- `client.js` (contrat API) est sous la responsabilité du poste B. Le poste A
+  ne le modifie pas : il signale tout changement d'endpoint dans son rapport de session.
+- Décisions `D-xx` : numérotées en continu, communes aux deux postes.
+- Chacun sur sa branche : `feat/backend-A`, `feat/frontend-B`. Merge dans `main` par PR.
+
 # ⚡ AGT TaskFlow
 
 Outil de gestion de tâches avec diagrammes Gantt et PERT, conçu pour des équipes projet travaillant sur plusieurs projets simultanément.
@@ -110,20 +129,21 @@ Outil de gestion de tâches avec diagrammes Gantt et PERT, conçu pour des équi
 
 ## 📋 Fonctionnalités
 
-| Vue | Description |
-|-----|-------------|
-| **Tâches** | Vue groupée Projet → Activité → Tâche. Chemin critique mis en évidence en rouge. |
-| **Gantt** | Timeline en coupons, barres colorées par responsable, flèches de dépendances. |
-| **PERT** | Nœuds ES/EF/LS/LF avec calcul automatique du chemin critique. |
-| **Projets** | CRUD complet des projets. |
-| **Activités** | CRUD complet des activités, rattachées à un projet. |
-| **Équipe** | Ajout/retrait des membres de l'équipe. |
+| Vue           | Description                                                                      |
+| ------------- | -------------------------------------------------------------------------------- |
+| **Tâches**    | Vue groupée Projet → Activité → Tâche. Chemin critique mis en évidence en rouge. |
+| **Gantt**     | Timeline en coupons, barres colorées par responsable, flèches de dépendances.    |
+| **PERT**      | Nœuds ES/EF/LS/LF avec calcul automatique du chemin critique.                    |
+| **Projets**   | CRUD complet des projets.                                                        |
+| **Activités** | CRUD complet des activités, rattachées à un projet.                              |
+| **Équipe**    | Ajout/retrait des membres de l'équipe.                                           |
 
 ---
 
 ## 🚀 Lancement rapide (Docker — recommandé)
 
 ### Prérequis
+
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) installé et lancé
 
 ### Étapes
@@ -145,11 +165,13 @@ docker compose up --build
 ```
 
 ### Arrêter
+
 ```bash
 docker compose down
 ```
 
 ### Supprimer la base de données (reset complet)
+
 ```bash
 docker compose down -v
 ```
@@ -234,23 +256,23 @@ agt-taskflow/
 
 ## 📡 API REST
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/api/tasks/` | Liste toutes les tâches |
-| POST | `/api/tasks/` | Créer une tâche |
-| PUT | `/api/tasks/<id>` | Modifier une tâche |
-| DELETE | `/api/tasks/<id>` | Supprimer une tâche |
-| GET | `/api/projects/` | Liste des projets |
-| POST | `/api/projects/` | Créer un projet |
-| PUT | `/api/projects/<id>` | Modifier un projet |
-| DELETE | `/api/projects/<id>` | Supprimer un projet |
-| GET | `/api/activities/` | Liste des activités |
-| POST | `/api/activities/` | Créer une activité |
-| PUT | `/api/activities/<id>` | Modifier une activité |
-| DELETE | `/api/activities/<id>` | Supprimer une activité |
-| GET | `/api/members/` | Liste des membres |
-| POST | `/api/members/` | Ajouter un membre |
-| DELETE | `/api/members/<id>` | Retirer un membre |
+| Méthode | Endpoint               | Description             |
+| ------- | ---------------------- | ----------------------- |
+| GET     | `/api/tasks/`          | Liste toutes les tâches |
+| POST    | `/api/tasks/`          | Créer une tâche         |
+| PUT     | `/api/tasks/<id>`      | Modifier une tâche      |
+| DELETE  | `/api/tasks/<id>`      | Supprimer une tâche     |
+| GET     | `/api/projects/`       | Liste des projets       |
+| POST    | `/api/projects/`       | Créer un projet         |
+| PUT     | `/api/projects/<id>`   | Modifier un projet      |
+| DELETE  | `/api/projects/<id>`   | Supprimer un projet     |
+| GET     | `/api/activities/`     | Liste des activités     |
+| POST    | `/api/activities/`     | Créer une activité      |
+| PUT     | `/api/activities/<id>` | Modifier une activité   |
+| DELETE  | `/api/activities/<id>` | Supprimer une activité  |
+| GET     | `/api/members/`        | Liste des membres       |
+| POST    | `/api/members/`        | Ajouter un membre       |
+| DELETE  | `/api/members/<id>`    | Retirer un membre       |
 
 ---
 
@@ -266,8 +288,8 @@ agt-taskflow/
 
 ## 🔧 Configuration
 
-| Variable | Défaut | Description |
-|----------|--------|-------------|
+| Variable  | Défaut        | Description              |
+| --------- | ------------- | ------------------------ |
 | `DB_PATH` | `taskflow.db` | Chemin de la base SQLite |
 
 Modifiable dans `docker-compose.yml` sous `environment`.
@@ -351,20 +373,20 @@ CMD ["python", "app.py"]
 
 [0;36m[1m[INFO][0m --- Fichiers Python principaux ---
   📄 backend/app.py  (38 lignes)
-  📄 backend/database.py  (216 lignes)
+  📄 backend/database.py  (225 lignes)
   📄 backend/routes/activities.py  (83 lignes)
-  📄 backend/routes/auth.py  (88 lignes)
+  📄 backend/routes/auth.py  (91 lignes)
   📄 backend/routes/daily_order.py  (131 lignes)
-  📄 backend/routes/difficulties.py  (115 lignes)
+  📄 backend/routes/difficulties.py  (156 lignes)
   📄 backend/routes/__init__.py  (0 lignes)
   📄 backend/routes/members.py  (46 lignes)
   📄 backend/routes/needs.py  (93 lignes)
   📄 backend/routes/notes.py  (89 lignes)
   📄 backend/routes/performance.py  (80 lignes)
-  📄 backend/routes/projects.py  (65 lignes)
+  📄 backend/routes/projects.py  (119 lignes)
   📄 backend/routes/reports.py  (141 lignes)
-  📄 backend/routes/tasks.py  (220 lignes)
-  📄 backend/utils/auth.py  (71 lignes)
+  📄 backend/routes/tasks.py  (265 lignes)
+  📄 backend/utils/auth.py  (93 lignes)
 
 [0;36m[1m[INFO][0m --- Modèles de données (models.py) ---
 
@@ -540,7 +562,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const { token, user, isAdmin, isLogged, login, logout } = useAuth();
+  const { token, user, isAdmin, isChef, isLogged, login, logout } = useAuth();
   const { markAsSeen, hasUnseen, totalUnseen }            = useSeenDifficulties();
   const [tab, setTab]       = useState("tasks");
   const [modal, setModal]   = useState(null);
@@ -561,9 +583,12 @@ export default function App() {
     loading, error, memberColor, pert,
   } = useData();
 
-  // ── Charger compteurs difficultés ────────────────────────────────────────
+  // ── Charger compteurs difficultés (admin + chef de projet) ───────────────
+  // Le backend filtre déjà par projet du chef (403 sur les tâches hors périmètre,
+  // ignorées par le catch), donc le compteur du chef se limite à ses projets.
+  const canSeeNotifications = isAdmin || isChef;
   useEffect(() => {
-    if (!isAdmin || !tasks.length) return;
+    if (!canSeeNotifications || !tasks.length) return;
     const loadCounts = async () => {
       const counts = {};
       await Promise.all(
@@ -577,9 +602,9 @@ export default function App() {
       setDiffCounts(counts);
     };
     loadCounts();
-  }, [tasks, isAdmin]);
+  }, [tasks, canSeeNotifications]);
 
-  const unseenTotal = isAdmin ? totalUnseen(diffCounts) : 0;
+  const unseenTotal = canSeeNotifications ? totalUnseen(diffCounts) : 0;
 
   // ── Auth guard ───────────────────────────────────────────────────────────
   if (!isLogged) return <LoginPage onLogin={login} />;
@@ -721,7 +746,7 @@ export default function App() {
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
           {/* Cloche */}
-          {isAdmin && (
+          {canSeeNotifications && (
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowBell((v) => !v)} style={{
                 background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
@@ -775,6 +800,7 @@ export default function App() {
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
               {user?.name}
               {isAdmin && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+              {isChef && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
             </div>
             <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
           </div>
@@ -812,7 +838,7 @@ export default function App() {
   );
 }
 [0;36m[1m[INFO][0m --- Composants principaux ---
-  🧩 frontend/src/App.jsx  (306 lignes)
+  🧩 frontend/src/App.jsx  (310 lignes)
   🧩 frontend/src/components/activities/ActivitiesView.jsx  (105 lignes)
   🧩 frontend/src/components/auth/LoginPage.jsx  (278 lignes)
   🧩 frontend/src/components/daily/DailyOrderView.jsx  (221 lignes)
@@ -826,7 +852,7 @@ export default function App() {
   🧩 frontend/src/components/shared/Badges.jsx  (72 lignes)
   🧩 frontend/src/components/shared/FilterBar.jsx  (215 lignes)
   🧩 frontend/src/components/tasks/TaskModal.jsx  (361 lignes)
-  🧩 frontend/src/components/tasks/TasksView.jsx  (211 lignes)
+  🧩 frontend/src/components/tasks/TasksView.jsx  (225 lignes)
   🧩 frontend/src/components/team/TeamView.jsx  (45 lignes)
   🧩 frontend/src/main.jsx  (10 lignes)
 
@@ -2870,14 +2896,17 @@ import * as api from "../../api/client";
 import { useSeenDifficulties } from "../../hooks/useSeenDifficulties";
 
 export function TasksView({ tasks, projects, activities, members, pert, filters, setFilters, memberColor, onAdd, onEdit, onDelete, onArchive, onUnarchive, isAdmin }) {
-  const [collapsed, setCollapsed]       = useState({});
-  const [diffCounts, setDiffCounts]     = useState({});
-  const { markAsSeen, hasUnseen }       = useSeenDifficulties();
+  const [collapsed, setCollapsed]   = useState({});
+  const [diffCounts, setDiffCounts] = useState({});
+  const { markAsSeen, hasUnseen }   = useSeenDifficulties();
 
   const tog = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
 
+  // ── Chargement des compteurs de difficultés ──────────────────────────────
+  // CDC BF-23 / BF-24 : le Chef de projet (non-admin) suit les difficultés.
+  // L'Admin consulte en lecture seule → pas besoin de tracker les "vus".
   useEffect(() => {
-    if (!isAdmin) return;
+    if (isAdmin) return;  // Admin = lecture seule, pas de tracking difficulté
     const loadCounts = async () => {
       const counts = {};
       await Promise.all(
@@ -2893,12 +2922,15 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
     loadCounts();
   }, [tasks, isAdmin]);
 
+  // ── Ouverture d'une tâche ────────────────────────────────────────────────
+  // Non-admin ouvre en mode édition et marque les difficultés comme vues.
+  // Admin ouvre en lecture seule (géré dans TaskModal via isAdmin).
   const handleOpen = (t) => {
-    if (isAdmin && diffCounts[t.id]) markAsSeen(t.id, diffCounts[t.id]);
+    if (!isAdmin && diffCounts[t.id]) markAsSeen(t.id, diffCounts[t.id]);
     onEdit(t);
   };
 
-  // Group by project → activity
+  // ── Groupement Projet → Activité ─────────────────────────────────────────
   const grouped = {};
   tasks.forEach((t) => {
     const pName = t.project_name || "Sans projet";
@@ -2917,7 +2949,9 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
             {tasks.length} tâche{tasks.length !== 1 ? "s" : ""} affichée{tasks.length !== 1 ? "s" : ""}
           </span>
         </div>
-        {isAdmin && (
+
+        {/* CDC BF-07 / BF-08 : seul le Chef de projet (non-admin) crée des tâches */}
+        {!isAdmin && (
           <button onClick={onAdd} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
             <Plus size={15} /> Nouvelle tâche
           </button>
@@ -2959,7 +2993,9 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
                 const isDone     = t.status === "done";
                 const isArchived = t.is_archived;
                 const diffCount  = diffCounts[t.id] || 0;
-                const showBadge  = isAdmin && hasUnseen(t.id, diffCount);
+
+                // CDC BF-23 : badge difficulté visible pour le Chef de projet (non-admin)
+                const showBadge  = !isAdmin && hasUnseen(t.id, diffCount);
 
                 return (
                   <div key={t.id} style={{
@@ -3022,17 +3058,21 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
                       <MemberBadge name={t.responsible} color={memberColor(t.responsible)} />
                       <StatusBadge status={t.status} />
 
-                      {/* Bouton voir/modifier — visible par TOUS */}
+                      {/* Bouton voir/modifier — visible par TOUS ──────────────────────────
+                          CDC BF-08 :
+                          - Non-admin (chef/membre) → crayon (édition)
+                          - Admin                  → œil (lecture seule)           */}
                       <button
                         onClick={() => handleOpen(t)}
-                        title={isAdmin ? "Modifier la tâche" : "Voir les détails"}
+                        title={!isAdmin ? "Modifier la tâche" : "Voir les détails"}
                         style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}
                       >
-                        {isAdmin ? <Pencil size={13} /> : <Eye size={13} />}
+                        {!isAdmin ? <Pencil size={13} /> : <Eye size={13} />}
                       </button>
 
-                      {/* Boutons admin uniquement */}
-                      {isAdmin && (
+                      {/* Boutons d'action — non-admin (chef de projet) uniquement ─────────
+                          CDC BF-08 : l'Admin ne modifie ni ne supprime rien.            */}
+                      {!isAdmin && (
                         <>
                           {/* Archiver / Désarchiver */}
                           {isArchived ? (
@@ -3275,18 +3315,18 @@ T019     T013
 
   Extension  Fichiers       Lignes
   ───────── ──────── ──────────
-  .jsx             17         3228
-  .py              15         1476
+  .jsx             17         3246
+  .py              15         1650
+  .md               8          640
   .sh               1          390
-  .js               6          320
-  .md               5          213
+  .js               6          326
   .css              1           49
   .yml              1           25
   .json             1           20
   .html             1           15
 
 [0;36m[1m[INFO][0m Total fichiers (hors node_modules, venv, dist) :
-59
+63
 
 [0;34m[1m══════════════════════════════════════════[0m
 [0;34m[1m  9. TECHNOLOGIES DÉTECTÉES[0m
@@ -3321,12 +3361,12 @@ T019     T013
   • Base de données SQLite embarquée (taskflow_dump.db)
 
 [1mProchaines étapes recommandées :[0m
-  1. Lire le rapport complet : /home/darelle/Stage-AGT-4GI/AGT-TASKFLOW-main/rapport_agt_taskflow_20260716_114537.txt
+  1. Lire le rapport complet : /media/josue-moffo/Secondaire/School/El_M/STAGE/AG-technologies/Projet/AGT-TASKFLOW2.0/rapport_agt_taskflow_20260716_154840.txt
   2. Lancer docker-compose up --build
   3. Vérifier les variables d'environnement (.env)
   4. Accéder à l'interface frontend et tester les endpoints
 
 [0;32m[1m[OK][0m ══════════════════════════════════════════════════════════
 [0;32m[1m[OK][0m  Scan terminé ! Rapport complet sauvegardé dans :
-[0;32m[1m[OK][0m  /home/darelle/Stage-AGT-4GI/AGT-TASKFLOW-main/rapport_agt_taskflow_20260716_114537.txt
+[0;32m[1m[OK][0m  /media/josue-moffo/Secondaire/School/El_M/STAGE/AG-technologies/Projet/AGT-TASKFLOW2.0/rapport_agt_taskflow_20260716_154840.txt
 [0;32m[1m[OK][0m ══════════════════════════════════════════════════════════

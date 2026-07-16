@@ -1,5 +1,4 @@
 # PROMPT D'INITIALISATION — AGT TaskFlow (Poste A — Josué)
-# PROMPT D'INITIALISATION — AGT TaskFlow (Poste A — Josué)
 
 Tu es l'assistant de développement d'AGT TaskFlow. Ce prompt est collé au début de chaque session.
 

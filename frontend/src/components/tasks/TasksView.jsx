@@ -7,14 +7,17 @@ import * as api from "../../api/client";
 import { useSeenDifficulties } from "../../hooks/useSeenDifficulties";
 
 export function TasksView({ tasks, projects, activities, members, pert, filters, setFilters, memberColor, onAdd, onEdit, onDelete, onArchive, onUnarchive, isAdmin }) {
-  const [collapsed, setCollapsed]       = useState({});
-  const [diffCounts, setDiffCounts]     = useState({});
-  const { markAsSeen, hasUnseen }       = useSeenDifficulties();
+  const [collapsed, setCollapsed]   = useState({});
+  const [diffCounts, setDiffCounts] = useState({});
+  const { markAsSeen, hasUnseen }   = useSeenDifficulties();
 
   const tog = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
 
+  // ── Chargement des compteurs de difficultés ──────────────────────────────
+  // CDC BF-23 / BF-24 : le Chef de projet (non-admin) suit les difficultés.
+  // L'Admin consulte en lecture seule → pas besoin de tracker les "vus".
   useEffect(() => {
-    if (!isAdmin) return;
+    if (isAdmin) return;  // Admin = lecture seule, pas de tracking difficulté
     const loadCounts = async () => {
       const counts = {};
       await Promise.all(
@@ -30,12 +33,15 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
     loadCounts();
   }, [tasks, isAdmin]);
 
+  // ── Ouverture d'une tâche ────────────────────────────────────────────────
+  // Non-admin ouvre en mode édition et marque les difficultés comme vues.
+  // Admin ouvre en lecture seule (géré dans TaskModal via isAdmin).
   const handleOpen = (t) => {
-    if (isAdmin && diffCounts[t.id]) markAsSeen(t.id, diffCounts[t.id]);
+    if (!isAdmin && diffCounts[t.id]) markAsSeen(t.id, diffCounts[t.id]);
     onEdit(t);
   };
 
-  // Group by project → activity
+  // ── Groupement Projet → Activité ─────────────────────────────────────────
   const grouped = {};
   tasks.forEach((t) => {
     const pName = t.project_name || "Sans projet";
@@ -54,7 +60,9 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
             {tasks.length} tâche{tasks.length !== 1 ? "s" : ""} affichée{tasks.length !== 1 ? "s" : ""}
           </span>
         </div>
-        {isAdmin && (
+
+        {/* CDC BF-07 / BF-08 : seul le Chef de projet (non-admin) crée des tâches */}
+        {!isAdmin && (
           <button onClick={onAdd} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
             <Plus size={15} /> Nouvelle tâche
           </button>
@@ -96,7 +104,9 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
                 const isDone     = t.status === "done";
                 const isArchived = t.is_archived;
                 const diffCount  = diffCounts[t.id] || 0;
-                const showBadge  = isAdmin && hasUnseen(t.id, diffCount);
+
+                // CDC BF-23 : badge difficulté visible pour le Chef de projet (non-admin)
+                const showBadge  = !isAdmin && hasUnseen(t.id, diffCount);
 
                 return (
                   <div key={t.id} style={{
@@ -159,17 +169,21 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
                       <MemberBadge name={t.responsible} color={memberColor(t.responsible)} />
                       <StatusBadge status={t.status} />
 
-                      {/* Bouton voir/modifier — visible par TOUS */}
+                      {/* Bouton voir/modifier — visible par TOUS ──────────────────────────
+                          CDC BF-08 :
+                          - Non-admin (chef/membre) → crayon (édition)
+                          - Admin                  → œil (lecture seule)           */}
                       <button
                         onClick={() => handleOpen(t)}
-                        title={isAdmin ? "Modifier la tâche" : "Voir les détails"}
+                        title={!isAdmin ? "Modifier la tâche" : "Voir les détails"}
                         style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}
                       >
-                        {isAdmin ? <Pencil size={13} /> : <Eye size={13} />}
+                        {!isAdmin ? <Pencil size={13} /> : <Eye size={13} />}
                       </button>
 
-                      {/* Boutons admin uniquement */}
-                      {isAdmin && (
+                      {/* Boutons d'action — non-admin (chef de projet) uniquement ─────────
+                          CDC BF-08 : l'Admin ne modifie ni ne supprime rien.            */}
+                      {!isAdmin && (
                         <>
                           {/* Archiver / Désarchiver */}
                           {isArchived ? (

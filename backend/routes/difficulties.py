@@ -6,19 +6,60 @@ from utils.auth import require_auth
 difficulties_bp = Blueprint("difficulties", __name__)
 
 
+def _user_role(user):
+    """Rôle effectif, avec repli sur is_admin (comme partout ailleurs)."""
+    return user.get("role") or ("admin" if user.get("is_admin") else "membre")
+
+
+def can_access_task(conn, user, task):
+    """
+    Détermine si `user` a le droit d'accéder aux difficultés de `task`.
+    - admin        : accès à tout
+    - chef_projet  : accès si la tâche appartient à un projet dont il est le chef
+    - membre       : accès si la tâche lui est assignée
+    `task` et `user` sont des dicts. `conn` est une connexion ouverte.
+    """
+    role = _user_role(user)
+
+    if role == "admin":
+        return True
+
+    if role == "chef_projet":
+        project_id = task.get("project_id")
+        if not project_id:
+            return False
+        proj = conn.execute(
+            "SELECT chef_id FROM projects WHERE id=?", (project_id,)
+        ).fetchone()
+        return bool(proj) and proj["chef_id"] == user["id"]
+
+    # membre
+    return task.get("responsible") == user.get("name")
+
+
 @difficulties_bp.route("/", methods=["GET"])
 @require_auth
 def list_difficulties(current_user):
     """
     GET /api/difficulties/?task_id=T001
-    Retourne toutes les difficultés d'une tâche.
-    Accessible en lecture à tous les membres connectés.
+    Retourne les difficultés d'une tâche, si l'utilisateur y a accès.
+    - admin : toutes ; chef_projet : celles de ses projets ; membre : ses tâches.
     """
     task_id = request.args.get("task_id")
     if not task_id:
         return jsonify({"error": "task_id requis"}), 400
 
     conn = get_db()
+
+    task = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+    if not task:
+        conn.close()
+        return jsonify({"error": "Tâche introuvable"}), 404
+
+    if not can_access_task(conn, current_user, dict(task)):
+        conn.close()
+        return jsonify({"error": "Accès non autorisé à cette tâche"}), 403
+
     rows = conn.execute(
         """SELECT d.*, m.name as member_name
            FROM task_difficulties d
@@ -58,14 +99,11 @@ def create_difficulty(current_user):
 
     task = dict(task)
 
-    # Seul le membre assigné ou l'admin peut signaler
-    is_assigned = task.get("responsible") == current_user["name"]
-    is_admin = current_user.get("is_admin", False)
-
-    if not is_assigned and not is_admin:
+    # Peut signaler : le membre assigné, l'admin, ou le chef du projet de la tâche
+    if not can_access_task(conn, current_user, task):
         conn.close()
         return jsonify({
-            "error": "Seul le membre assigné peut signaler une difficulté"
+            "error": "Vous n'avez pas accès à cette tâche"
         }), 403
 
     c = conn.execute(
@@ -104,9 +142,12 @@ def delete_difficulty(did, current_user):
 
     diff = dict(row)
     is_author = diff["member_id"] == current_user["id"]
-    is_admin = current_user.get("is_admin", False)
 
-    if not is_author and not is_admin:
+    # Récupérer la tâche liée pour vérifier le rôle chef/admin
+    task = conn.execute("SELECT * FROM tasks WHERE id=?", (diff["task_id"],)).fetchone()
+    can_manage = bool(task) and can_access_task(conn, current_user, dict(task))
+
+    if not is_author and not can_manage:
         conn.close()
         return jsonify({"error": "Non autorisé"}), 403
 

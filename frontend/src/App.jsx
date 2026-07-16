@@ -34,7 +34,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const { token, user, isAdmin, isLogged, login, logout } = useAuth();
+  const { token, user, isAdmin, isChef, isLogged, login, logout } = useAuth();
   const { markAsSeen, hasUnseen, totalUnseen }            = useSeenDifficulties();
   const [tab, setTab]       = useState("tasks");
   const [modal, setModal]   = useState(null);
@@ -55,9 +55,12 @@ export default function App() {
     loading, error, memberColor, pert,
   } = useData();
 
-  // ── Charger compteurs difficultés ────────────────────────────────────────
+  // ── Charger compteurs difficultés (admin + chef de projet) ───────────────
+  // Le backend filtre déjà par projet du chef (403 sur les tâches hors périmètre,
+  // ignorées par le catch), donc le compteur du chef se limite à ses projets.
+  const canSeeNotifications = isAdmin || isChef;
   useEffect(() => {
-    if (!isAdmin || !tasks.length) return;
+    if (!canSeeNotifications || !tasks.length) return;
     const loadCounts = async () => {
       const counts = {};
       await Promise.all(
@@ -71,9 +74,9 @@ export default function App() {
       setDiffCounts(counts);
     };
     loadCounts();
-  }, [tasks, isAdmin]);
+  }, [tasks, canSeeNotifications]);
 
-  const unseenTotal = isAdmin ? totalUnseen(diffCounts) : 0;
+  const unseenTotal = canSeeNotifications ? totalUnseen(diffCounts) : 0;
 
   // ── Auth guard ───────────────────────────────────────────────────────────
   if (!isLogged) return <LoginPage onLogin={login} />;
@@ -215,7 +218,7 @@ export default function App() {
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
           {/* Cloche */}
-          {isAdmin && (
+          {canSeeNotifications && (
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowBell((v) => !v)} style={{
                 background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
@@ -269,6 +272,7 @@ export default function App() {
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
               {user?.name}
               {isAdmin && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+              {isChef && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
             </div>
             <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
           </div>

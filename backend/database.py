@@ -121,6 +121,7 @@ def init_db():
         ("members", "is_active",           "ALTER TABLE members ADD COLUMN is_active BOOLEAN DEFAULT 1"),
         ("members", "daily_coupon_target", "ALTER TABLE members ADD COLUMN daily_coupon_target INTEGER DEFAULT 2"),
         ("members", "role",                "ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'membre'"),
+        ("projects", "chef_id",            "ALTER TABLE projects ADD COLUMN chef_id INTEGER DEFAULT NULL REFERENCES members(id)"),
         ("tasks",   "start_date",          "ALTER TABLE tasks ADD COLUMN start_date DATE DEFAULT NULL"),
         ("tasks",   "end_date",            "ALTER TABLE tasks ADD COLUMN end_date DATE DEFAULT NULL"),
         ("tasks",   "due_date",            "ALTER TABLE tasks ADD COLUMN due_date DATE DEFAULT NULL"),

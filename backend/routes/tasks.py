@@ -1,9 +1,13 @@
 # backend/routes/tasks.py
 from flask import Blueprint, request, jsonify
 from database import get_db
+from utils.auth import require_auth
 from datetime import datetime, timezone
 
 tasks_bp = Blueprint("tasks", __name__)
+
+# ── Message d'erreur admin en lecture seule (CDC BF-08 / BNF-05) ────────────
+_ADMIN_READ_ONLY = "L'administrateur dispose d'un accès en lecture seule sur les tâches."
 
 
 def fetch_task(conn, task_id):
@@ -41,24 +45,25 @@ def task_matches_date_filter(task, date_from, date_to, single_date):
     t_start = task.get("start_date")
     t_end   = task.get("end_date") or task.get("due_date")
 
-    # Si la tâche n'a pas de dates → on l'inclut toujours
     if not t_start and not t_end:
         return True
 
-    # Si la tâche a une date de début → vérifier qu'elle est avant date_to
     if t_start and date_to and t_start > date_to:
         return False
 
-    # Si la tâche a une date de fin → vérifier qu'elle est après date_from
     if t_end and date_from and t_end < date_from:
         return False
 
     return True
 
 
+# ── GET /api/tasks/ ─────────────────────────────────────────────────────────
+# CDC BF-12 : tout utilisateur authentifié peut filtrer et lister les tâches.
+# Admin inclus (lecture seule).
+
 @tasks_bp.route("/", methods=["GET"])
-def list_tasks():
-    # ── Paramètres de filtrage ──────────────────────────────────────────────
+@require_auth
+def list_tasks(current_user):
     show_archived = request.args.get("show_archived", "false").lower() == "true"
     date_from     = request.args.get("date_from")
     date_to       = request.args.get("date_to")
@@ -87,7 +92,6 @@ def list_tasks():
         ).fetchall()
         task["dependencies"] = [d["depends_on"] for d in deps]
 
-        # ── Filtres ────────────────────────────────────────────────────────
         if not show_archived and task.get("is_archived"):
             continue
         if priority and task.get("priority") != priority:
@@ -112,13 +116,23 @@ def list_tasks():
     return jsonify(tasks)
 
 
+# ── POST /api/tasks/ ─────────────────────────────────────────────────────────
+# CDC BF-07 / BF-08 : réservé au Chef de projet.
+# Admin → 403 (lecture seule).
+# La distinction chef/membre viendra à l'Étape 3 (projects.chef_id).
+
 @tasks_bp.route("/", methods=["POST"])
-def create_task():
+@require_auth
+def create_task(current_user):
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     data = request.get_json()
     task_id     = (data.get("id") or "").strip()
     description = (data.get("description") or "").strip()
     if not task_id or not description:
-        return jsonify({"error": "id and description required"}), 400
+        return jsonify({"error": "L'identifiant et la description sont obligatoires."}), 400
+
     conn = get_db()
     try:
         conn.execute(
@@ -148,8 +162,17 @@ def create_task():
         return jsonify({"error": str(e)}), 409
 
 
+# ── PUT /api/tasks/<task_id> ─────────────────────────────────────────────────
+# CDC BF-08 : Chef de projet → tous les champs ; Membre → statut seulement.
+# Admin → 403.
+# Note : la restriction Membre (statut seulement) viendra à l'Étape 3.
+
 @tasks_bp.route("/<task_id>", methods=["PUT"])
-def update_task(task_id):
+@require_auth
+def update_task(task_id, current_user):
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     data       = request.get_json()
     new_status = data.get("status", "todo")
     completed_at = data.get("completed_at")
@@ -180,11 +203,19 @@ def update_task(task_id):
     conn.commit()
     task = fetch_task(conn, task_id)
     conn.close()
-    return jsonify(task) if task else (jsonify({"error": "not found"}), 404)
+    return jsonify(task) if task else (jsonify({"error": "Tâche introuvable."}), 404)
 
+
+# ── DELETE /api/tasks/<task_id> ──────────────────────────────────────────────
+# CDC BF-09 : Chef de projet uniquement, après confirmation.
+# Admin → 403.
 
 @tasks_bp.route("/<task_id>", methods=["DELETE"])
-def delete_task(task_id):
+@require_auth
+def delete_task(task_id, current_user):
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     conn = get_db()
     conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
     conn.commit()
@@ -192,9 +223,16 @@ def delete_task(task_id):
     return jsonify({"deleted": task_id})
 
 
+# ── PATCH /api/tasks/<task_id>/archive ──────────────────────────────────────
+# CDC BF-08 : Chef de projet uniquement.
+# Admin → 403 (le commentaire précédent "admin uniquement" était incorrect).
+
 @tasks_bp.route("/<task_id>/archive", methods=["PATCH"])
-def archive_task(task_id):
-    """Archive une tâche — admin uniquement (vérifié côté frontend)."""
+@require_auth
+def archive_task(task_id, current_user):
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     conn.execute(
@@ -204,12 +242,19 @@ def archive_task(task_id):
     conn.commit()
     task = fetch_task(conn, task_id)
     conn.close()
-    return jsonify(task) if task else (jsonify({"error": "not found"}), 404)
+    return jsonify(task) if task else (jsonify({"error": "Tâche introuvable."}), 404)
 
+
+# ── PATCH /api/tasks/<task_id>/unarchive ────────────────────────────────────
+# CDC BF-08 : Chef de projet uniquement.
+# Admin → 403.
 
 @tasks_bp.route("/<task_id>/unarchive", methods=["PATCH"])
-def unarchive_task(task_id):
-    """Désarchive une tâche."""
+@require_auth
+def unarchive_task(task_id, current_user):
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     conn = get_db()
     conn.execute(
         "UPDATE tasks SET is_archived=0, archived_at=NULL WHERE id=?",
@@ -218,4 +263,4 @@ def unarchive_task(task_id):
     conn.commit()
     task = fetch_task(conn, task_id)
     conn.close()
-    return jsonify(task) if task else (jsonify({"error": "not found"}), 404)
+    return jsonify(task) if task else (jsonify({"error": "Tâche introuvable."}), 404)

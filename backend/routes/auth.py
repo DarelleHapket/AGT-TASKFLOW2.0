@@ -50,7 +50,8 @@ def login():
     token = encode_token({
         "member_id": member["id"],
         "name": member["name"],
-        "is_admin": bool(member.get("is_admin", 0))
+        "is_admin": bool(member.get("is_admin", 0)),
+        "role": member.get("role") or ("admin" if member.get("is_admin") else "membre")
     })
 
     return jsonify({
@@ -59,7 +60,8 @@ def login():
             "id": member["id"],
             "name": member["name"],
             "email": member["email"],
-            "is_admin": bool(member.get("is_admin", 0))
+            "is_admin": bool(member.get("is_admin", 0)),
+            "role": member.get("role") or ("admin" if member.get("is_admin") else "membre")
         }
     })
 
@@ -75,7 +77,8 @@ def me(current_user):
         "id": current_user["id"],
         "name": current_user["name"],
         "email": current_user["email"],
-        "is_admin": bool(current_user.get("is_admin", 0))
+        "is_admin": bool(current_user.get("is_admin", 0)),
+        "role": current_user.get("role") or ("admin" if current_user.get("is_admin") else "membre")
     })
 
 

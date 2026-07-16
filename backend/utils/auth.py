@@ -70,3 +70,25 @@ def require_admin(f):
             return jsonify({"error": "Accès réservé à l'administrateur"}), 403
         return f(*args, current_user=user, **kwargs)
     return decorated
+
+
+def require_role(*roles):
+    """
+    Décorateur — restreint l'accès aux rôles fournis.
+    Ex: @require_role("admin", "chef_projet")
+    L'admin (role='admin' ou is_admin=1) passe toujours.
+    Injecte current_user dans la vue.
+    """
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user, error = get_current_user()
+            if error:
+                return jsonify({"error": error}), 401
+            user_role = user.get("role") or ("admin" if user.get("is_admin") else "membre")
+            # L'admin a toujours accès, quels que soient les rôles exigés
+            if user_role == "admin" or user_role in roles:
+                return f(*args, current_user=user, **kwargs)
+            return jsonify({"error": "Accès non autorisé pour votre rôle"}), 403
+        return decorated
+    return wrapper

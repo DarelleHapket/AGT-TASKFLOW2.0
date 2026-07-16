@@ -1,4 +1,4 @@
-## 🤝 Conventions de travail à deux (poste A backend / poste B frontend)
+## 🤝 Conventions de travail à deux
 
 Fichiers partagés : `docs/ia/INDEX.md`, `docs/ia/TODO.md`, `frontend/src/api/client.js`.
 

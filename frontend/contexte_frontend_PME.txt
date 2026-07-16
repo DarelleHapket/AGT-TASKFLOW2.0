@@ -1,0 +1,2048 @@
+﻿Next.js Project Context
+Generated On: 2026-05-05 14:14:46
+Root: C:\Users\hp\Documents\AGT-TASKFLOW\frontend
+===============================================
+
+// FILE: src/api/client.js
+-----------------------------------------------
+const BASE = "/api";
+
+async function req(method, path, body) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(BASE + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// Tasks
+export const getTasks      = () => req("GET", "/tasks/");
+export const createTask    = (t) => req("POST", "/tasks/", t);
+export const updateTask    = (id, t) => req("PUT", `/tasks/${id}`, t);
+export const deleteTask    = (id) => req("DELETE", `/tasks/${id}`);
+
+// Projects
+export const getProjects   = () => req("GET", "/projects/");
+export const createProject = (p) => req("POST", "/projects/", p);
+export const updateProject = (id, p) => req("PUT", `/projects/${id}`, p);
+export const deleteProject = (id) => req("DELETE", `/projects/${id}`);
+
+// Activities
+export const getActivities   = (pid) => req("GET", `/activities/${pid ? `?project_id=${pid}` : ""}`);
+export const createActivity  = (a) => req("POST", "/activities/", a);
+export const updateActivity  = (id, a) => req("PUT", `/activities/${id}`, a);
+export const deleteActivity  = (id) => req("DELETE", `/activities/${id}`);
+
+// Members
+export const getMembers    = () => req("GET", "/members/");
+export const createMember  = (m) => req("POST", "/members/", m);
+export const deleteMember  = (id) => req("DELETE", `/members/${id}`);
+
+// Needs
+export const getNeeds      = () => req("GET", "/needs/");
+export const getNeedTypes  = () => req("GET", "/needs/types");
+export const createNeed    = (n) => req("POST", "/needs/", n);
+export const updateNeed    = (id, n) => req("PUT", `/needs/${id}`, n);
+export const deleteNeed    = (id) => req("DELETE", `/needs/${id}`);
+
+// Notes
+export const getNotes      = () => req("GET", "/notes/");
+export const createNote    = (n) => req("POST", "/notes/", n);
+export const updateNote    = (id, n) => req("PUT", `/notes/${id}`, n);
+export const deleteNote    = (id) => req("DELETE", `/notes/${id}`);
+
+// Performance
+export const getPerformance = (dateFrom, dateTo) => {
+  const params = new URLSearchParams();
+  if (dateFrom) params.set("date_from", dateFrom);
+  if (dateTo)   params.set("date_to", dateTo);
+  const qs = params.toString();
+  return req("GET", `/performance/${qs ? "?" + qs : ""}`);
+};
+
+// END OF FILE: src/api/client.js
+
+// FILE: src/components/activities/ActivitiesView.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+
+function ActivityForm({ initial, projects, onSave, onCancel }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [desc, setDesc] = useState(initial?.description || "");
+  const [pid, setPid] = useState(initial?.project_id ? String(initial.project_id) : "");
+
+  return (
+    <div style={{ padding: "14px 16px", background: "var(--accent-bg)", borderBottom: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 160 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", display: "block", marginBottom: 4 }}>PROJET</label>
+        <select value={pid} onChange={(e) => setPid(e.target.value)}>
+          <option value="">— Choisir —</option>
+          {projects.map((p) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+        </select>
+      </div>
+      <div style={{ flex: 1, minWidth: 160 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", display: "block", marginBottom: 4 }}>NOM DE L'ACTIVITÉ</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Backend" />
+      </div>
+      <div style={{ flex: 2, minWidth: 180 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", display: "block", marginBottom: 4 }}>DESCRIPTION</label>
+        <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description optionnelle…" />
+      </div>
+      <div style={{ display: "flex", gap: 8, paddingBottom: 1 }}>
+        <button onClick={onCancel} style={{ border: "1px solid var(--border)", background: "white", borderRadius: 8, padding: "7px 12px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
+          <X size={14} />
+        </button>
+        <button
+          onClick={() => name.trim() && pid && onSave({ name: name.trim(), description: desc.trim(), project_id: Number(pid) })}
+          style={{ background: "var(--accent)", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", color: "white", display: "flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13 }}
+        >
+          <Check size={14} /> Enregistrer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete }) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [filterPid, setFilterPid] = useState("all");
+
+  const visible = filterPid === "all" ? activities : activities.filter((a) => String(a.project_id) === filterPid);
+
+  return (
+    <div style={{ maxWidth: 700 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Activités</h2>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{activities.length} activité{activities.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Nouvelle activité
+        </button>
+      </div>
+
+      {/* Filter by project */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, padding: "10px 14px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", alignSelf: "center" }}>PROJET</span>
+        {["all", ...projects.map((p) => String(p.id))].map((pid) => {
+          const label = pid === "all" ? "Tous" : projects.find((p) => String(p.id) === pid)?.name;
+          return (
+            <button key={pid} onClick={() => setFilterPid(pid)} style={{ padding: "3px 12px", borderRadius: 20, border: `1.5px solid ${filterPid === pid ? "var(--accent)" : "var(--border)"}`, background: filterPid === pid ? "var(--accent)" : "transparent", color: filterPid === pid ? "white" : "var(--text-2)", cursor: "pointer", fontSize: 11, fontWeight: filterPid === pid ? 700 : 400 }}>{label}</button>
+          );
+        })}
+      </div>
+
+      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        {adding && (
+          <ActivityForm projects={projects} onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />
+        )}
+        {visible.length === 0 && !adding && (
+          <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🔖</div>
+            <div>Aucune activité pour ce filtre.</div>
+          </div>
+        )}
+        {visible.map((a) =>
+          editing?.id === a.id ? (
+            <ActivityForm key={a.id} initial={a} projects={projects} onSave={async (d) => { await onUpdate(a.id, d); setEditing(null); }} onCancel={() => setEditing(null)} />
+          ) : (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🔖</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{a.name}</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>📁 {a.project_name}{a.description ? ` · ${a.description}` : ""}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setEditing(a)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
+                  <Pencil size={13} />
+                </button>
+                <button onClick={() => { if (window.confirm(`Supprimer l'activité "${a.name}" ?`)) onDelete(a.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/activities/ActivitiesView.jsx
+
+// FILE: src/components/gantt/GanttView.jsx
+-----------------------------------------------
+import { FilterBar } from "../shared/FilterBar";
+
+export function GanttView({ tasks, projects, members, pert, filters, setFilters, memberColor }) {
+  const ROW = 38, LW = 230, CW = 46, HH = 44;
+  const sorted = [...tasks].sort((a, b) => (pert.ES[a.id] ?? 0) - (pert.ES[b.id] ?? 0));
+  const maxC = Math.max(pert.end || 0, 10);
+  const cols = Array.from({ length: maxC + 2 }, (_, i) => i);
+  const W = LW + (maxC + 2) * CW;
+  const H = HH + sorted.length * ROW + 20;
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 16px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Diagramme de Gantt</h2>
+      <FilterBar filters={filters} setFilters={setFilters} projects={projects} members={members} showStatus={false} />
+
+      <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", overflow: "auto", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+        <svg width={W} height={H}>
+          <defs>
+            <marker id="ga" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <polygon points="0 0, 7 3.5, 0 7" fill="#94a3b8" />
+            </marker>
+          </defs>
+          {/* Header */}
+          <rect x={0} y={0} width={LW} height={HH} fill="#f8fafc" />
+          <text x={LW / 2} y={HH / 2 + 5} textAnchor="middle" fill="#94a3b8" fontSize={11} fontWeight="700" letterSpacing=".08em">TÂCHE</text>
+          {cols.map((c) => (
+            <g key={c}>
+              <rect x={LW + c * CW} y={0} width={CW} height={HH} fill={c % 2 === 0 ? "#f8fafc" : "#f1f5f9"} />
+              <rect x={LW + c * CW} y={HH - 2} width={CW} height={2} fill="#e2e8f0" />
+              <text x={LW + c * CW + CW / 2} y={HH / 2 + 5} textAnchor="middle" fill="#94a3b8" fontSize={12}>{c}</text>
+            </g>
+          ))}
+          {/* Rows */}
+          {sorted.map((t, i) => {
+            const y = HH + i * ROW;
+            const es = pert.ES[t.id] ?? 0, dur = t.duration || 1;
+            const slack = pert.slack[t.id] ?? null, isCrit = slack === 0;
+            const c = memberColor(t.responsible);
+            return (
+              <g key={t.id}>
+                <rect x={0} y={y} width={LW} height={ROW} fill={i % 2 === 0 ? "#ffffff" : "#f8fafc"} />
+                {isCrit && <rect x={0} y={y} width={3} height={ROW} fill="#ef4444" />}
+                {cols.map((c2) => (
+                  <rect key={c2} x={LW + c2 * CW} y={y} width={CW} height={ROW} fill={i % 2 === 0 ? "#ffffff" : "#f8fafc"} stroke="#e2e8f0" strokeWidth={0.5} />
+                ))}
+                <text x={isCrit ? 10 : 8} y={y + ROW / 2 + 4} fontSize={11} fill={isCrit ? "#ef4444" : "#475569"} fontWeight={isCrit ? "700" : "400"}>
+                  {t.id}: {(t.description || "").slice(0, 26)}{(t.description || "").length > 26 ? "…" : ""}
+                </text>
+                {/* Slack indicator */}
+                {slack !== null && slack > 0 && (
+                  <rect x={LW + (es + dur) * CW + 3} y={y + 12} width={slack * CW - 6} height={ROW - 24} fill="#e2e8f0" rx={4} opacity={0.5} />
+                )}
+                <rect x={LW + es * CW + 3} y={y + 7} width={Math.max(dur * CW - 6, 4)} height={ROW - 14}
+                  fill={c} rx={6} opacity={t.status === "done" ? 0.4 : 1}
+                  stroke={isCrit ? "#ef4444" : "transparent"} strokeWidth={2}
+                />
+                {dur * CW > 32 && (
+                  <text x={LW + es * CW + dur * CW / 2} y={y + ROW / 2 + 4} textAnchor="middle" fill="white" fontSize={10} fontWeight="bold">{dur}c</text>
+                )}
+              </g>
+            );
+          })}
+          {/* Dependency arrows */}
+          {sorted.map((t) =>
+            (t.dependencies || []).map((did) => {
+              const fi = sorted.findIndex((x) => x.id === did);
+              const ti = sorted.findIndex((x) => x.id === t.id);
+              if (fi < 0 || ti < 0) return null;
+              const x1 = LW + (pert.EF[did] ?? 0) * CW, y1 = HH + fi * ROW + ROW / 2;
+              const x2 = LW + (pert.ES[t.id] ?? 0) * CW, y2 = HH + ti * ROW + ROW / 2;
+              const isCrit = pert.slack[did] === 0 && pert.slack[t.id] === 0;
+              return (
+                <path key={`${did}>${t.id}`}
+                  d={`M${x1},${y1} C${x1 + 24},${y1} ${x2 - 24},${y2} ${x2},${y2}`}
+                  fill="none" stroke={isCrit ? "#ef4444" : "#94a3b8"} strokeWidth={isCrit ? 2 : 1}
+                  strokeDasharray={isCrit ? "none" : "5,3"} markerEnd="url(#ga)"
+                />
+              );
+            })
+          )}
+        </svg>
+      </div>
+
+      <div style={{ marginTop: 10, display: "flex", gap: 16, flexWrap: "wrap", padding: "10px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
+        {members.map((m) => (
+          <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: m.color }} />
+            <span style={{ fontSize: 11, color: "var(--text-2)" }}>{m.name}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 3, height: 14, background: "#ef4444", borderRadius: 2 }} />
+          <span style={{ fontSize: 11, color: "var(--text-2)" }}>Chemin critique</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 18, height: 10, borderRadius: 3, background: "#e2e8f0" }} />
+          <span style={{ fontSize: 11, color: "var(--text-2)" }}>Marge disponible</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/gantt/GanttView.jsx
+
+// FILE: src/components/needs/NeedsView.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { Plus, Pencil, Trash2, X, Check } from "lucide-react";
+
+const PREDEFINED_TYPES = ["Matériel", "Logiciel", "Humain", "Autre"];
+const STATUSES = [
+  { value: "initié",   label: "Initié",   color: "#64748b" },
+  { value: "demandé",  label: "Demandé",  color: "#f59e0b" },
+  { value: "couvert",  label: "Couvert",  color: "#22c55e" },
+];
+
+function StatusBadge({ status }) {
+  const s = STATUSES.find((x) => x.value === status) || STATUSES[0];
+  return (
+    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: s.color + "18", color: s.color, border: `1px solid ${s.color}33` }}>
+      {s.label}
+    </span>
+  );
+}
+
+function TypeBadge({ type }) {
+  return (
+    <span style={{ padding: "2px 9px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: "var(--accent-bg)", color: "var(--accent)", border: "1px solid var(--accent)33", letterSpacing: ".04em" }}>
+      {type}
+    </span>
+  );
+}
+
+const inp = { width: "100%", padding: "8px 12px", borderRadius: 8, border: "1.5px solid var(--border)", fontSize: 13, outline: "none", background: "var(--bg-input)", color: "var(--text)", fontFamily: "inherit", boxSizing: "border-box" };
+const lbl = { fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 4, display: "block", letterSpacing: ".08em" };
+
+function NeedForm({ initial, projects, activities, onSave, onCancel }) {
+  const [f, setF] = useState({
+    title: initial?.title || "",
+    description: initial?.description || "",
+    type: initial?.type || "Autre",
+    customType: "",
+    status: initial?.status || "initié",
+    project_id: initial?.project_id ? String(initial.project_id) : "",
+    activity_id: initial?.activity_id ? String(initial.activity_id) : "",
+  });
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const isCustom = !PREDEFINED_TYPES.includes(f.type);
+  const filteredActs = activities.filter((a) => !f.project_id || String(a.project_id) === f.project_id);
+
+  const handleSave = () => {
+    if (!f.title.trim()) return;
+    const type = isCustom ? f.customType.trim() || "Autre" : f.type;
+    onSave({ ...f, type, project_id: f.project_id || null, activity_id: f.activity_id || null });
+  };
+
+  return (
+    <div style={{ padding: 20, background: "var(--accent-bg)", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={lbl}>TITRE DU BESOIN *</label>
+          <input style={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="Ex: Licence Adobe XD" />
+        </div>
+        <div>
+          <label style={lbl}>TYPE</label>
+          <select style={inp} value={isCustom ? "__custom__" : f.type} onChange={(e) => set("type", e.target.value === "__custom__" ? f.customType || "" : e.target.value)}>
+            {PREDEFINED_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            <option value="__custom__">Personnalisé…</option>
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>STATUT</label>
+          <select style={inp} value={f.status} onChange={(e) => set("status", e.target.value)}>
+            {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
+        {(isCustom || f.type === "__custom__") && (
+          <div style={{ gridColumn: "1/-1" }}>
+            <label style={lbl}>TYPE PERSONNALISÉ</label>
+            <input style={inp} value={f.customType} onChange={(e) => set("customType", e.target.value)} placeholder="Ex: Formation, Infrastructure…" />
+          </div>
+        )}
+        <div>
+          <label style={lbl}>PROJET (optionnel)</label>
+          <select style={inp} value={f.project_id} onChange={(e) => { set("project_id", e.target.value); set("activity_id", ""); }}>
+            <option value="">— Général —</option>
+            {projects.map((p) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>ACTIVITÉ (optionnel)</label>
+          <select style={inp} value={f.activity_id} onChange={(e) => set("activity_id", e.target.value)}>
+            <option value="">— Aucune —</option>
+            {filteredActs.map((a) => <option key={a.id} value={String(a.id)}>{a.name}</option>)}
+          </select>
+        </div>
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={lbl}>DESCRIPTION</label>
+          <textarea style={{ ...inp, height: 64, resize: "vertical" }} value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Détails du besoin…" />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={onCancel} style={{ border: "1px solid var(--border)", background: "white", borderRadius: 8, padding: "7px 14px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center", gap: 5 }}><X size={13} /> Annuler</button>
+        <button onClick={handleSave} style={{ background: "var(--accent)", border: "none", borderRadius: 8, padding: "7px 16px", cursor: "pointer", color: "white", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}><Check size={13} /> Enregistrer</button>
+      </div>
+    </div>
+  );
+}
+
+export function NeedsView({ needs, projects, activities, onAdd, onUpdate, onDelete }) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const visible = filterStatus === "all" ? needs : needs.filter((n) => n.status === filterStatus);
+
+  return (
+    <div style={{ maxWidth: 800 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Besoins</h2>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{needs.length} besoin{needs.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Nouveau besoin
+        </button>
+      </div>
+
+      {/* Status filter */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, padding: "10px 14px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", alignSelf: "center" }}>STATUT</span>
+        {["all", ...STATUSES.map((s) => s.value)].map((sv) => {
+          const label = sv === "all" ? "Tous" : STATUSES.find((s) => s.value === sv)?.label;
+          const active = filterStatus === sv;
+          return (
+            <button key={sv} onClick={() => setFilterStatus(sv)} style={{ padding: "3px 12px", borderRadius: 20, border: `1.5px solid ${active ? "var(--accent)" : "var(--border)"}`, background: active ? "var(--accent)" : "transparent", color: active ? "white" : "var(--text-2)", cursor: "pointer", fontSize: 11, fontWeight: active ? 700 : 400 }}>{label}</button>
+          );
+        })}
+      </div>
+
+      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        {adding && <NeedForm projects={projects} activities={activities} onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />}
+        {visible.length === 0 && !adding && (
+          <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🎯</div>
+            <div>Aucun besoin enregistré.</div>
+          </div>
+        )}
+        {visible.map((n) =>
+          editing?.id === n.id ? (
+            <NeedForm key={n.id} initial={n} projects={projects} activities={activities}
+              onSave={async (d) => { await onUpdate(n.id, d); setEditing(null); }}
+              onCancel={() => setEditing(null)} />
+          ) : (
+            <div key={n.id} style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)", display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 5 }}>
+                  <TypeBadge type={n.type} />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{n.title}</span>
+                  <StatusBadge status={n.status} />
+                </div>
+                {n.description && <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 4 }}>{n.description}</div>}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {n.project_name && <span style={{ fontSize: 11, color: "var(--text-3)" }}>📁 {n.project_name}</span>}
+                  {n.activity_name && <span style={{ fontSize: 11, color: "var(--text-3)" }}>🔖 {n.activity_name}</span>}
+                  {!n.project_name && <span style={{ fontSize: 11, color: "var(--text-3)" }}>🌐 Général</span>}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button onClick={() => setEditing(n)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
+                <button onClick={() => { if (window.confirm("Supprimer ce besoin ?")) onDelete(n.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/needs/NeedsView.jsx
+
+// FILE: src/components/notes/NotesView.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { Plus, Pencil, Trash2, X, Check, FileText } from "lucide-react";
+
+const inp = { width: "100%", padding: "8px 12px", borderRadius: 8, border: "1.5px solid var(--border)", fontSize: 13, outline: "none", background: "var(--bg-input)", color: "var(--text)", fontFamily: "inherit", boxSizing: "border-box" };
+const lbl = { fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 4, display: "block", letterSpacing: ".08em" };
+
+function NoteForm({ initial, projects, activities, tasks, onSave, onCancel }) {
+  const [f, setF] = useState({
+    title: initial?.title || "",
+    content: initial?.content || "",
+    project_id: initial?.project_id ? String(initial.project_id) : "",
+    activity_id: initial?.activity_id ? String(initial.activity_id) : "",
+    task_id: initial?.task_id || "",
+  });
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const filteredActs = activities.filter((a) => !f.project_id || String(a.project_id) === f.project_id);
+  const filteredTasks = tasks.filter((t) => !f.project_id || String(t.project_id) === f.project_id);
+
+  return (
+    <div style={{ padding: 20, background: "#f0fdf4", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={lbl}>TITRE *</label>
+          <input style={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="Titre de la note…" />
+        </div>
+        <div>
+          <label style={lbl}>PROJET (optionnel)</label>
+          <select style={inp} value={f.project_id} onChange={(e) => { set("project_id", e.target.value); set("activity_id", ""); set("task_id", ""); }}>
+            <option value="">— Note générale —</option>
+            {projects.map((p) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>ACTIVITÉ (optionnel)</label>
+          <select style={inp} value={f.activity_id} onChange={(e) => set("activity_id", e.target.value)}>
+            <option value="">— Aucune —</option>
+            {filteredActs.map((a) => <option key={a.id} value={String(a.id)}>{a.name}</option>)}
+          </select>
+        </div>
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={lbl}>TÂCHE LIÉE (optionnel)</label>
+          <select style={inp} value={f.task_id} onChange={(e) => set("task_id", e.target.value)}>
+            <option value="">— Aucune —</option>
+            {filteredTasks.map((t) => <option key={t.id} value={t.id}>{t.id} — {(t.description || "").slice(0, 40)}</option>)}
+          </select>
+        </div>
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={lbl}>CONTENU</label>
+          <textarea style={{ ...inp, height: 100, resize: "vertical" }} value={f.content} onChange={(e) => set("content", e.target.value)} placeholder="Contenu de la note…" />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={onCancel} style={{ border: "1px solid var(--border)", background: "white", borderRadius: 8, padding: "7px 14px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center", gap: 5 }}><X size={13} /> Annuler</button>
+        <button onClick={() => f.title.trim() && onSave({ ...f, project_id: f.project_id || null, activity_id: f.activity_id || null, task_id: f.task_id || null })}
+          style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "7px 16px", cursor: "pointer", color: "white", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
+          <Check size={13} /> Enregistrer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function NotesView({ notes, projects, activities, tasks, onAdd, onUpdate, onDelete }) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [filterPid, setFilterPid] = useState("all");
+
+  const visible = filterPid === "all" ? notes
+    : filterPid === "general" ? notes.filter((n) => !n.project_id)
+    : notes.filter((n) => String(n.project_id) === filterPid);
+
+  const fmt = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+
+  return (
+    <div style={{ maxWidth: 800 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Notes</h2>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{notes.length} note{notes.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "#16a34a", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Nouvelle note
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, padding: "10px 14px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", alignSelf: "center" }}>FILTRER</span>
+        {[{ v: "all", l: "Toutes" }, { v: "general", l: "Générales" }, ...projects.map((p) => ({ v: String(p.id), l: p.name }))].map(({ v, l }) => {
+          const active = filterPid === v;
+          return <button key={v} onClick={() => setFilterPid(v)} style={{ padding: "3px 12px", borderRadius: 20, border: `1.5px solid ${active ? "#16a34a" : "var(--border)"}`, background: active ? "#16a34a" : "transparent", color: active ? "white" : "var(--text-2)", cursor: "pointer", fontSize: 11, fontWeight: active ? 700 : 400 }}>{l}</button>;
+        })}
+      </div>
+
+      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        {adding && <NoteForm projects={projects} activities={activities} tasks={tasks} onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />}
+        {visible.length === 0 && !adding && (
+          <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>📝</div>
+            <div>Aucune note pour ce filtre.</div>
+          </div>
+        )}
+        {visible.map((n) =>
+          editing?.id === n.id ? (
+            <NoteForm key={n.id} initial={n} projects={projects} activities={activities} tasks={tasks}
+              onSave={async (d) => { await onUpdate(n.id, d); setEditing(null); }}
+              onCancel={() => setEditing(null)} />
+          ) : (
+            <div key={n.id} style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)", display: "flex", gap: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <FileText size={15} color="#16a34a" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)", marginBottom: 3 }}>{n.title}</div>
+                {n.content && <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 5, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{n.content.slice(0, 200)}{n.content.length > 200 ? "…" : ""}</div>}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "var(--text-3)" }}>
+                  {n.project_name ? <span>📁 {n.project_name}</span> : <span>🌐 Générale</span>}
+                  {n.activity_name && <span>🔖 {n.activity_name}</span>}
+                  {n.task_id && <span>📋 {n.task_id}</span>}
+                  <span style={{ marginLeft: "auto" }}>🕐 {fmt(n.updated_at)}</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button onClick={() => setEditing(n)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
+                <button onClick={() => { if (window.confirm("Supprimer cette note ?")) onDelete(n.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/notes/NotesView.jsx
+
+// FILE: src/components/performance/PerformanceView.jsx
+-----------------------------------------------
+import { useState, useEffect } from "react";
+import { getPerformance } from "../../api/client";
+import { Trophy, TrendingUp, Clock } from "lucide-react";
+
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const mon = new Date(now); mon.setDate(now.getDate() + diffToMon);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return [fmt(mon), fmt(sun)];
+}
+
+function getMonthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return [from, to];
+}
+
+const PERIODS = [
+  { id: "week",   label: "Cette semaine" },
+  { id: "month",  label: "Ce mois" },
+  { id: "custom", label: "Plage personnalisée" },
+  { id: "all",    label: "Tout" },
+];
+
+function MedalIcon({ rank }) {
+  if (rank === 0) return <span style={{ fontSize: 22 }}>🥇</span>;
+  if (rank === 1) return <span style={{ fontSize: 22 }}>🥈</span>;
+  if (rank === 2) return <span style={{ fontSize: 22 }}>🥉</span>;
+  return <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-3)", width: 28, textAlign: "center" }}>#{rank + 1}</span>;
+}
+
+export function PerformanceView({ members }) {
+  const [period, setPeriod]     = useState("month");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo]     = useState("");
+  const [data, setData]         = useState([]);
+  const [loading, setLoading]   = useState(false);
+
+  const memberColor = (name) => members.find((m) => m.name === name)?.color || "#94a3b8";
+
+  const load = async (p, df, dt) => {
+    setLoading(true);
+    let from = df, to = dt;
+    if (p === "week") { [from, to] = getWeekRange(); }
+    else if (p === "month") { [from, to] = getMonthRange(); }
+    else if (p === "all") { from = ""; to = ""; }
+    try {
+      const res = await getPerformance(from, to);
+      setData(res);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(period, dateFrom, dateTo); }, []);
+
+  const handlePeriod = (p) => {
+    setPeriod(p);
+    if (p !== "custom") load(p, "", "");
+  };
+
+  const maxCoupons = data.length ? Math.max(...data.map((d) => d.total_coupons), 1) : 1;
+
+  return (
+    <div style={{ maxWidth: 860 }}>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Performances</h2>
+        <span style={{ fontSize: 12, color: "var(--text-3)" }}>Coupons cumulés sur les tâches terminées</span>
+      </div>
+
+      {/* Period selector */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 20, padding: "12px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginRight: 4 }}>PÉRIODE</span>
+        {PERIODS.map(({ id, label }) => {
+          const active = period === id;
+          return <button key={id} onClick={() => handlePeriod(id)} style={{ padding: "4px 14px", borderRadius: 20, border: `1.5px solid ${active ? "var(--accent)" : "var(--border)"}`, background: active ? "var(--accent)" : "transparent", color: active ? "white" : "var(--text-2)", cursor: "pointer", fontSize: 11, fontWeight: active ? 700 : 400 }}>{label}</button>;
+        })}
+        {period === "custom" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: 8 }}>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              style={{ padding: "4px 10px", borderRadius: 8, border: "1.5px solid var(--border)", fontSize: 12, outline: "none", background: "white", color: "var(--text)" }} />
+            <span style={{ color: "var(--text-3)", fontSize: 12 }}>→</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              style={{ padding: "4px 10px", borderRadius: 8, border: "1.5px solid var(--border)", fontSize: 12, outline: "none", background: "white", color: "var(--text)" }} />
+            <button onClick={() => load("custom", dateFrom, dateTo)}
+              style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "5px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+              Appliquer
+            </button>
+          </div>
+        )}
+      </div>
+
+      {loading && <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>Chargement…</div>}
+
+      {!loading && data.length === 0 && (
+        <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)", background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>📊</div>
+          <div>Aucune tâche terminée sur cette période.</div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>Marquez des tâches comme "Terminée" pour voir les stats.</div>
+        </div>
+      )}
+
+      {!loading && data.length > 0 && (
+        <>
+          {/* Podium cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 20 }}>
+            {data.map((d, i) => {
+              const color = memberColor(d.member);
+              return (
+                <div key={d.member} style={{ background: "var(--bg-card)", borderRadius: 14, padding: 16, border: `2px solid ${i === 0 ? "#f59e0b" : "var(--border)"}`, boxShadow: i === 0 ? "0 4px 20px #f59e0b20" : "var(--shadow)", position: "relative" }}>
+                  <div style={{ position: "absolute", top: 12, right: 12 }}><MedalIcon rank={i} /></div>
+                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 18, marginBottom: 10 }}>
+                    {d.member[0]?.toUpperCase()}
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: "var(--text)", marginBottom: 4 }}>{d.member}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 6 }}>
+                    <span style={{ fontSize: 28, fontWeight: 900, color }}>{d.total_coupons}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>coupons</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>{d.task_count} tâche{d.task_count !== 1 ? "s" : ""} terminée{d.task_count !== 1 ? "s" : ""}</div>
+                  {/* Mini bar */}
+                  <div style={{ marginTop: 10, height: 5, background: "var(--border)", borderRadius: 3 }}>
+                    <div style={{ height: "100%", width: `${Math.round((d.total_coupons / maxCoupons) * 100)}%`, background: color, borderRadius: 3, transition: "width .5s" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Detailed table */}
+          <div style={{ background: "var(--bg-card)", borderRadius: 14, border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+            <div style={{ padding: "12px 16px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "2fr 3fr 1fr 1fr", gap: 8 }}>
+              {["MEMBRE", "PAR PROJET", "TÂCHES", "COUPONS"].map((h) => (
+                <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em" }}>{h}</span>
+              ))}
+            </div>
+            {data.map((d, i) => {
+              const color = memberColor(d.member);
+              return (
+                <div key={d.member} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "2fr 3fr 1fr 1fr", gap: 8, alignItems: "start", background: i % 2 === 0 ? "var(--bg-card)" : "var(--bg)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
+                      {d.member[0]?.toUpperCase()}
+                    </div>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{d.member}</span>
+                  </div>
+                  <div>
+                    {d.by_project.map((bp) => (
+                      <div key={bp.project} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-2)", marginBottom: 2 }}>
+                        <span>📁 {bp.project}</span>
+                        <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--text-3)" }}>{bp.total_coupons}c</span>
+                      </div>
+                    ))}
+                  </div>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{d.task_count}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontWeight: 800, fontSize: 16, color }}>{d.total_coupons}</span>
+                    <span style={{ fontSize: 10, color: "var(--text-3)" }}>c</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// END OF FILE: src/components/performance/PerformanceView.jsx
+
+// FILE: src/components/pert/PERTView.jsx
+-----------------------------------------------
+import { useState } from "react";
+
+export function PERTView({ tasks, projects, pert }) {
+  const [pf, setPf] = useState("all");
+
+  // Exclure les tâches en cycle du rendu PERT
+  const cycleSet = new Set(pert.cycles || []);
+  const filtered = (pf === "all" ? tasks : tasks.filter((t) => String(t.project_id) === String(pf)))
+    .filter((t) => !cycleSet.has(t.id));
+
+  const NW = 180, NH = 100, HG = 70, VG = 22;
+  const map = Object.fromEntries(filtered.map((t) => [t.id, t]));
+  const level = {};
+  const visiting = new Set();
+  const gl = (id) => {
+    if (level[id] !== undefined) return level[id];
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const deps = (map[id]?.dependencies || []).filter((d) => map[d] && !cycleSet.has(d));
+    const result = deps.length ? Math.max(...deps.map(gl)) + 1 : 0;
+    visiting.delete(id);
+    return (level[id] = result);
+  };
+  filtered.forEach((t) => gl(t.id));
+  const byL = {};
+  filtered.forEach((t) => { const l = level[t.id] || 0; (byL[l] = byL[l] || []).push(t); });
+
+  const pos = {};
+  Object.keys(byL).sort((a, b) => a - b).forEach((l) => {
+    byL[l].forEach((t, i) => { pos[t.id] = { x: Number(l) * (NW + HG) + 24, y: i * (NH + VG) + 24 }; });
+  });
+
+  const maxL = Object.keys(byL).length ? Math.max(...Object.keys(byL).map(Number)) : 0;
+  const maxC = Object.values(byL).length ? Math.max(...Object.values(byL).map((g) => g.length)) : 1;
+  const SW = (maxL + 1) * (NW + HG) + 48, SH = maxC * (NH + VG) + 48;
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 16px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Diagramme PERT</h2>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16, padding: "10px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em", alignSelf: "center" }}>PROJET</span>
+        {["all", ...projects.map((p) => String(p.id))].map((pid) => {
+          const label = pid === "all" ? "Tous" : (projects.find((p) => String(p.id) === pid)?.name || pid);
+          return (
+            <button key={pid} onClick={() => setPf(pid)} style={{ padding: "3px 12px", borderRadius: 20, border: `1.5px solid ${pf === pid ? "var(--accent)" : "var(--border)"}`, background: pf === pid ? "var(--accent)" : "transparent", color: pf === pid ? "white" : "var(--text-2)", cursor: "pointer", fontSize: 11, fontWeight: pf === pid ? 700 : 400 }}>{label}</button>
+          );
+        })}
+      </div>
+
+      {cycleSet.size > 0 && (
+        <div style={{ marginBottom: 12, padding: "10px 16px", background: "#fef9c3", border: "1px solid #fde047", borderRadius: 10, fontSize: 12, color: "#854d0e", display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+          <div>
+            <b>Cycle de dépendances détecté</b> — ces tâches se référencent mutuellement et sont exclues du diagramme PERT :
+            <div style={{ marginTop: 4, fontFamily: "monospace", fontWeight: 700 }}>{[...cycleSet].join(", ")}</div>
+            <div style={{ marginTop: 4, color: "#a16207" }}>Corrige les dépendances de ces tâches pour les voir apparaître.</div>
+          </div>
+        </div>
+      )}
+      <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", overflow: "auto", border: "1px solid var(--border)", padding: 8 }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 80, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔗</div>
+            <div>Aucune tâche pour ce filtre</div>
+          </div>
+        ) : (
+          <svg width={SW} height={SH}>
+            <defs>
+              <marker id="pa" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <polygon points="0 0, 8 4, 0 8" fill="#94a3b8" />
+              </marker>
+              <marker id="ca" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <polygon points="0 0, 8 4, 0 8" fill="#ef4444" />
+              </marker>
+            </defs>
+            {filtered.map((t) =>
+              (t.dependencies || []).map((did) => {
+                if (!pos[did] || !pos[t.id]) return null;
+                const fr = pos[did], to = pos[t.id];
+                const x1 = fr.x + NW, y1 = fr.y + NH / 2, x2 = to.x, y2 = to.y + NH / 2;
+                const isCrit = pert.slack[did] === 0 && pert.slack[t.id] === 0;
+                return (
+                  <path key={`${did}>${t.id}`}
+                    d={`M${x1},${y1} C${x1 + HG * .55},${y1} ${x2 - HG * .55},${y2} ${x2},${y2}`}
+                    fill="none" stroke={isCrit ? "#ef4444" : "#cbd5e1"} strokeWidth={isCrit ? 2.5 : 1.5}
+                    markerEnd={`url(#${isCrit ? "ca" : "pa"})`}
+                  />
+                );
+              })
+            )}
+            {filtered.map((t) => {
+              const p = pos[t.id]; if (!p) return null;
+              const slack = pert.slack[t.id] ?? null, isCrit = slack === 0;
+              const bc = isCrit ? "#ef4444" : "var(--accent)";
+              const bg = isCrit ? "#fff8f8" : "#ffffff";
+              const es = pert.ES[t.id] ?? "-", ef = pert.EF[t.id] ?? "-";
+              const ls = pert.LS[t.id] ?? "-", lf = pert.LF[t.id] ?? "-";
+              const desc = (t.description || "").slice(0, 21) + ((t.description || "").length > 21 ? "…" : "");
+              return (
+                <g key={t.id} transform={`translate(${p.x},${p.y})`}>
+                  <rect width={NW} height={NH} rx={8} fill={bg} stroke={bc} strokeWidth={isCrit ? 2.5 : 1.5} />
+                  <rect width={NW} height={32} rx="7 7 0 0" fill={isCrit ? "#fef2f2" : "#f8fafc"} />
+                  <line x1={NW / 2} y1={0} x2={NW / 2} y2={32} stroke={bc} strokeWidth={1} />
+                  <text x={NW / 4} y={11} textAnchor="middle" fontSize={8} fill={bc} fontWeight="700" letterSpacing=".06em">ES</text>
+                  <text x={NW * 3 / 4} y={11} textAnchor="middle" fontSize={8} fill={bc} fontWeight="700" letterSpacing=".06em">EF</text>
+                  <text x={NW / 4} y={26} textAnchor="middle" fontSize={15} fill={bc} fontWeight="800">{es}</text>
+                  <text x={NW * 3 / 4} y={26} textAnchor="middle" fontSize={15} fill={bc} fontWeight="800">{ef}</text>
+                  <line x1={0} y1={32} x2={NW} y2={32} stroke={bc} strokeWidth={.8} />
+                  <text x={NW / 2} y={46} textAnchor="middle" fontSize={11} fill="#0f172a" fontWeight="800">{t.id}</text>
+                  <text x={NW / 2} y={59} textAnchor="middle" fontSize={9.5} fill="#64748b">{desc}</text>
+                  <line x1={0} y1={65} x2={NW} y2={65} stroke={bc} strokeWidth={.8} />
+                  <line x1={NW / 2} y1={65} x2={NW / 2} y2={NH} stroke={bc} strokeWidth={1} />
+                  <text x={NW / 4} y={74} textAnchor="middle" fontSize={8} fill="#94a3b8" letterSpacing=".06em">LS</text>
+                  <text x={NW * 3 / 4} y={74} textAnchor="middle" fontSize={8} fill="#94a3b8" letterSpacing=".06em">LF</text>
+                  <text x={NW / 4} y={90} textAnchor="middle" fontSize={15} fill={isCrit ? "#ef4444" : "#64748b"} fontWeight="800">{ls}</text>
+                  <text x={NW * 3 / 4} y={90} textAnchor="middle" fontSize={15} fill={isCrit ? "#ef4444" : "#64748b"} fontWeight="800">{lf}</text>
+                  {slack !== null && (
+                    <g transform={`translate(${NW - 2},-10)`}>
+                      <rect width={32} height={18} rx={9} fill={isCrit ? "#ef4444" : slack <= 2 ? "#f59e0b" : "#22c55e"} x={-32} />
+                      <text x={-16} y={13} textAnchor="middle" fontSize={9} fill="white" fontWeight="800">m={slack}</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10, display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", fontSize: 11, color: "var(--text-2)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 14, height: 14, borderRadius: 4, border: "2.5px solid #ef4444", background: "#fff8f8" }} />
+          Chemin critique (marge = 0)
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 14, height: 14, borderRadius: 4, border: "1.5px solid var(--accent)", background: "#ffffff" }} />
+          Tâche normale
+        </div>
+        <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--text-3)" }}>ES·EF = dates tôt · LS·LF = dates tard · m = marge totale</span>
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/pert/PERTView.jsx
+
+// FILE: src/components/projects/ProjectsView.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+
+function ProjectRow({ project, onEdit, onDelete }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}>
+      <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📁</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{project.name}</div>
+        {project.description && <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>{project.description}</div>}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => onEdit(project)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
+          <Pencil size={13} />
+        </button>
+        <button onClick={() => { if (window.confirm(`Supprimer le projet "${project.name}" ?`)) onDelete(project.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProjectForm({ initial, onSave, onCancel }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [desc, setDesc] = useState(initial?.description || "");
+  return (
+    <div style={{ padding: "14px 16px", background: "var(--accent-bg)", borderBottom: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 180 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", display: "block", marginBottom: 4 }}>NOM DU PROJET</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: SALMA" onKeyDown={(e) => e.key === "Enter" && name.trim() && onSave({ name: name.trim(), description: desc.trim() })} />
+      </div>
+      <div style={{ flex: 2, minWidth: 200 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", display: "block", marginBottom: 4 }}>DESCRIPTION</label>
+        <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description optionnelle…" />
+      </div>
+      <div style={{ display: "flex", gap: 8, paddingBottom: 1 }}>
+        <button onClick={onCancel} style={{ border: "1px solid var(--border)", background: "white", borderRadius: 8, padding: "7px 12px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
+          <X size={14} />
+        </button>
+        <button onClick={() => name.trim() && onSave({ name: name.trim(), description: desc.trim() })} style={{ background: "var(--accent)", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", color: "white", display: "flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13 }}>
+          <Check size={14} /> Enregistrer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ProjectsView({ projects, onAdd, onUpdate, onDelete }) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Projets</h2>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{projects.length} projet{projects.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Nouveau projet
+        </button>
+      </div>
+
+      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        {adding && (
+          <ProjectForm onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />
+        )}
+        {projects.length === 0 && !adding && (
+          <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>📁</div>
+            <div>Aucun projet. Commencez par en créer un.</div>
+          </div>
+        )}
+        {projects.map((p) =>
+          editing?.id === p.id ? (
+            <ProjectForm key={p.id} initial={p} onSave={async (d) => { await onUpdate(p.id, d); setEditing(null); }} onCancel={() => setEditing(null)} />
+          ) : (
+            <ProjectRow key={p.id} project={p} onEdit={setEditing} onDelete={onDelete} />
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/projects/ProjectsView.jsx
+
+// FILE: src/components/shared/Badges.jsx
+-----------------------------------------------
+import { STATUSES } from "../../utils/pert";
+
+export function StatusBadge({ status }) {
+  const s = STATUSES.find((x) => x.value === status) || STATUSES[0];
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 10px",
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 600,
+      background: s.color + "18",
+      color: s.color,
+      border: `1px solid ${s.color}33`,
+      whiteSpace: "nowrap",
+    }}>
+      {s.label}
+    </span>
+  );
+}
+
+export function CriticalBadge() {
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 20,
+      fontSize: 9,
+      fontWeight: 700,
+      background: "#fef2f2",
+      color: "#ef4444",
+      border: "1px solid #fecaca",
+      letterSpacing: ".06em",
+    }}>
+      ● CRITIQUE
+    </span>
+  );
+}
+
+export function MemberBadge({ name, color }) {
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 12px",
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 700,
+      background: (color || "#6366f1") + "18",
+      color: color || "#6366f1",
+      border: `1px solid ${(color || "#6366f1")}33`,
+      whiteSpace: "nowrap",
+    }}>
+      {name || "—"}
+    </span>
+  );
+}
+
+export function TaskIdBadge({ id }) {
+  return (
+    <code style={{
+      fontSize: 10,
+      color: "#64748b",
+      background: "#f1f5f9",
+      padding: "1px 7px",
+      borderRadius: 4,
+      border: "1px solid #e2e8f0",
+      fontFamily: "'DM Mono', monospace",
+    }}>
+      {id}
+    </code>
+  );
+}
+
+// END OF FILE: src/components/shared/Badges.jsx
+
+// FILE: src/components/shared/FilterBar.jsx
+-----------------------------------------------
+import { STATUSES } from "../../utils/pert";
+
+const pill = (active, label, onClick) => (
+  <button
+    key={label}
+    onClick={onClick}
+    style={{
+      padding: "3px 12px",
+      borderRadius: 20,
+      border: `1.5px solid ${active ? "var(--accent)" : "var(--border)"}`,
+      background: active ? "var(--accent)" : "transparent",
+      color: active ? "white" : "var(--text-2)",
+      cursor: "pointer",
+      fontSize: 11,
+      fontWeight: active ? 700 : 400,
+      whiteSpace: "nowrap",
+      transition: "all .15s",
+    }}
+  >
+    {label}
+  </button>
+);
+
+export function FilterBar({ filters, setFilters, projects, members, showStatus = true }) {
+  const set = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
+  return (
+    <div style={{
+      display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16,
+      padding: "10px 16px", background: "var(--bg-card)", borderRadius: "var(--radius)",
+      border: "1px solid var(--border)", boxShadow: "var(--shadow)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>PROJET</span>
+        {pill(filters.project === "all", "Tous", () => set("project", "all"))}
+        {projects.map((p) => pill(filters.project === p.id, p.name, () => set("project", p.id)))}
+      </div>
+      <div style={{ width: 1, background: "var(--border)" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>MEMBRE</span>
+        {pill(filters.member === "all", "Tous", () => set("member", "all"))}
+        {members.map((m) => pill(filters.member === m.name, m.name, () => set("member", m.name)))}
+      </div>
+      {showStatus && (
+        <>
+          <div style={{ width: 1, background: "var(--border)" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>STATUT</span>
+            {pill(filters.status === "all", "Tous", () => set("status", "all"))}
+            {STATUSES.map((s) => pill(filters.status === s.value, s.label, () => set("status", s.value)))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// END OF FILE: src/components/shared/FilterBar.jsx
+
+// FILE: src/components/tasks/TaskModal.jsx
+-----------------------------------------------
+import { useState, useEffect } from "react";
+import { X, Check } from "lucide-react";
+import { STATUSES } from "../../utils/pert";
+
+const inp = {
+  width: "100%", padding: "9px 12px", borderRadius: 8,
+  border: "1.5px solid var(--border)", fontSize: 13,
+  outline: "none", background: "var(--bg-input)", color: "var(--text)",
+  fontFamily: "inherit", boxSizing: "border-box",
+};
+const lbl = {
+  fontSize: 10, fontWeight: 700, color: "var(--text-3)",
+  marginBottom: 5, display: "block", letterSpacing: ".08em",
+};
+
+export function TaskModal({ mode, initial, tasks, members, projects, activities, onSave, onClose }) {
+  const blank = { id: "", project_id: "", activity_id: "", description: "", duration: 1, dependencies: [], responsible: "", status: "todo" };
+  const [f, setF] = useState(initial || blank);
+
+  useEffect(() => {
+    if (mode === "add" && !f.id) {
+      setF((p) => ({ ...p, id: `T${String(tasks.length + 1).padStart(3, "0")}` }));
+    }
+  }, []);
+
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const togDep = (id) => {
+    const d = f.dependencies || [];
+    set("dependencies", d.includes(id) ? d.filter((x) => x !== id) : [...d, id]);
+  };
+
+  const filteredActivities = activities.filter((a) => !f.project_id || a.project_id === Number(f.project_id));
+  const avail = tasks.filter((t) => t.id !== f.id);
+  const valid = f.id.trim() && f.description.trim();
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 560, maxHeight: "92vh", overflow: "auto", boxShadow: "var(--shadow-md)", border: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "var(--text)" }}>
+            {mode === "add" ? "Nouvelle tâche" : "Modifier la tâche"}
+          </h3>
+          <button onClick={onClose} style={{ background: "var(--bg)", border: "1px solid var(--border)", width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)" }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div>
+            <label style={lbl}>ID DE LA TÂCHE</label>
+            <input style={inp} value={f.id} onChange={(e) => set("id", e.target.value)} placeholder="T001" />
+          </div>
+          <div>
+            <label style={lbl}>DURÉE (COUPONS)</label>
+            <input style={inp} type="number" min={1} value={f.duration} onChange={(e) => set("duration", Math.max(1, parseInt(e.target.value) || 1))} />
+          </div>
+          <div>
+            <label style={lbl}>PROJET</label>
+            <select style={inp} value={f.project_id} onChange={(e) => { set("project_id", e.target.value); set("activity_id", ""); }}>
+              <option value="">— Choisir —</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>ACTIVITÉ</label>
+            <select style={inp} value={f.activity_id} onChange={(e) => set("activity_id", e.target.value)}>
+              <option value="">— Choisir —</option>
+              {filteredActivities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn: "1/-1" }}>
+            <label style={lbl}>DESCRIPTION</label>
+            <textarea style={{ ...inp, height: 72, resize: "vertical" }} value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Décrivez la tâche…" />
+          </div>
+          <div>
+            <label style={lbl}>RESPONSABLE</label>
+            <select style={inp} value={f.responsible} onChange={(e) => set("responsible", e.target.value)}>
+              <option value="">— Choisir —</option>
+              {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>STATUT</label>
+            <select style={inp} value={f.status} onChange={(e) => set("status", e.target.value)}>
+              {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          {avail.length > 0 && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={lbl}>DÉPENDANCES (prédécesseurs)</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 12, background: "var(--bg)", borderRadius: 10, border: "1.5px solid var(--border)", maxHeight: 110, overflow: "auto" }}>
+                {avail.map((t) => {
+                  const sel = (f.dependencies || []).includes(t.id);
+                  return (
+                    <button key={t.id} onClick={() => togDep(t.id)} style={{ padding: "4px 12px", borderRadius: 20, border: `1.5px solid ${sel ? "var(--accent)" : "var(--border)"}`, cursor: "pointer", fontSize: 11, fontWeight: 600, background: sel ? "var(--accent)" : "transparent", color: sel ? "white" : "var(--text-2)", transition: "all .15s" }}>
+                      {t.id} — {(t.description || "").slice(0, 18)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", borderRadius: 10, border: "1.5px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>
+            Annuler
+          </button>
+          <button onClick={() => { if (valid) onSave(f); }} style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: valid ? "var(--accent)" : "var(--bg)", color: valid ? "white" : "var(--text-3)", cursor: valid ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <Check size={14} /> {mode === "add" ? "Créer" : "Enregistrer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/tasks/TaskModal.jsx
+
+// FILE: src/components/tasks/TasksView.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { Plus, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { FilterBar } from "../shared/FilterBar";
+import { StatusBadge, CriticalBadge, MemberBadge, TaskIdBadge } from "../shared/Badges";
+
+export function TasksView({ tasks, projects, activities, members, pert, filters, setFilters, memberColor, onAdd, onEdit, onDelete }) {
+  const [collapsed, setCollapsed] = useState({});
+  const tog = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+
+  // Group by project → activity
+  const grouped = {};
+  tasks.forEach((t) => {
+    const pName = t.project_name || "Sans projet";
+    const aName = t.activity_name || "Sans activité";
+    if (!grouped[pName]) grouped[pName] = {};
+    if (!grouped[pName][aName]) grouped[pName][aName] = [];
+    grouped[pName][aName].push(t);
+  });
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Tâches</h2>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{tasks.length} tâche{tasks.length !== 1 ? "s" : ""} affichée{tasks.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={onAdd} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Nouvelle tâche
+        </button>
+      </div>
+
+      <FilterBar filters={filters} setFilters={setFilters} projects={projects} members={members} />
+
+      {Object.entries(grouped).length === 0 && (
+        <div style={{ textAlign: "center", padding: 80, color: "var(--text-3)", background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: "var(--text-2)" }}>Aucune tâche</div>
+          <div style={{ fontSize: 13 }}>Créez votre première tâche pour démarrer</div>
+        </div>
+      )}
+
+      {Object.entries(grouped).map(([proj, acts]) => (
+        <div key={proj} style={{ marginBottom: 10, borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+          <div onClick={() => tog(proj)} style={{ background: "var(--bg-hover)", padding: "11px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: collapsed[proj] ? "none" : "1px solid var(--border)" }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
+              {collapsed[proj] ? <ChevronRight size={14} /> : <ChevronDown size={14} />} 📁 {proj}
+            </span>
+            <span style={{ fontSize: 11, background: "var(--bg-card)", color: "var(--text-3)", padding: "2px 10px", borderRadius: 20, border: "1px solid var(--border)" }}>
+              {Object.values(acts).flat().length} tâche{Object.values(acts).flat().length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {!collapsed[proj] && Object.entries(acts).map(([act, atasks]) => (
+            <div key={act}>
+              <div onClick={() => tog(`${proj}/${act}`)} style={{ background: "var(--bg-card)", padding: "7px 16px 7px 28px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--border)" }}>
+                {collapsed[`${proj}/${act}`] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>🔖 {act}</span>
+                <span style={{ fontSize: 10, color: "var(--text-3)", background: "var(--bg)", padding: "1px 8px", borderRadius: 10, border: "1px solid var(--border)" }}>{atasks.length}</span>
+              </div>
+
+              {!collapsed[`${proj}/${act}`] && atasks.map((t) => {
+                const slack = pert.slack[t.id] ?? null;
+                const isCrit = slack === 0;
+                return (
+                  <div key={t.id} style={{ padding: "11px 16px 11px 40px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, borderLeft: isCrit ? "3px solid #ef4444" : "3px solid transparent", background: isCrit ? "#fff8f8" : "var(--bg-card)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                        <TaskIdBadge id={t.id} />
+                        <span style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{t.description}</span>
+                        {isCrit && <CriticalBadge />}
+                      </div>
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 11, color: "var(--text-3)" }}>⏱ <b style={{ color: "var(--text-2)" }}>{t.duration}</b> coupon{t.duration > 1 ? "s" : ""}</span>
+                        {t.dependencies?.length > 0 && <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>↤ {t.dependencies.join(", ")}</span>}
+                        <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>ES:{pert.ES[t.id] ?? "-"} EF:{pert.EF[t.id] ?? "-"}</span>
+                        {slack !== null && <span style={{ fontSize: 11, fontWeight: 600, color: isCrit ? "#ef4444" : slack <= 2 ? "#f59e0b" : "#22c55e" }}>marge:{slack}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <MemberBadge name={t.responsible} color={memberColor(t.responsible)} />
+                      <StatusBadge status={t.status} />
+                      <button onClick={() => onEdit(t)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => { if (window.confirm("Supprimer cette tâche ?")) onDelete(t.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// END OF FILE: src/components/tasks/TasksView.jsx
+
+// FILE: src/components/team/TeamView.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+
+export function TeamView({ members, onAdd, onDelete }) {
+  const [name, setName] = useState("");
+
+  const add = async () => {
+    if (name.trim()) { await onAdd({ name: name.trim() }); setName(""); }
+  };
+
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <h2 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Équipe</h2>
+      <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        <div style={{ padding: "12px 16px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".1em" }}>
+          MEMBRES ({members.length})
+        </div>
+        {members.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
+            <div>Aucun membre pour l'instant.</div>
+          </div>
+        )}
+        {members.map((m) => (
+          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: m.color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+              {m.name[0]?.toUpperCase() || "?"}
+            </div>
+            <span style={{ flex: 1, fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{m.name}</span>
+            <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color, border: "2px solid var(--border)" }} />
+            <button onClick={() => { if (window.confirm(`Retirer ${m.name} de l'équipe ?`)) onDelete(m.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8, padding: 16 }}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Prénom du nouveau membre…" onKeyDown={(e) => { if (e.key === "Enter") add(); }} style={{ flex: 1 }} />
+          <button onClick={add} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 10, padding: "8px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
+            <Plus size={14} /> Ajouter
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// END OF FILE: src/components/team/TeamView.jsx
+
+// FILE: src/hooks/useData.js
+-----------------------------------------------
+import { useState, useEffect, useCallback } from "react";
+import * as api from "../api/client";
+import { computePERT } from "../utils/pert";
+
+export function useData() {
+  const [tasks, setTasks]           = useState([]);
+  const [projects, setProjects]     = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [members, setMembers]       = useState([]);
+  const [needs, setNeeds]           = useState([]);
+  const [notes, setNotes]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [t, p, a, m, n, no] = await Promise.all([
+        api.getTasks(), api.getProjects(), api.getActivities(),
+        api.getMembers(), api.getNeeds(), api.getNotes(),
+      ]);
+      setTasks(t); setProjects(p); setActivities(a);
+      setMembers(m); setNeeds(n); setNotes(no);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const memberColor = (name) => {
+    const m = members.find((x) => x.name === name);
+    return m?.color || "#94a3b8";
+  };
+
+  const pert = computePERT(tasks);
+
+  return {
+    tasks, setTasks, projects, setProjects,
+    activities, setActivities, members, setMembers,
+    needs, setNeeds, notes, setNotes,
+    loading, error, reload: load, memberColor, pert,
+  };
+}
+
+// END OF FILE: src/hooks/useData.js
+
+// FILE: src/utils/pert.js
+-----------------------------------------------
+/**
+ * computePERT — Calcul du chemin critique (CPM)
+ * Robuste aux cycles : si un cycle est détecté, les tâches impliquées
+ * sont ignorées du calcul topologique mais restent affichées.
+ */
+export function computePERT(tasks) {
+  if (!tasks.length) return { ES: {}, EF: {}, LS: {}, LF: {}, slack: {}, end: 0, cycles: [] };
+
+  const map = Object.fromEntries(tasks.map((t) => [t.id, t]));
+
+  // ── Détection de cycles (DFS avec état : blanc/gris/noir) ──
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = Object.fromEntries(tasks.map((t) => [t.id, WHITE]));
+  const cycleNodes = new Set();
+
+  const detectCycle = (id) => {
+    if (color[id] === BLACK) return false;
+    if (color[id] === GRAY) return true; // cycle détecté
+    color[id] = GRAY;
+    for (const dep of (map[id]?.dependencies || []).filter((d) => map[d])) {
+      if (detectCycle(dep)) {
+        cycleNodes.add(id);
+        cycleNodes.add(dep);
+      }
+    }
+    color[id] = BLACK;
+    return false;
+  };
+  tasks.forEach((t) => detectCycle(t.id));
+
+  // ── Tri topologique (sans les nœuds en cycle) ──
+  const safeTasks = tasks.filter((t) => !cycleNodes.has(t.id));
+  const visited = new Set();
+  const order = [];
+
+  const dfs = (id) => {
+    if (visited.has(id) || cycleNodes.has(id)) return;
+    visited.add(id);
+    (map[id]?.dependencies || [])
+      .filter((d) => map[d] && !cycleNodes.has(d))
+      .forEach(dfs);
+    order.push(id);
+  };
+  safeTasks.forEach((t) => dfs(t.id));
+
+  // ── Calcul ES / EF (dates au plus tôt) ──
+  const ES = {}, EF = {};
+  order.forEach((id) => {
+    const deps = (map[id]?.dependencies || []).filter((d) => map[d] && !cycleNodes.has(d));
+    ES[id] = deps.length ? Math.max(...deps.map((d) => EF[d] ?? 0)) : 0;
+    EF[id] = ES[id] + (map[id]?.duration || 1);
+  });
+
+  const end = Math.max(0, ...safeTasks.map((t) => EF[t.id] ?? 0));
+
+  // ── Calcul LS / LF (dates au plus tard) ──
+  const LS = {}, LF = {};
+  [...order].reverse().forEach((id) => {
+    const succs = safeTasks.filter(
+      (t) => (t.dependencies || []).includes(id) && !cycleNodes.has(t.id)
+    );
+    LF[id] = succs.length ? Math.min(...succs.map((s) => LS[s.id])) : end;
+    LS[id] = LF[id] - (map[id]?.duration || 1);
+  });
+
+  // ── Marge totale ──
+  const slack = Object.fromEntries(
+    tasks.map((t) => [t.id, cycleNodes.has(t.id) ? null : (LS[t.id] || 0) - (ES[t.id] || 0)])
+  );
+
+  return {
+    ES, EF, LS, LF, slack, end,
+    cycles: [...cycleNodes], // liste des IDs en cycle pour affichage warning
+  };
+}
+
+export const STATUSES = [
+  { value: "todo",        label: "À faire",  color: "#64748b" },
+  { value: "in_progress", label: "En cours", color: "#3b82f6" },
+  { value: "done",        label: "Terminée", color: "#22c55e" },
+  { value: "blocked",     label: "Bloquée",  color: "#ef4444" },
+];
+
+// END OF FILE: src/utils/pert.js
+
+// FILE: src/App.jsx
+-----------------------------------------------
+import { useState } from "react";
+import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2 } from "lucide-react";
+import { useData } from "./hooks/useData";
+import * as api from "./api/client";
+import { TasksView } from "./components/tasks/TasksView";
+import { TaskModal } from "./components/tasks/TaskModal";
+import { GanttView } from "./components/gantt/GanttView";
+import { PERTView } from "./components/pert/PERTView";
+import { ProjectsView } from "./components/projects/ProjectsView";
+import { ActivitiesView } from "./components/activities/ActivitiesView";
+import { TeamView } from "./components/team/TeamView";
+import { NeedsView } from "./components/needs/NeedsView";
+import { NotesView } from "./components/notes/NotesView";
+import { PerformanceView } from "./components/performance/PerformanceView";
+
+const TABS = [
+  { id: "tasks",       label: "Tâches",       Icon: LayoutList },
+  { id: "gantt",       label: "Gantt",        Icon: GanttChart },
+  { id: "pert",        label: "PERT",         Icon: Network },
+  { id: "projects",    label: "Projets",      Icon: FolderOpen },
+  { id: "activities",  label: "Activités",    Icon: Tag },
+  { id: "needs",       label: "Besoins",      Icon: Target },
+  { id: "notes",       label: "Notes",        Icon: FileText },
+  { id: "performance", label: "Performances", Icon: BarChart2 },
+  { id: "team",        label: "Équipe",       Icon: Users },
+];
+
+export default function App() {
+  const {
+    tasks, setTasks, projects, setProjects,
+    activities, setActivities, members, setMembers,
+    needs, setNeeds, notes, setNotes,
+    loading, error, memberColor, pert,
+  } = useData();
+
+  const [tab, setTab]       = useState("tasks");
+  const [modal, setModal]   = useState(null);
+  const [filters, setFilters] = useState({ project: "all", member: "all", status: "all" });
+
+  if (loading) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", background: "var(--bg)", gap: 12 }}>
+      <Zap size={32} color="var(--accent)" />
+      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>AGT TaskFlow</div>
+      <div style={{ fontSize: 13, color: "var(--text-3)" }}>Connexion au serveur…</div>
+    </div>
+  );
+
+  if (error) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", background: "var(--bg)", gap: 12 }}>
+      <div style={{ fontSize: 13, color: "#ef4444", background: "#fef2f2", padding: "12px 20px", borderRadius: 10, border: "1px solid #fecaca" }}>
+        ⚠️ Erreur : {error}<br /><small>Vérifiez que le backend Flask est lancé.</small>
+      </div>
+    </div>
+  );
+
+  const filtered = tasks.filter((t) =>
+    (filters.project === "all" || String(t.project_id) === String(filters.project)) &&
+    (filters.member === "all" || t.responsible === filters.member) &&
+    (filters.status === "all" || t.status === filters.status)
+  );
+
+  const critCount = tasks.filter((t) => pert.slack[t.id] === 0).length;
+
+  // ── Task CRUD ──
+  const onSaveTask = async (f) => {
+    const payload = { ...f, project_id: f.project_id ? Number(f.project_id) : null, activity_id: f.activity_id ? Number(f.activity_id) : null };
+    if (modal.mode === "add") {
+      const t = await api.createTask(payload);
+      setTasks((prev) => [...prev, t]);
+    } else {
+      const t = await api.updateTask(f.id, payload);
+      setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
+    }
+    setModal(null);
+  };
+  const onDeleteTask = async (id) => {
+    await api.deleteTask(id);
+    setTasks((prev) => prev.filter((t) => t.id !== id).map((t) => ({ ...t, dependencies: (t.dependencies || []).filter((d) => d !== id) })));
+  };
+
+  // ── Project CRUD ──
+  const onAddProject    = async (d) => { const p = await api.createProject(d); setProjects((prev) => [...prev, p]); };
+  const onUpdateProject = async (id, d) => { const p = await api.updateProject(id, d); setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
+  const onDeleteProject = async (id) => { await api.deleteProject(id); setProjects((prev) => prev.filter((p) => p.id !== id)); };
+
+  // ── Activity CRUD ──
+  const onAddActivity    = async (d) => { const a = await api.createActivity(d); setActivities((prev) => [...prev, a]); };
+  const onUpdateActivity = async (id, d) => { const a = await api.updateActivity(id, d); setActivities((prev) => prev.map((x) => x.id === id ? a : x)); };
+  const onDeleteActivity = async (id) => { await api.deleteActivity(id); setActivities((prev) => prev.filter((a) => a.id !== id)); };
+
+  // ── Member CRUD ──
+  const onAddMember    = async (d) => { const m = await api.createMember(d); setMembers((prev) => [...prev, m]); };
+  const onDeleteMember = async (id) => { await api.deleteMember(id); setMembers((prev) => prev.filter((m) => m.id !== id)); };
+
+  // ── Need CRUD ──
+  const onAddNeed    = async (d) => { const n = await api.createNeed(d); setNeeds((prev) => [...prev, n]); };
+  const onUpdateNeed = async (id, d) => { const n = await api.updateNeed(id, d); setNeeds((prev) => prev.map((x) => x.id === id ? n : x)); };
+  const onDeleteNeed = async (id) => { await api.deleteNeed(id); setNeeds((prev) => prev.filter((n) => n.id !== id)); };
+
+  // ── Note CRUD ──
+  const onAddNote    = async (d) => { const n = await api.createNote(d); setNotes((prev) => [...prev, n]); };
+  const onUpdateNote = async (id, d) => { const n = await api.updateNote(id, d); setNotes((prev) => prev.map((x) => x.id === id ? n : x)); };
+  const onDeleteNote = async (id) => { await api.deleteNote(id); setNotes((prev) => prev.filter((n) => n.id !== id)); };
+
+  return (
+    <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
+      {/* Header */}
+      <div style={{ background: "var(--bg-card)", borderBottom: "1px solid var(--border)", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52, position: "sticky", top: 0, zIndex: 50, boxShadow: "var(--shadow)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <Zap size={18} color="var(--accent)" />
+          <span style={{ fontWeight: 900, fontSize: 15, letterSpacing: "-0.5px", color: "var(--text)" }}>AGT TaskFlow</span>
+        </div>
+        <nav style={{ display: "flex", gap: 1, overflowX: "auto" }}>
+          {TABS.map(({ id, label, Icon }) => (
+            <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? "var(--accent-bg)" : "transparent", border: "none", color: tab === id ? "var(--accent)" : "var(--text-2)", padding: "6px 11px", borderRadius: 7, cursor: "pointer", fontWeight: tab === id ? 700 : 400, fontSize: 11, display: "flex", alignItems: "center", gap: 4, transition: "all .15s", whiteSpace: "nowrap" }}>
+              <Icon size={13} /> {label}
+            </button>
+          ))}
+        </nav>
+        <div style={{ display: "flex", gap: 12, fontSize: 11, flexShrink: 0 }}>
+          <span style={{ color: "var(--text-3)" }}>{tasks.length} tâche{tasks.length !== 1 ? "s" : ""}</span>
+          {critCount > 0 && <span style={{ color: "#ef4444", fontWeight: 700 }}>● {critCount} critique{critCount > 1 ? "s" : ""}</span>}
+          {critCount === 0 && tasks.length > 0 && <span style={{ color: "#22c55e", fontWeight: 600 }}>✓ OK</span>}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: 20, maxWidth: 1440, margin: "0 auto" }}>
+        {tab === "tasks"       && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} />}
+        {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
+        {tab === "pert"        && <PERTView tasks={tasks} projects={projects} pert={pert} />}
+        {tab === "projects"    && <ProjectsView projects={projects} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} />}
+        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} />}
+        {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
+        {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
+        {tab === "performance" && <PerformanceView members={members} />}
+        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} />}
+      </div>
+
+      {modal && (
+        <TaskModal mode={modal.mode} initial={modal.task} tasks={tasks} members={members} projects={projects} activities={activities} onSave={onSaveTask} onClose={() => setModal(null)} />
+      )}
+    </div>
+  );
+}
+
+// END OF FILE: src/App.jsx
+
+// FILE: src/index.css
+-----------------------------------------------
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #f8fafc;
+  --bg-card:   #ffffff;
+  --bg-hover:  #f1f5f9;
+  --bg-input:  #ffffff;
+  --border:    #e2e8f0;
+  --border-2:  #cbd5e1;
+  --text:      #0f172a;
+  --text-2:    #475569;
+  --text-3:    #94a3b8;
+  --accent:    #4f46e5;
+  --accent-bg: #eef2ff;
+  --accent-h:  #4338ca;
+  --danger:    #ef4444;
+  --danger-bg: #fef2f2;
+  --success:   #22c55e;
+  --warning:   #f59e0b;
+  --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.10);
+  --radius:    10px;
+  --radius-lg: 14px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+input, select, textarea {
+  font-family: inherit;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+
+button { font-family: inherit; cursor: pointer; }
+
+code, .mono { font-family: 'DM Mono', monospace; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+
+// END OF FILE: src/index.css
+
+// FILE: src/main.jsx
+-----------------------------------------------
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// END OF FILE: src/main.jsx
+
+// FILE: Dockerfile
+-----------------------------------------------
+FROM node:20-alpine AS build
+
+WORKDIR /app
+COPY package.json .
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+// END OF FILE: Dockerfile
+
+// FILE: index.html
+-----------------------------------------------
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AGT TaskFlow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
+// END OF FILE: index.html
+
+// FILE: nginx.conf
+-----------------------------------------------
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://backend:5000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+// END OF FILE: nginx.conf
+
+// FILE: package.json
+-----------------------------------------------
+{
+  "name": "agt-taskflow",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "^0.383.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.3.1"
+  }
+}
+
+// END OF FILE: package.json
+
+// FILE: scanner.ps1
+-----------------------------------------------
+<#
+.SYNOPSIS
+Extrait le code source d'un projet Next.js pour l'utiliser comme contexte IA.
+FIX : Utilise StreamWriter au lieu de Add-Content pour éviter les erreurs de verrouillage.
+#>
+
+param (
+    [string]$ProjectPath = "."
+)
+
+$OutputFilename = "contexte_frontend_PME.txt"
+
+# Résolution du chemin absolu
+try {
+    $ResolvedPath = (Resolve-Path $ProjectPath -ErrorAction Stop).Path
+} catch {
+    Write-Error "Erreur: Répertoire invalide ($ProjectPath)."
+    exit 1
+}
+
+$OutputFile = Join-Path $ResolvedPath $OutputFilename
+
+# Suppression de l'ancien fichier s'il existe
+if (Test-Path $OutputFile) {
+    Remove-Item $OutputFile -Force
+}
+
+# Dossiers à ignorer
+$ExcludeDirs = @(
+    ".git", ".vscode", ".idea", "node_modules", ".next", 
+    "out", "build", "coverage", "public", "dist", ".vercel"
+)
+
+# Fichiers à ignorer — on ajoute aussi le chemin complet du fichier de sortie
+$ExcludeFiles = @(
+    "*.log", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+    ".env*", "*.ico", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", 
+    "*.pdf", "*.map", "*.ttf", "*.woff", "*.woff2", "*.eot", "*.mp4",
+    $OutputFilename,
+    "contexte_frontend",
+    "contexte_admin"
+)
+
+# Fonction pour vérifier si un fichier est binaire
+function Test-IsBinary {
+    param ([string]$FilePath)
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+        $checkLength = [math]::Min(1024, $bytes.Length)
+        for ($i = 0; $i -lt $checkLength; $i++) {
+            if ($bytes[$i] -eq 0) { return $true }
+        }
+        return $false
+    } catch {
+        return $true
+    }
+}
+
+$foundFiles = [System.Collections.Generic.List[string]]::new()
+
+function Get-ValidFiles {
+    param ([string]$CurrentDir)
+    
+    $items = Get-ChildItem -Path $CurrentDir -Force -ErrorAction SilentlyContinue
+    
+    foreach ($item in $items) {
+        if ($item.PSIsContainer) {
+            if ($ExcludeDirs -notcontains $item.Name) {
+                Get-ValidFiles -CurrentDir $item.FullName
+            }
+        } else {
+            # === SÉCURITÉ SUPPLÉMENTAIRE : ignorer si c'est le fichier de sortie ===
+            if ($item.FullName -eq $OutputFile) { continue }
+
+            $skip = $false
+            foreach ($pattern in $ExcludeFiles) {
+                if ($item.Name -like $pattern) {
+                    $skip = $true
+                    break
+                }
+            }
+            if (-not $skip) {
+                $foundFiles.Add($item.FullName)
+            }
+        }
+    }
+}
+
+Write-Host "Recherche des fichiers en cours..." -ForegroundColor Cyan
+Get-ValidFiles -CurrentDir $ResolvedPath
+Write-Host "  -> $($foundFiles.Count) fichiers trouvés." -ForegroundColor Gray
+
+# ==============================================================================
+#  FIX PRINCIPAL : On utilise un StreamWriter unique pour tout le fichier
+#  Au lieu de Add-Content qui ouvre/ferme le fichier à chaque appel
+# ==============================================================================
+
+$dateStr = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$header = @"
+Next.js Project Context
+Generated On: $dateStr
+Root: $ResolvedPath
+===============================================
+"@
+
+Write-Host "Génération du fichier de contexte en cours..." -ForegroundColor Cyan
+
+# Ouvrir le fichier UNE SEULE FOIS avec StreamWriter
+$stream = [System.IO.StreamWriter]::new($OutputFile, $false, [System.Text.Encoding]::UTF8)
+
+try {
+    # Écriture de l'en-tête
+    $stream.WriteLine($header)
+
+    $count = 0
+    foreach ($file in $foundFiles) {
+        $count++
+        $relativePath = $file.Substring($ResolvedPath.Length).TrimStart('\')
+        $relativePath = $relativePath -replace '\\', '/'
+
+        # En-tête du fichier
+        $stream.WriteLine("")
+        $stream.WriteLine("// FILE: $relativePath")
+        $stream.WriteLine("-----------------------------------------------")
+
+        if (Test-IsBinary -FilePath $file) {
+            $stream.WriteLine("[Fichier binaire ou asset omis]")
+        } else {
+            try {
+                $content = [System.IO.File]::ReadAllText($file, [System.Text.Encoding]::UTF8)
+                if ($null -ne $content) {
+                    $stream.Write($content)
+                    # S'assurer qu'on termine par un saut de ligne
+                    if (-not $content.EndsWith("`n")) {
+                        $stream.WriteLine("")
+                    }
+                }
+            } catch {
+                $stream.WriteLine("[Erreur lors de la lecture du fichier]")
+            }
+        }
+
+        $stream.WriteLine("")
+        $stream.WriteLine("// END OF FILE: $relativePath")
+
+        # Progression tous les 50 fichiers
+        if ($count % 50 -eq 0) {
+            Write-Host "  -> $count / $($foundFiles.Count) fichiers traités..." -ForegroundColor Gray
+        }
+    }
+} finally {
+    # Toujours fermer le stream, même en cas d'erreur
+    $stream.Close()
+    $stream.Dispose()
+}
+
+$sizeMB = [math]::Round((Get-Item $OutputFile).Length / 1MB, 2)
+Write-Host ""
+Write-Host "Succès ! Contexte Next.js prêt :" -ForegroundColor Green
+Write-Host "  Fichier : $OutputFile" -ForegroundColor Green
+Write-Host "  Fichiers inclus : $count" -ForegroundColor Green
+Write-Host "  Taille : $sizeMB MB" -ForegroundColor Green
+
+// END OF FILE: scanner.ps1
+
+// FILE: vite.config.js
+-----------------------------------------------
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: "0.0.0.0",
+    port: 3000,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_URL || "http://backend:5000", // port interne Docker inchangé
+        changeOrigin: true,
+      },
+    },
+  },
+});
+
+// END OF FILE: vite.config.js

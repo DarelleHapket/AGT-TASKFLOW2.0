@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: agt_backend
+    volumes:
+      - db_data:/data
+    environment:
+      DB_PATH: /data/taskflow.db
+    ports:
+      - "4001:5000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: agt_frontend
+    ports:
+      - "4000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:

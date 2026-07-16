@@ -120,6 +120,7 @@ def init_db():
         ("members", "is_admin",            "ALTER TABLE members ADD COLUMN is_admin BOOLEAN DEFAULT 0"),
         ("members", "is_active",           "ALTER TABLE members ADD COLUMN is_active BOOLEAN DEFAULT 1"),
         ("members", "daily_coupon_target", "ALTER TABLE members ADD COLUMN daily_coupon_target INTEGER DEFAULT 2"),
+        ("members", "role",                "ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'membre'"),
         ("tasks",   "start_date",          "ALTER TABLE tasks ADD COLUMN start_date DATE DEFAULT NULL"),
         ("tasks",   "end_date",            "ALTER TABLE tasks ADD COLUMN end_date DATE DEFAULT NULL"),
         ("tasks",   "due_date",            "ALTER TABLE tasks ADD COLUMN due_date DATE DEFAULT NULL"),
@@ -193,7 +194,8 @@ def init_db():
                email='gabriel@ag-technologies.tech',
                password_hash=?,
                is_admin=1,
-               is_active=1
+               is_active=1,
+               role='admin'
                WHERE LOWER(name)='gabriel'""",
             (hash_password("AGT2026!"),)
         )
@@ -208,10 +210,16 @@ def init_db():
         email = f"{m['name'].lower()}@ag-technologies.tech"
         c.execute(
             """UPDATE members SET
-               email=?, password_hash=?, is_admin=0, is_active=1
+               email=?, password_hash=?, is_admin=0, is_active=1, role='membre'
                WHERE id=?""",
             (email, hash_password("AGT2026!"), m["id"])
         )
+
+    # ── Rattrapage role pour bases déjà initialisées ────────────────────────
+    # (si la colonne role vient d'être ajoutée sur une base existante, on la
+    #  synchronise avec is_admin : is_admin=1 → 'admin', sinon 'membre')
+    c.execute("UPDATE members SET role='admin'  WHERE is_admin=1 AND (role IS NULL OR role='' OR role='membre')")
+    c.execute("UPDATE members SET role='membre' WHERE is_admin=0 AND (role IS NULL OR role='')")
 
     conn.commit()
     conn.close()

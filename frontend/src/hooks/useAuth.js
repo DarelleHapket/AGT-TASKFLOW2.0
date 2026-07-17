@@ -2,12 +2,12 @@
 import { useState, useCallback } from "react";
 
 const TOKEN_KEY = "agt_token";
-const USER_KEY  = "agt_user";
+const USER_KEY = "agt_user";
 
 function loadFromStorage() {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
-    const user  = JSON.parse(localStorage.getItem(USER_KEY) || "null");
+    const user = JSON.parse(localStorage.getItem(USER_KEY) || "null");
     return { token, user };
   } catch {
     return { token: null, user: null };
@@ -29,10 +29,15 @@ export function useAuth() {
     setAuth({ token: null, user: null });
   }, []);
 
+  const role = auth.user?.role ?? (auth.user?.is_admin ? "admin" : "membre");
+
   return {
-    token:    auth.token,
-    user:     auth.user,
-    isAdmin:  auth.user?.is_admin ?? false,
+    token: auth.token,
+    user: auth.user,
+    role,
+    isAdmin: role === "admin",
+    isChef: role === "chef_projet",
+    isMembre: role === "membre",
     isLogged: !!auth.token,
     login,
     logout,

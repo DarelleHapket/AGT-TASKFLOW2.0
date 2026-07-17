@@ -1,22 +1,42 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Crown } from "lucide-react";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 
-function ProjectRow({ project, onEdit, onDelete }) {
+function ProjectRow({ project, members, isAdmin, isChef, onEdit, onDelete, onSetChef }) {
+  const chef = members.find((m) => m.id === project.chef_id);
+  const handleChef = (e) => {
+    const val = e.target.value;
+    onSetChef(project.id, val === "" ? null : Number(val));
+  };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}>
       <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📁</div>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{project.name}</div>
         {project.description && <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>{project.description}</div>}
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => onEdit(project)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
-          <Pencil size={13} />
-        </button>
-        <button onClick={() => { if (window.confirm(`Supprimer le projet "${project.name}" ?`)) onDelete(project.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
-          <Trash2 size={13} />
-        </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <Crown size={13} style={{ color: chef ? "#f59e0b" : "var(--text-3)" }} />
+        {isAdmin ? (
+          <select value={project.chef_id || ""} onChange={handleChef} title="Chef de projet"
+            style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12, color: "var(--text)", background: "var(--bg)", cursor: "pointer", maxWidth: 140, fontWeight: chef ? 600 : 400 }}>
+            <option value="">— Aucun chef —</option>
+            {members.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+          </select>
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--text-2)", fontWeight: chef ? 600 : 400 }}>{chef ? chef.name : "Aucun chef"}</span>
+        )}
       </div>
+      {isChef && (
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <button onClick={() => onEdit(project)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
+            <Pencil size={13} />
+          </button>
+          <button onClick={() => onDelete(project)} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
+            <Trash2 size={13} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -46,40 +66,43 @@ function ProjectForm({ initial, onSave, onCancel }) {
   );
 }
 
-export function ProjectsView({ projects, onAdd, onUpdate, onDelete }) {
+export function ProjectsView({ projects, members = [], isAdmin, isChef, onAdd, onUpdate, onDelete, onSetChef }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
-
+  const [confirm, setConfirm] = useState(null);
+  const askDelete = (project) => {
+    setConfirm({ title: "Supprimer le projet", message: `Le projet « ${project.name} » et son contenu associé seront supprimés. Cette action est irréversible.`, confirmLabel: "Supprimer", danger: true, onConfirm: () => onDelete(project.id) });
+  };
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 720 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Projets</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>{projects.length} projet{projects.length !== 1 ? "s" : ""}</span>
         </div>
-        <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-          <Plus size={15} /> Nouveau projet
-        </button>
-      </div>
-
-      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        {adding && (
-          <ProjectForm onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />
+        {isChef && (
+          <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+            <Plus size={15} /> Nouveau projet
+          </button>
         )}
+      </div>
+      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        {adding && isChef && (<ProjectForm onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />)}
         {projects.length === 0 && !adding && (
           <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>📁</div>
-            <div>Aucun projet. Commencez par en créer un.</div>
+            <div>Aucun projet{isChef ? ". Commencez par en créer un." : "."}</div>
           </div>
         )}
         {projects.map((p) =>
-          editing?.id === p.id ? (
+          editing?.id === p.id && isChef ? (
             <ProjectForm key={p.id} initial={p} onSave={async (d) => { await onUpdate(p.id, d); setEditing(null); }} onCancel={() => setEditing(null)} />
           ) : (
-            <ProjectRow key={p.id} project={p} onEdit={setEditing} onDelete={onDelete} />
+            <ProjectRow key={p.id} project={p} members={members} isAdmin={isAdmin} isChef={isChef} onEdit={setEditing} onDelete={askDelete} onSetChef={onSetChef} />
           )
         )}
       </div>
+      <ConfirmDialog data={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }

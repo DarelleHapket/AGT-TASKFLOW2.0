@@ -6,14 +6,31 @@
 #   Bug 2 : DELETE /<id> → idem
 
 from flask import Blueprint, request, jsonify
+from functools import wraps
 from database import get_db
-from utils.auth import require_auth, require_role
+from utils.auth import require_role, require_auth, get_current_user
 
 projects_bp = Blueprint("projects", __name__)
 
 _ADMIN_READ_ONLY  = "L'administrateur dispose d'un accès en lecture seule sur les projets."
 _NOT_YOUR_PROJECT = "Vous n'êtes pas le chef de ce projet."
 
+def require_chef_only(f):
+    """Écriture projet réservée au Chef de projet (CdC : l'admin est en lecture seule)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user, error = get_current_user()
+        if error:
+            return jsonify({"error": error}), 401
+        role = user.get("role") or ("admin" if user.get("is_admin") else "membre")
+        if role != "chef_projet":
+            return jsonify({"error": "Réservé au chef de projet"}), 403
+        return f(*args, current_user=user, **kwargs)
+    return decorated
+
+
+def row_to_dict(row):
+    return dict(row) if row else None
 
 # ── Helper interne ───────────────────────────────────────────────────────────
 
@@ -38,6 +55,24 @@ def _is_owner(project, current_user):
 
 # ── GET /api/projects/ ───────────────────────────────────────────────────────
 
+def _demote_if_orphan(conn, member_id):
+    """Repasse un membre en 'membre' s'il n'est plus chef d'aucun projet.
+    Ne touche jamais un admin."""
+    if member_id is None:
+        return
+    m = conn.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone()
+    if not m or dict(m).get("is_admin"):
+        return
+    still_chef = conn.execute(
+        "SELECT COUNT(*) FROM projects WHERE chef_id=?", (member_id,)
+    ).fetchone()[0]
+    if still_chef == 0:
+        conn.execute(
+            "UPDATE members SET role='membre' WHERE id=? AND role='chef_projet'",
+            (member_id,)
+        )
+
+
 @projects_bp.route("/", methods=["GET"])
 @require_auth
 def list_projects(current_user):
@@ -57,13 +92,10 @@ def list_projects(current_user):
 # Chef → crée le projet ET devient automatiquement chef_id (Bug 1 corrigé).
 
 @projects_bp.route("/", methods=["POST"])
-@require_auth
+@require_chef_only
 def create_project(current_user):
-    if current_user.get("is_admin"):
-        return jsonify({"error": _ADMIN_READ_ONLY}), 403
-
-    data        = request.get_json() or {}
-    name        = (data.get("name") or "").strip()
+    data = request.get_json()
+    name = (data.get("name") or "").strip()
     description = (data.get("description") or "").strip()
 
     if not name:
@@ -146,6 +178,7 @@ def delete_project(pid, current_user):
         return jsonify({"error": _NOT_YOUR_PROJECT}), 403
 
     conn.execute("DELETE FROM projects WHERE id=?", (pid,))
+    _demote_if_orphan(conn, old_chef)
     conn.commit()
     conn.close()
     return jsonify({"deleted": pid})
@@ -160,8 +193,9 @@ def set_project_chef(pid, current_user):
     """
     PUT /api/projects/<id>/chef
     Body: { "chef_id": <member_id | null> }
-    Désigne (ou retire) le chef d'un projet.
-    Si chef_id fourni : le membre reçoit le role 'chef_projet'.
+    Désigne (ou retire, si null) le chef d'un projet.
+    - Si chef_id fourni : le membre doit exister ; on lui donne le role 'chef_projet'.
+    - L'ancien chef, s'il n'est plus chef d'aucun projet, repasse 'membre'.
     """
     data    = request.get_json() or {}
     chef_id = data.get("chef_id", None)
@@ -172,8 +206,12 @@ def set_project_chef(pid, current_user):
         conn.close()
         return jsonify({"error": "Projet introuvable."}), 404
 
+    old_chef = dict(project).get("chef_id")
+
+    # Retrait du chef (chef_id = null)
     if chef_id is None:
         conn.execute("UPDATE projects SET chef_id=NULL WHERE id=?", (pid,))
+        _demote_if_orphan(conn, old_chef)
         conn.commit()
         row = _fetch_project(conn, pid)
         conn.close()
@@ -185,12 +223,18 @@ def set_project_chef(pid, current_user):
         return jsonify({"error": "Membre introuvable."}), 404
 
     member = dict(member)
+
+    # Rattacher le nouveau chef au projet
     conn.execute("UPDATE projects SET chef_id=? WHERE id=?", (chef_id, pid))
+    # Promouvoir le nouveau chef (sauf admin)
     if not member.get("is_admin"):
         conn.execute(
             "UPDATE members SET role='chef_projet' WHERE id=? AND role != 'admin'",
             (chef_id,)
         )
+    # Resynchro de l'ancien chef s'il a été remplacé et n'est plus chef ailleurs
+    if old_chef and old_chef != chef_id:
+        _demote_if_orphan(conn, old_chef)
     conn.commit()
     row = _fetch_project(conn, pid)
     conn.close()

@@ -7,7 +7,8 @@
 //   • Bouton "Nouveau projet" : inchangé (isChef suffit — il en devient chef)
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Crown } from "lucide-react";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 
 function ProjectRow({ project, onEdit, onDelete, isChef, currentUser }) {
   // Bug 2 — ownership : seul le chef DE CE projet voit les boutons d'action
@@ -16,7 +17,7 @@ function ProjectRow({ project, onEdit, onDelete, isChef, currentUser }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}>
       <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📁</div>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{project.name}</div>
         {project.description && (
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>{project.description}</div>
@@ -84,9 +85,12 @@ function ProjectForm({ initial, onSave, onCancel }) {
 export function ProjectsView({ projects, onAdd, onUpdate, onDelete, isAdmin, isChef, currentUser }) {
   const [adding,  setAdding]  = useState(false);
   const [editing, setEditing] = useState(null);
-
+  const [confirm, setConfirm] = useState(null);
+  const askDelete = (project) => {
+    setConfirm({ title: "Supprimer le projet", message: `Le projet « ${project.name} » et son contenu associé seront supprimés. Cette action est irréversible.`, confirmLabel: "Supprimer", danger: true, onConfirm: () => onDelete(project.id) });
+  };
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 720 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Projets</h2>
@@ -109,10 +113,13 @@ export function ProjectsView({ projects, onAdd, onUpdate, onDelete, isAdmin, isC
             onCancel={() => setAdding(false)}
           />
         )}
+      </div>
+      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        {adding && isChef && (<ProjectForm onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />)}
         {projects.length === 0 && !adding && (
           <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>📁</div>
-            <div>Aucun projet. Commencez par en créer un.</div>
+            <div>Aucun projet{isChef ? ". Commencez par en créer un." : "."}</div>
           </div>
         )}
         {projects.map((p) =>
@@ -135,6 +142,7 @@ export function ProjectsView({ projects, onAdd, onUpdate, onDelete, isAdmin, isC
           )
         )}
       </div>
+      <ConfirmDialog data={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }

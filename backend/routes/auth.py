@@ -42,6 +42,11 @@ def login():
     member = dict(row)
 
     if not member.get("is_active", 1):
+        status = member.get("status")
+        if status == "pending":
+            return jsonify({"error": "Compte en attente de validation par l'administrateur"}), 403
+        if status == "rejected":
+            return jsonify({"error": "Demande de compte refusée. Contactez votre Lead Technique"}), 403
         return jsonify({"error": "Compte désactivé. Contactez votre Lead Technique"}), 403
 
     if not verify_password(password, member.get("password_hash", "")):
@@ -64,6 +69,46 @@ def login():
             "role": member.get("role") or ("admin" if member.get("is_admin") else "membre")
         }
     })
+
+
+@auth_bp.route("/register", methods=["POST"])
+def register():
+    """
+    POST /api/auth/register  (public — BF-02)
+    Body: { "name": "...", "email": "...", "password": "..." }
+    Crée une demande de compte en attente de validation admin.
+    """
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not name or not email or not password:
+        return jsonify({"error": "Nom, email et mot de passe requis"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Le mot de passe doit faire au moins 6 caractères"}), 400
+
+    conn = get_db()
+    exists = conn.execute(
+        "SELECT 1 FROM members WHERE LOWER(email)=? OR LOWER(name)=?",
+        (email, name.lower())
+    ).fetchone()
+    if exists:
+        conn.close()
+        return jsonify({"error": "Un compte avec ce nom ou cet email existe déjà"}), 409
+
+    try:
+        conn.execute(
+            """INSERT INTO members (name, email, password_hash, is_admin, is_active, status, role)
+               VALUES (?, ?, ?, 0, 0, 'pending', 'membre')""",
+            (name, email, hash_password(password))
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Demande envoyée. En attente de validation par l'administrateur."}), 201
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 409
 
 
 @auth_bp.route("/me", methods=["GET"])

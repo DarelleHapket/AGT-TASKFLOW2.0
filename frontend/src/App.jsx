@@ -191,14 +191,16 @@ export default function App() {
 
   const onAddProject    = async (d) => { const p = await api.createProject(d);         setProjects((prev) => [...prev, p]); };
   const onUpdateProject = async (id, d) => { const p = await api.updateProject(id, d); setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
-  const onDeleteProject = async (id) => { await api.deleteProject(id);                 setProjects((prev) => prev.filter((p) => p.id !== id)); };
+  const onDeleteProject = async (id) => { await api.deleteProject(id); setProjects((prev) => prev.filter((p) => p.id !== id)); };
+  const onSetChef       = async (id, chefId) => { const p = await api.setProjectChef(id, chefId); setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
 
   const onAddActivity    = async (d) => { const a = await api.createActivity(d);         setActivities((prev) => [...prev, a]); };
   const onUpdateActivity = async (id, d) => { const a = await api.updateActivity(id, d); setActivities((prev) => prev.map((x) => x.id === id ? a : x)); };
   const onDeleteActivity = async (id) => { await api.deleteActivity(id);                 setActivities((prev) => prev.filter((a) => a.id !== id)); };
 
   const onAddMember    = async (d) => { const m = await api.createMember(d);    setMembers((prev) => [...prev, m]); };
-  const onDeleteMember = async (id) => { await api.deleteMember(id);            setMembers((prev) => prev.filter((m) => m.id !== id)); };
+  const onDeleteMember = async (id) => { await api.deleteMember(id); setMembers((prev) => prev.filter((m) => m.id !== id)); };
+  const onSetMemberRole = async (id, role) => { const m = await api.setMemberRole(id, role); setMembers((prev) => prev.map((x) => x.id === id ? { ...x, ...m } : x)); };
 
   const onAddNeed    = async (d) => { const n = await api.createNeed(d);         setNeeds((prev) => [...prev, n]); };
   const onUpdateNeed = async (id, d) => { const n = await api.updateNeed(id, d); setNeeds((prev) => prev.map((x) => x.id === id ? n : x)); };
@@ -316,13 +318,13 @@ export default function App() {
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "projects"    && <ProjectsView projects={projects} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} isAdmin={isAdmin} isChef={isChef} currentUser={user} />}
-        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} isChef={isChef} />}
+        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} />}
+        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
         {tab === "reports"     && <ReportsView members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "team"        && <TeamView members={members} onDelete={onDeleteMember} isAdmin={isAdmin} />}
+        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
       </div>
 
         {modal && (

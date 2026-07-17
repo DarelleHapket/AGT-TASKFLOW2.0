@@ -1,3 +1,10 @@
+# backend/routes/projects.py
+#
+# A-03 — Corrections :
+#   Bug 1 : POST /  → chef_id = current_user["id"] ajouté dans l'INSERT
+#   Bug 2 : PUT /<id>  → garde ownership : seul le chef du projet peut modifier
+#   Bug 2 : DELETE /<id> → idem
+
 from flask import Blueprint, request, jsonify
 from functools import wraps
 from database import get_db
@@ -5,6 +12,8 @@ from utils.auth import require_role, require_auth, get_current_user
 
 projects_bp = Blueprint("projects", __name__)
 
+_ADMIN_READ_ONLY  = "L'administrateur dispose d'un accès en lecture seule sur les projets."
+_NOT_YOUR_PROJECT = "Vous n'êtes pas le chef de ce projet."
 
 def require_chef_only(f):
     """Écriture projet réservée au Chef de projet (CdC : l'admin est en lecture seule)."""
@@ -23,6 +32,28 @@ def require_chef_only(f):
 def row_to_dict(row):
     return dict(row) if row else None
 
+# ── Helper interne ───────────────────────────────────────────────────────────
+
+def _fetch_project(conn, pid):
+    """Retourne un projet avec chef_name (LEFT JOIN members)."""
+    return conn.execute(
+        """SELECT p.*, m.name AS chef_name
+           FROM projects p
+           LEFT JOIN members m ON p.chef_id = m.id
+           WHERE p.id = ?""",
+        (pid,)
+    ).fetchone()
+
+
+def _is_owner(project, current_user):
+    """Vérifie que current_user est bien le chef de ce projet."""
+    chef_id = project["chef_id"]
+    if chef_id is None:
+        return False
+    return int(chef_id) == int(current_user["id"])
+
+
+# ── GET /api/projects/ ───────────────────────────────────────────────────────
 
 def _demote_if_orphan(conn, member_id):
     """Repasse un membre en 'membre' s'il n'est plus chef d'aucun projet.
@@ -46,10 +77,19 @@ def _demote_if_orphan(conn, member_id):
 @require_auth
 def list_projects(current_user):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM projects ORDER BY name").fetchall()
+    rows = conn.execute(
+        """SELECT p.*, m.name AS chef_name
+           FROM projects p
+           LEFT JOIN members m ON p.chef_id = m.id
+           ORDER BY p.name"""
+    ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
+
+# ── POST /api/projects/ ──────────────────────────────────────────────────────
+# Admin → 403.
+# Chef → crée le projet ET devient automatiquement chef_id (Bug 1 corrigé).
 
 @projects_bp.route("/", methods=["POST"])
 @require_chef_only
@@ -57,16 +97,19 @@ def create_project(current_user):
     data = request.get_json()
     name = (data.get("name") or "").strip()
     description = (data.get("description") or "").strip()
+
     if not name:
-        return jsonify({"error": "name required"}), 400
+        return jsonify({"error": "Le nom du projet est obligatoire."}), 400
+
     conn = get_db()
     try:
+        # Bug 1 — chef_id = id du membre connecté
         c = conn.execute(
-            "INSERT INTO projects (name, description) VALUES (?, ?)",
-            (name, description)
+            "INSERT INTO projects (name, description, chef_id) VALUES (?, ?, ?)",
+            (name, description, current_user["id"])
         )
         conn.commit()
-        row = conn.execute("SELECT * FROM projects WHERE id=?", (c.lastrowid,)).fetchone()
+        row = _fetch_project(conn, c.lastrowid)
         conn.close()
         return jsonify(dict(row)), 201
     except Exception as e:
@@ -74,32 +117,66 @@ def create_project(current_user):
         return jsonify({"error": str(e)}), 409
 
 
+# ── PUT /api/projects/<id> ───────────────────────────────────────────────────
+# Admin → 403.
+# Bug 2 — seul le chef du projet peut modifier (ownership guard).
+
 @projects_bp.route("/<int:pid>", methods=["PUT"])
-@require_chef_only
+@require_auth
 def update_project(pid, current_user):
-    data = request.get_json()
-    name = (data.get("name") or "").strip()
-    description = (data.get("description") or "").strip()
-    if not name:
-        return jsonify({"error": "name required"}), 400
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     conn = get_db()
+    project = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    if not project:
+        conn.close()
+        return jsonify({"error": "Projet introuvable."}), 404
+
+    # Bug 2 — garde ownership
+    if not _is_owner(project, current_user):
+        conn.close()
+        return jsonify({"error": _NOT_YOUR_PROJECT}), 403
+
+    data        = request.get_json() or {}
+    name        = (data.get("name") or "").strip()
+    description = (data.get("description") or "").strip()
+
+    if not name:
+        conn.close()
+        return jsonify({"error": "Le nom du projet est obligatoire."}), 400
+
     conn.execute(
         "UPDATE projects SET name=?, description=? WHERE id=?",
         (name, description, pid)
     )
     conn.commit()
-    row = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    row = _fetch_project(conn, pid)
     conn.close()
-    return jsonify(dict(row)) if row else (jsonify({"error": "not found"}), 404)
+    return jsonify(dict(row)) if row else (jsonify({"error": "Projet introuvable."}), 404)
 
+
+# ── DELETE /api/projects/<id> ────────────────────────────────────────────────
+# Admin → 403.
+# Bug 2 — seul le chef du projet peut supprimer (ownership guard).
 
 @projects_bp.route("/<int:pid>", methods=["DELETE"])
-@require_chef_only
+@require_auth
 def delete_project(pid, current_user):
+    if current_user.get("is_admin"):
+        return jsonify({"error": _ADMIN_READ_ONLY}), 403
+
     conn = get_db()
-    # récupérer l'ancien chef pour resynchro éventuelle après suppression
-    proj = conn.execute("SELECT chef_id FROM projects WHERE id=?", (pid,)).fetchone()
-    old_chef = dict(proj).get("chef_id") if proj else None
+    project = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    if not project:
+        conn.close()
+        return jsonify({"error": "Projet introuvable."}), 404
+
+    # Bug 2 — garde ownership
+    if not _is_owner(project, current_user):
+        conn.close()
+        return jsonify({"error": _NOT_YOUR_PROJECT}), 403
+
     conn.execute("DELETE FROM projects WHERE id=?", (pid,))
     _demote_if_orphan(conn, old_chef)
     conn.commit()
@@ -107,9 +184,9 @@ def delete_project(pid, current_user):
     return jsonify({"deleted": pid})
 
 
-# ── Ajout poste B (Darelle) — désignation du chef de projet ─────────────────
-# Réservé à l'admin (cf. diagramme de classe : "Admin désigne ChefProjet").
-# Additif : ne modifie aucune des routes CRUD ci-dessus.
+# ── PUT /api/projects/<id>/chef ──────────────────────────────────────────────
+# Poste B (Darelle) — conservé intact.
+
 @projects_bp.route("/<int:pid>/chef", methods=["PUT"])
 @require_role("admin")
 def set_project_chef(pid, current_user):
@@ -120,15 +197,14 @@ def set_project_chef(pid, current_user):
     - Si chef_id fourni : le membre doit exister ; on lui donne le role 'chef_projet'.
     - L'ancien chef, s'il n'est plus chef d'aucun projet, repasse 'membre'.
     """
-    data = request.get_json() or {}
+    data    = request.get_json() or {}
     chef_id = data.get("chef_id", None)
 
     conn = get_db()
-
     project = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
     if not project:
         conn.close()
-        return jsonify({"error": "Projet introuvable"}), 404
+        return jsonify({"error": "Projet introuvable."}), 404
 
     old_chef = dict(project).get("chef_id")
 
@@ -137,15 +213,14 @@ def set_project_chef(pid, current_user):
         conn.execute("UPDATE projects SET chef_id=NULL WHERE id=?", (pid,))
         _demote_if_orphan(conn, old_chef)
         conn.commit()
-        row = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+        row = _fetch_project(conn, pid)
         conn.close()
         return jsonify(dict(row))
 
-    # Désignation : le membre doit exister
     member = conn.execute("SELECT * FROM members WHERE id=?", (chef_id,)).fetchone()
     if not member:
         conn.close()
-        return jsonify({"error": "Membre introuvable"}), 404
+        return jsonify({"error": "Membre introuvable."}), 404
 
     member = dict(member)
 
@@ -161,7 +236,6 @@ def set_project_chef(pid, current_user):
     if old_chef and old_chef != chef_id:
         _demote_if_orphan(conn, old_chef)
     conn.commit()
-
-    row = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    row = _fetch_project(conn, pid)
     conn.close()
     return jsonify(dict(row))

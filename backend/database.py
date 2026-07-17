@@ -137,7 +137,18 @@ def init_db():
         ("tasks", "archived_at", "ALTER TABLE tasks ADD COLUMN archived_at TIMESTAMP DEFAULT NULL"),
     ]
 
-    for table, column, sql in migrations_b1 + migrations_b2:
+    # ── Migrations v2 Bloc 3 — non destructives ─────────────────────────────
+    # Étape 3.1bis (A-04) : ownership des tâches.
+    # owner_id = créateur de la tâche. NULL pour les tâches déjà existantes
+    # avant cette migration (pas de rattrapage automatique — décision produit :
+    # ces tâches restent gérables uniquement par le chef du projet ou l'admin
+    # jusqu'à ce qu'un nouveau propriétaire les reprenne naturellement).
+
+    migrations_b3 = [
+        ("tasks", "owner_id", "ALTER TABLE tasks ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
+    ]
+
+    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3:
         try:
             c.execute(sql)
         except Exception:

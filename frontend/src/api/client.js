@@ -1,8 +1,27 @@
 // frontend/src/api/client.js
+//
+// A-04 — Bugfix gestion de session (D-07) :
+//   • Ajout d'un registre `onUnauthorized` : callback appelé chaque fois
+//     qu'une requête reçoit un 401 (token absent, invalide ou expiré).
+//   • App.jsx enregistre ce callback au montage pour déclencher logout()
+//     proprement dès qu'une session devient invalide, au lieu de laisser
+//     l'utilisateur bloqué sur un token périmé indéfiniment.
+//   • Aucune signature de fonction exportée n'a changé : tous les appels
+//     existants (getTasks, createTask, etc.) restent strictement identiques.
+
 const BASE = "/api";
 
 function getToken() {
   return localStorage.getItem("agt_token");
+}
+
+// ── Registre du callback d'expiration de session ────────────────────────────
+// Simple event hook, sans dépendance à React : évite tout couplage circulaire
+// entre ce module et les hooks qui consomment l'API.
+let _onUnauthorized = null;
+
+export function setUnauthorizedHandler(handler) {
+  _onUnauthorized = handler;
 }
 
 async function req(method, path, body) {
@@ -16,15 +35,17 @@ async function req(method, path, body) {
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(BASE + path, opts);
-  if (res.status === 401) {
-    localStorage.removeItem("agt_token");
-    localStorage.removeItem("agt_user");
-    localStorage.setItem("agt_session_expired", "1");
-    window.location.reload();
-    throw new Error("Session expiree");
-  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+
+    // 401 : token absent, invalide ou expiré → la session n'est plus valide.
+    // On notifie le handler enregistré (déconnexion propre côté App) avant
+    // de propager l'erreur, pour que l'UI ne reste jamais bloquée en boucle
+    // sur des appels qui échoueront systématiquement.
+    if (res.status === 401 && _onUnauthorized) {
+      _onUnauthorized();
+    }
+
     throw new Error(err.error || `HTTP ${res.status}`);
   }
   return res.json();

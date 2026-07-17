@@ -88,6 +88,40 @@ def validate_member(current_user, mid):
     return jsonify(dict(out))
 
 
+@members_bp.route("/<int:mid>/role", methods=["PUT"])
+@require_admin
+def set_member_role(current_user, mid):
+    """
+    PUT /api/members/<id>/role
+    Body: { "role": "membre" | "chef_projet" }
+    L'admin promeut un membre en chef de projet, ou l'y retire.
+    Ne touche jamais un compte admin.
+    """
+    data = request.get_json() or {}
+    role = (data.get("role") or "").strip()
+    if role not in ("membre", "chef_projet"):
+        return jsonify({"error": "role doit être 'membre' ou 'chef_projet'"}), 400
+
+    conn = get_db()
+    member = conn.execute("SELECT * FROM members WHERE id=?", (mid,)).fetchone()
+    if not member:
+        conn.close()
+        return jsonify({"error": "Membre introuvable"}), 404
+
+    member = dict(member)
+    if member.get("is_admin") or member.get("role") == "admin":
+        conn.close()
+        return jsonify({"error": "Impossible de modifier le rôle d'un administrateur"}), 403
+
+    conn.execute("UPDATE members SET role=? WHERE id=?", (role, mid))
+    conn.commit()
+    out = conn.execute(
+        "SELECT id, name, email, role, is_active FROM members WHERE id=?", (mid,)
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(out))
+
+
 @members_bp.route("/<int:mid>", methods=["DELETE"])
 @require_admin
 def delete_member(current_user, mid):

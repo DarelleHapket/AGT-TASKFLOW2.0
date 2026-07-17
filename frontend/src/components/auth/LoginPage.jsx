@@ -13,8 +13,15 @@ export function LoginPage({ onLogin }) {
   const [loading, setLoading]   = useState(false);
   const [focused, setFocused]   = useState(null);
   const [mounted, setMounted]   = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    if (localStorage.getItem("agt_session_expired")) {
+      setSessionExpired(true);
+      localStorage.removeItem("agt_session_expired");
+    }
+  }, []);
 
   function switchMode() {
     setMode((m) => (m === "login" ? "register" : "login"));
@@ -182,6 +189,19 @@ export function LoginPage({ onLogin }) {
               ? "Entrez vos identifiants pour accéder à votre espace"
               : "Votre demande sera transmise à l'administrateur pour validation"}
           </p>
+
+          {/* Session expirée */}
+          {sessionExpired && mode === "login" && (
+            <div style={{
+              background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)",
+              borderRadius: 12, padding: "12px 16px", marginBottom: 24,
+              display: "flex", alignItems: "center", gap: 10,
+              color: "#fbbf24", fontSize: 13,
+            }}>
+              <AlertCircle size={15} />
+              Votre session a expiré. Veuillez vous reconnecter.
+            </div>
+          )}
 
           {/* Succès */}
           {success && (

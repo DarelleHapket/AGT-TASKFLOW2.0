@@ -16,6 +16,13 @@ async function req(method, path, body) {
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(BASE + path, opts);
+  if (res.status === 401) {
+    localStorage.removeItem("agt_token");
+    localStorage.removeItem("agt_user");
+    localStorage.setItem("agt_session_expired", "1");
+    window.location.reload();
+    throw new Error("Session expiree");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -43,6 +50,7 @@ export const getProjects = () => req("GET", "/projects/");
 export const createProject = (p) => req("POST", "/projects/", p);
 export const updateProject = (id, p) => req("PUT", `/projects/${id}`, p);
 export const deleteProject = (id) => req("DELETE", `/projects/${id}`);
+export const setProjectChef = (id, chefId) => req("PUT", `/projects/${id}/chef`, { chef_id: chefId });
 
 // ── Activities ──────────────────────────────────────────────────────────────
 export const getActivities = (pid) =>
@@ -57,8 +65,8 @@ export const getMembers = () => req("GET", "/members/");
 export const createMember = (m) => req("POST", "/members/", m);
 export const deleteMember = (id) => req("DELETE", `/members/${id}`);
 export const getPendingMembers = () => req("GET", "/members/pending");
-export const validateMember = (id, action) =>
-  req("PUT", `/members/${id}/validate`, { action });
+export const validateMember    = (id, action) => req("PUT", `/members/${id}/validate`, { action });
+export const setMemberRole     = (id, role) => req("PUT", `/members/${id}/role`, { role });
 
 // ── Needs ───────────────────────────────────────────────────────────────────
 export const getNeeds = () => req("GET", "/needs/");

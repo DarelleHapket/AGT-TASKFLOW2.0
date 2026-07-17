@@ -1,4 +1,14 @@
 // frontend/src/hooks/useAuth.js
+//
+// A-04 — Bugfix gestion de session (D-07) :
+//   Aucun changement de logique interne ici : login/logout fonctionnaient déjà
+//   correctement en isolation. Le bug venait de l'absence de connexion entre
+//   un 401 API et l'appel de logout() (corrigé dans App.jsx via
+//   setUnauthorizedHandler), et du déclenchement prématuré de useData()
+//   avant authentification (corrigé dans useData.js).
+//   Ce fichier est inclus tel quel dans la livraison de session pour
+//   traçabilité — sa signature exportée est strictement inchangée.
+
 import { useState, useCallback } from "react";
 
 const TOKEN_KEY = "agt_token";

@@ -1,4 +1,19 @@
 // frontend/src/App.jsx
+// ⚠️  Fichier TRANSVERSAL — Poste A + Poste B
+//
+// A-03 — B-04 : isChef={isChef} ajouté sur <TaskModal>
+//              isChef propagé à <TasksView>, <ProjectsView>, <ActivitiesView>
+//
+// A-04 — Bugfix gestion de session (D-07) :
+//   • useData() reçoit désormais isLogged en argument, pour ne charger les
+//     données qu'une fois l'utilisateur authentifié (corrige le "token
+//     invalide" affiché au tout premier login, avant correctif résolu
+//     seulement par un rafraîchissement manuel).
+//   • api.setUnauthorizedHandler(logout) enregistré au montage : tout 401
+//     reçu par n'importe quel appel API déclenche désormais une déconnexion
+//     propre et un retour à l'écran de login, au lieu de laisser
+//     l'utilisateur bloqué sur une session expirée indéfiniment.
+
 import { useState, useEffect } from "react";
 import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList } from "lucide-react";
 import { useData } from "./hooks/useData";
@@ -35,9 +50,9 @@ const TABS = [
 
 export default function App() {
   const { token, user, isAdmin, isChef, isLogged, login, logout } = useAuth();
-  const { markAsSeen, hasUnseen, totalUnseen }            = useSeenDifficulties();
-  const [tab, setTab]       = useState("tasks");
-  const [modal, setModal]   = useState(null);
+  const { markAsSeen, hasUnseen, totalUnseen }                    = useSeenDifficulties();
+  const [tab, setTab]         = useState("tasks");
+  const [modal, setModal]     = useState(null);
   const [filters, setFilters] = useState({
     project: "all", member: "all", status: "all",
     priority: "all", period: "all",
@@ -48,16 +63,21 @@ export default function App() {
   const [diffCounts, setDiffCounts] = useState({});
   const [showBell, setShowBell]     = useState(false);
 
+  // A-04 (D-07) : enregistre le handler de déconnexion automatique dès le
+  // montage. N'importe quel appel API recevant un 401 (token absent, invalide
+  // ou expiré) déclenchera logout(), qui renvoie proprement vers LoginPage.
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => logout());
+  }, [logout]);
+
   const {
     tasks, setTasks, projects, setProjects,
     activities, setActivities, members, setMembers,
     needs, setNeeds, notes, setNotes,
     loading, error, memberColor, pert,
-  } = useData();
+  } = useData(isLogged); // A-04 (D-07) : ne charge qu'une fois authentifié
 
-  // ── Charger compteurs difficultés (admin + chef de projet) ───────────────
-  // Le backend filtre déjà par projet du chef (403 sur les tâches hors périmètre,
-  // ignorées par le catch), donc le compteur du chef se limite à ses projets.
+  // ── Compteurs de difficultés (admin + chef uniquement) ───────────────────
   const canSeeNotifications = isAdmin || isChef;
   useEffect(() => {
     if (!canSeeNotifications || !tasks.length) return;
@@ -103,9 +123,9 @@ export default function App() {
   const today = new Date().toISOString().slice(0, 10);
   const filtered = tasks.filter((t) => {
     if (!filters.show_archived && t.is_archived) return false;
-    if (filters.project !== "all" && String(t.project_id) !== String(filters.project)) return false;
-    if (filters.member  !== "all" && t.responsible !== filters.member) return false;
-    if (filters.status  !== "all" && t.status !== filters.status) return false;
+    if (filters.project  !== "all" && String(t.project_id) !== String(filters.project)) return false;
+    if (filters.member   !== "all" && t.responsible !== filters.member) return false;
+    if (filters.status   !== "all" && t.status !== filters.status) return false;
     if (filters.priority !== "all" && t.priority !== filters.priority) return false;
     if (filters.show_overdue  && !(t.due_date && t.due_date < today && t.status !== "done")) return false;
     if (filters.show_critical && !(pert.slack[t.id] === 0)) return false;
@@ -116,7 +136,6 @@ export default function App() {
           !t.project_name?.toLowerCase().includes(q) &&
           !t.activity_name?.toLowerCase().includes(q)) return false;
     }
-    // Filtre temporel
     if (filters.single_date) {
       const s = t.start_date, e = t.end_date || t.due_date;
       if (s && s > filters.single_date) return false;
@@ -155,6 +174,11 @@ export default function App() {
     })));
   };
 
+  const onStatusChange = async (id, status) => {
+    const t = await api.updateTask(id, { status }); // payload minimal : le backend ignore le reste en mode status_only
+    setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
+  };
+
   const onArchiveTask = async (id) => {
     const t = await api.archiveTask(id);
     setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
@@ -165,24 +189,24 @@ export default function App() {
     setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
   };
 
-  const onAddProject    = async (d) => { const p = await api.createProject(d);    setProjects((prev) => [...prev, p]); };
+  const onAddProject    = async (d) => { const p = await api.createProject(d);         setProjects((prev) => [...prev, p]); };
   const onUpdateProject = async (id, d) => { const p = await api.updateProject(id, d); setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
-  const onDeleteProject = async (id) => { await api.deleteProject(id); setProjects((prev) => prev.filter((p) => p.id !== id)); };
+  const onDeleteProject = async (id) => { await api.deleteProject(id);                 setProjects((prev) => prev.filter((p) => p.id !== id)); };
 
-  const onAddActivity    = async (d) => { const a = await api.createActivity(d);    setActivities((prev) => [...prev, a]); };
+  const onAddActivity    = async (d) => { const a = await api.createActivity(d);         setActivities((prev) => [...prev, a]); };
   const onUpdateActivity = async (id, d) => { const a = await api.updateActivity(id, d); setActivities((prev) => prev.map((x) => x.id === id ? a : x)); };
-  const onDeleteActivity = async (id) => { await api.deleteActivity(id); setActivities((prev) => prev.filter((a) => a.id !== id)); };
+  const onDeleteActivity = async (id) => { await api.deleteActivity(id);                 setActivities((prev) => prev.filter((a) => a.id !== id)); };
 
   const onAddMember    = async (d) => { const m = await api.createMember(d);    setMembers((prev) => [...prev, m]); };
-  const onDeleteMember = async (id) => { await api.deleteMember(id); setMembers((prev) => prev.filter((m) => m.id !== id)); };
+  const onDeleteMember = async (id) => { await api.deleteMember(id);            setMembers((prev) => prev.filter((m) => m.id !== id)); };
 
-  const onAddNeed    = async (d) => { const n = await api.createNeed(d);    setNeeds((prev) => [...prev, n]); };
+  const onAddNeed    = async (d) => { const n = await api.createNeed(d);         setNeeds((prev) => [...prev, n]); };
   const onUpdateNeed = async (id, d) => { const n = await api.updateNeed(id, d); setNeeds((prev) => prev.map((x) => x.id === id ? n : x)); };
-  const onDeleteNeed = async (id) => { await api.deleteNeed(id); setNeeds((prev) => prev.filter((n) => n.id !== id)); };
+  const onDeleteNeed = async (id) => { await api.deleteNeed(id);                 setNeeds((prev) => prev.filter((n) => n.id !== id)); };
 
-  const onAddNote    = async (d) => { const n = await api.createNote(d);    setNotes((prev) => [...prev, n]); };
+  const onAddNote    = async (d) => { const n = await api.createNote(d);         setNotes((prev) => [...prev, n]); };
   const onUpdateNote = async (id, d) => { const n = await api.updateNote(id, d); setNotes((prev) => prev.map((x) => x.id === id ? n : x)); };
-  const onDeleteNote = async (id) => { await api.deleteNote(id); setNotes((prev) => prev.filter((n) => n.id !== id)); };
+  const onDeleteNote = async (id) => { await api.deleteNote(id);                 setNotes((prev) => prev.filter((n) => n.id !== id)); };
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -272,7 +296,7 @@ export default function App() {
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
               {user?.name}
               {isAdmin && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
-              {isChef && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
+              {isChef  && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#0ea5e9",    color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
             </div>
             <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
           </div>
@@ -288,24 +312,28 @@ export default function App() {
 
       {/* Contenu */}
       <div style={{ padding: 20, maxWidth: 1440, margin: "0 auto" }}>
-        {tab === "tasks"       && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} onArchive={onArchiveTask} onUnarchive={onUnarchiveTask} isAdmin={isAdmin} />}
+        {tab === "tasks" && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} onArchive={onArchiveTask} onUnarchive={onUnarchiveTask} onStatusChange={onStatusChange} isAdmin={isAdmin} currentUser={user} />}
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "projects"    && <ProjectsView projects={projects} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} isAdmin={isAdmin} />}
-        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
+        {tab === "projects"    && <ProjectsView projects={projects} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} isAdmin={isAdmin} isChef={isChef} currentUser={user} />}
+        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} isChef={isChef} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
         {tab === "reports"     && <ReportsView members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} isAdmin={isAdmin} />}
+        {tab === "team"        && <TeamView members={members} onDelete={onDeleteMember} isAdmin={isAdmin} />}
       </div>
 
-      {modal && (
-        <TaskModal mode={modal.mode} initial={modal.task} tasks={tasks} members={members}
-          projects={projects} activities={activities} onSave={onSaveTask}
-          onClose={() => setModal(null)} isAdmin={isAdmin} currentUser={user} />
-      )}
+        {modal && (
+          <TaskModal
+            mode={modal.mode} initial={modal.task} tasks={tasks} members={members}
+            projects={projects} activities={activities} onSave={onSaveTask}
+            onStatusChange={onStatusChange}
+            onClose={() => setModal(null)}
+            isAdmin={isAdmin} currentUser={user}
+          />
+        )}
     </div>
   );
 }

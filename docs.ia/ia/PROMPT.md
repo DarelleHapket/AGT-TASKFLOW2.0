@@ -32,7 +32,7 @@ signaler tout changement dans le rapport de session :
    de la prochaine session (dernier numéro A + 1).
    de la prochaine session (dernier numéro A + 1).
 2. Annonce-moi ce numéro (format A-NN) et DEMANDE-MOI de le confirmer avant toute action.
-3. Une fois confirmé, lis le dernier rapport « A- » dans docs/ia/reports/ et docs/ia/TODO.md.
+3. Une fois confirmé, lis le dernier rapport « A- » dans INDEX.md, et le session_A-xx et docs/ia/TODO.md.
 4. Produis un court BILAN : où en est ton périmètre, quelle tâche recommandée ensuite.
 3. Une fois confirmé, lis le dernier rapport « A- » dans docs/ia/reports/ et docs/ia/TODO.md.
 4. Produis un court BILAN : où en est ton périmètre, quelle tâche recommandée ensuite.

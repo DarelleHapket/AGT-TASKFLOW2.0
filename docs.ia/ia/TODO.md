@@ -1,6 +1,6 @@
 # TODO.md — Poste A (Josué) | AGT TaskFlow
-**Périmètre :** Tâches · PERT · Gantt · Projets · Activités
-**Mis à jour :** Session A-01 — 16 juillet 2026
+**Périmètre :** Tâches · PERT · Gantt · Projets · Activités  
+**Mis à jour :** Session A-04 — 17 juillet 2026  
 **Référence CDC :** version 1.0 BROUILLON, 14 juillet 2026
 
 > **Légende**
@@ -13,98 +13,112 @@
 
 ---
 
-## Étape 0 — Audit du code réel ✅ Complété en session A-01
+## Étape 0 — Audit du code réel ✅ Complété
 
-- [x] Lire `backend/database.py` — migrations v2 confirmées : `priority`, `start_date`, `end_date`, `due_date`, `is_archived`, `archived_at`, `chef_id` dans `projects` tous présents
-- [x] Lire `backend/routes/tasks.py` — tous les champs lus/écrits correctement, guards manquants confirmés
-- [x] Lire `frontend/src/utils/pert.js` — calcul PERT 100 % frontend confirmé (robuste, détection de cycles DFS)
-- [x] Lire `frontend/src/hooks/useData.js` — `pert = computePERT(tasks)` côté client confirmé
-- [x] Lire `frontend/src/components/tasks/TasksView.jsx` — logique `isAdmin` inversée confirmée et corrigée
-- [x] Lire `backend/utils/auth.py` — `@require_auth` et `@require_admin` disponibles, `current_user` injecté
-- [ ] Lire `frontend/src/components/tasks/TaskModal.jsx` — **Bug B-01 ouvert** : sémantique `isAdmin` à vérifier
-- [ ] Lire `frontend/src/api/client.js` — vérifier absence endpoint PERT backend et liste complète des appels
+- [x] Lire `backend/database.py`
+- [x] Lire `backend/routes/tasks.py`
+- [x] Lire `frontend/src/utils/pert.js`
+- [x] Lire `frontend/src/hooks/useData.js`
+- [x] Lire `frontend/src/components/tasks/TasksView.jsx`
+- [x] Lire `backend/utils/auth.py`
+- [x] Lire `frontend/src/components/tasks/TaskModal.jsx` — B-01 (A-02), B-03/09/10 (A-03)
+- [x] Lire `frontend/src/api/client.js`
+- [x] Lire `backend/routes/projects.py` (A-03)
+- [x] Lire `frontend/src/hooks/useAuth.js` (A-04)
+- [x] Lire `frontend/src/App.jsx` en entier (A-04)
 
 ---
 
-## Étape 1 — Stabilisation BDD : champs manquants dans `tasks` ✅ Validé en session A-01
-
-> Tous les champs existent dans le code réel. Le dump était antérieur aux migrations v2.
+## Étape 1 — Stabilisation BDD ✅ Validée
 
 ### 1.1 Champ `priority` [P1]
-- [x] Vérifié présent dans schéma initial `tasks` (valeur défaut `'normale'`)
-- [x] Lu et écrit dans GET / POST / PUT de `tasks.py`
-- [ ] Vérifier que `TaskModal.jsx` expose bien le champ `priority` en saisie
+- [x] Présent dans schéma `tasks`
+- [x] Lu/écrit dans `tasks.py`
+- [x] Exposé en saisie dans `TaskModal.jsx`
 
 ### 1.2 Champ `is_archived` + `archived_at` [P2]
-- [x] Vérifié présent via migrations v2 Bloc 1 et 2
-- [x] Endpoints `PATCH /archive` et `PATCH /unarchive` existants et protégés (session A-01)
+- [x] Présents via migrations v2
+- [x] Endpoints `PATCH /archive` et `PATCH /unarchive` protégés
 
-### 1.3 Champs de dates : `start_date`, `end_date`, `due_date` [P2]
-- [x] Vérifié présents via migrations v2 Bloc 1
-- [x] Lus et écrits dans GET / POST / PUT de `tasks.py`
-- [ ] Vérifier que `TaskModal.jsx` expose les dates en saisie optionnelle
+### 1.3 Champs de dates [P2]
+- [x] Présents via migrations v2
+- [x] Lus/écrits dans `tasks.py`
+- [x] Exposés en saisie dans `TaskModal.jsx`
+
+### 1.4 Champ `owner_id` [P1] ✅ (A-04)
+- [x] Migration Bloc 3 non destructive dans `database.py`
+- [x] `NULL` pour les tâches existantes (pas de rattrapage automatique, D-10)
+- [x] Renseigné automatiquement à la création (`POST /tasks/`)
 
 ---
 
-## Étape 2 — PERT côté backend [P1] ← Priorité session A-02
+## Étape 2 — PERT côté backend [P1] ✅ Backend complet
 
-> **CDC §4.2.2** : *"Le backend recalcule automatiquement le graphe PERT."*
-> Actuellement 100 % frontend. Écart architectural le plus structurant.
-
-### 2.1 Moteur PERT backend — `backend/utils/pert.py` [P1]
-- [ ] Créer `backend/utils/pert.py` avec `compute_pert()`, `forward_pass()`, `backward_pass()`, détection de cycles
-- [ ] Appeler `compute_pert()` après chaque POST / PUT / DELETE sur `/tasks/`
-- [ ] Inclure les champs PERT dans la réponse JSON : `es`, `ef`, `ls`, `lf`, `slack`, `critical`
+### 2.1 Moteur PERT backend [P1] ✅
+- [x] `backend/utils/pert.py` créé (A-02)
+- [x] `compute_pert()` appelé dans `GET /tasks/` (A-02)
+- [x] Champs PERT dans la réponse : `es`, `ef`, `ls`, `lf`, `slack`, `critical` (D-05, A-02)
 
 ### 2.2 Contrat API — 🔗 coordination Poste B [P1]
-- [ ] Définir avec Darelle le format exact des champs PERT dans le JSON
-- [ ] Documenter dans `docs/ia/` le contrat arrêté
+- [~] D-05 défini (format champs plats + cas cycle)
+- [ ] Documenter dans `docs/ia/PERT_CONTRACT.md` et transmettre à Darelle
+- [ ] **Ajout A-04 :** documenter aussi le nouveau champ `permission` (`full`/`status_only`/`read_only`) désormais présent sur chaque tâche de `GET /tasks/`, utile si Darelle l'exploite dans ses rapports
 
-### 2.3 Frontend : brancher sur le PERT backend [P1]
-- [ ] Modifier `useData.js` ⚠️ : ne plus appeler `computePERT()` si le backend fournit les valeurs
-- [ ] Garder `utils/pert.js` comme fallback pour la vue DailyOrder
-- [ ] Mettre à jour `PERTView.jsx` et `GanttView.jsx`
+### 2.3 Frontend : branché sur le PERT backend [P1] ✅ (A-03)
+- [x] `useData.js` ⚠️ : `computePERT` retiré, `buildPertFromTasks()` lit les champs backend (A-03)
+- [x] Double format D-05 géré : tableau plat + `{tasks, pert_cycle_ids}` (A-03)
+- [x] `pert` migré en état explicite `useState` (A-03)
+- [x] `PERTView.jsx` et `GanttView.jsx` : aucune modification requise (A-03)
+- [x] **D-06** : PERT post-mutation figé jusqu'à `reload()` — non bloquant, laissé en l'état ; `setTasks` locaux suffisent pour l'usage courant (réévaluer en A-05 si signalé par les utilisateurs)
 
-### 2.4 Tests PERT [P1]
-- [ ] Cas 1 : graphe linéaire A→B→C → slack = 0 partout
-- [ ] Cas 2 : deux chemins parallèles → seul le plus long est critique
-- [ ] Cas 3 : pas de dépendances → ES=0, slack maximal
-- [ ] Cas 4 : cycle détecté → 400 avec liste des IDs impliqués
+### 2.4 Tests PERT [P1] ✅
+- [x] Cas 1 : graphe linéaire A→B→C → slack = 0 partout ✅
+- [x] Cas 2 : deux chemins parallèles → seul le plus long est critique ✅
+- [x] Cas 3 : pas de dépendances → ES=0 partout ✅
+- [x] Cas 4 : cycle détecté → CycleError avec liste des IDs ✅
 
 ---
 
-## Étape 3 — Tâches : contrôle d'accès par rôle [P1]
+## Étape 3 — Tâches : contrôle d'accès par rôle [P1] ✅ Complété (A-04, modèle étendu)
 
-> D-01 : Admin 403 sur écritures ✅ fait (session A-01).
-> D-03 : Distinction Chef vs Membre → à faire ici.
+> D-01 : Admin 403 sur écritures ✅ (A-01).
+> D-08 : ownership projets implémenté (A-03).
+> **D-09 (A-04) : le modèle initial "Chef uniquement" est remplacé par owner / chef_projet / responsable.**
 > 🔗 Dépend du Poste B : `members.role` opérationnel.
 
-### 3.1 Backend : guard Chef dans `routes/tasks.py` [P1]
-- [~] `@require_auth` + admin 403 fait (session A-01)
-- [ ] Ajouter helper `is_chef_of_project(conn, project_id, user_id)` basé sur `projects.chef_id`
-- [ ] `POST /tasks/` → vérifier appelant = chef du `project_id` soumis
-- [ ] `PUT /tasks/<id>` → chef : tous les champs ; membre (responsable) : `status` seulement
-- [ ] `DELETE`, `PATCH archive/unarchive` → chef uniquement
+### 3.1 Backend : guards dans `routes/tasks.py` [P1] ✅ (A-04)
+- [x] `@require_auth` + admin 403 fait (A-01)
+- [x] Helpers `is_owner()`, `is_chef_of_project()`, `is_responsible()`, `can_full_edit()`, `get_permission_level()`
+- [x] `POST /tasks/` → ouvert à tout non-admin, `owner_id` = créateur automatique
+- [x] `PUT /tasks/<id>` → `full` : tous champs ; `status_only` : `status` uniquement (autres champs ignorés, sécurité anti-bypass) ; `read_only` : 403
+- [x] `DELETE`, `PATCH archive/unarchive` → `can_full_edit` uniquement (owner ou chef du projet)
+- [x] Champ `permission` calculé et renvoyé sur chaque tâche de `GET /tasks/`
 
-### 3.2 Frontend : adapter `TaskModal.jsx` [P1]
-- [ ] **Audit `TaskModal.jsx` d'abord** (Bug B-01 — envoyer le fichier)
-- [ ] Admin → formulaire entier en lecture seule
-- [ ] Membre non-chef → seul champ `status` éditable
-- [ ] Chef → formulaire complet
+### 3.2 Frontend : `TaskModal.jsx` [P1] ✅ (A-04, réécrit)
+- [x] Admin → AdminModal (vue directeur, D-07 A-03) ✅ inchangé
+- [x] `MemberModal` séparé supprimé — formulaire unique piloté par `task.permission`
+- [x] `full` → tous les champs actifs
+- [x] `status_only` → seul le champ statut actif, reste grisé
+- [x] `read_only` → tout grisé, bandeau explicatif affiché
+- [x] Mode création : projets non filtrés (tout membre peut créer une tâche liée à n'importe quel projet ou sans projet)
+
+### 3.3 Frontend : `TasksView.jsx` [P1] ✅ (A-04, réécrit)
+- [x] UI pilotée entièrement par `task.permission` reçu du backend
+- [x] Bouton ouvrir : Pencil (full) / Eye (status_only, read_only)
+- [x] Select statut inline pour `status_only`
+- [x] Boutons Archive/Désarchive/Supprimer conditionnés à `full`
+- [x] "Nouvelle tâche" visible pour tout non-admin
 
 ---
 
 ## Étape 4 — Gantt : conformité CDC [P1 / P2]
 
-> **CDC BF-17** : barres ES→EF en coupons, critique rouge, couleur du membre responsable.
-
 ### 4.1 Vérification de l'existant [P1]
-- [ ] Lire `GanttView.jsx` (envoyer le fichier)
-- [ ] Confirmer barres ES/EF, critique rouge, couleur responsable
+- [x] `GanttView.jsx` lu (A-03) — barres ES/EF, critique rouge, couleur responsable : OK
 
 ### 4.2 Améliorations manquantes [P1 / P2]
 - [ ] Flèches de dépendances entre barres [P2]
-- [ ] Filtre par membre dans la vue Gantt [P1]
+- [ ] Filtre par membre [P1]
 - [ ] Filtre par projet si absent [P1]
 
 ### 4.3 Étiquettes et légende [P2]
@@ -116,110 +130,120 @@
 
 ## Étape 5 — Projets : Chef de projet [P1]
 
-> **D-02** : Chef stocké dans `projects.chef_id` (déjà en DB via migration v2).
-> Pas de table `project_members` — membres du projet = DISTINCT responsible des tâches.
-> 🔗 Dépend du Poste B : comptes membres opérationnels.
-
-### 5.1 Backend : endpoint désignation Chef [P1]
+### 5.1 Backend [P1] ✅
 - [x] Colonne `projects.chef_id` présente (migration v2)
-- [ ] `PATCH /projects/<id>/chef` → Admin uniquement, body `{"chef_id": N}`
-- [ ] Inclure `chef_id` et `chef_name` dans la réponse GET `/projects/`
+- [x] `GET /projects/` retourne `chef_id` + `chef_name` (A-02)
+- [x] `PUT /<id>/chef` → Admin uniquement (Darelle, A-02)
+- [x] `POST /projects/` stocke `chef_id = current_user["id"]` (A-03, D-08)
+- [x] `PUT/DELETE` : garde ownership `_is_owner()` (A-03, D-08)
 
-### 5.2 Frontend `ProjectsView.jsx` [P1]
-- [ ] Lire `ProjectsView.jsx` (envoyer le fichier)
-- [ ] Afficher le Chef de projet sur chaque ligne
-- [ ] Si `isAdmin` → bouton "Désigner Chef"
+### 5.2 Frontend `ProjectsView.jsx` [P1] ✅ (A-03)
+- [x] Chef affiché sur chaque ligne (chef_name) (A-03)
+- [x] Boutons ✏️/🗑️ visibles uniquement pour le chef propriétaire (A-03, D-08)
+- [x] "Nouveau projet" réservé au Chef (A-03)
 
-### 5.3 Guard Chef dans `tasks.py` et `activities.py` [P1]
-- [ ] Utiliser `is_chef_of_project()` (Étape 3.1) pour tous les guards d'écriture
+### 5.3 Guard modèle owner/chef dans `tasks.py` et `activities.py` [P1]
+- [x] `tasks.py` : fait (Étape 3.1, A-04)
+- [ ] `activities.py` : reste à faire (Étape 6.1)
 
 ---
 
-## Étape 6 — Activités : guard rôle et hiérarchie [P1]
-
-> **CDC BF-19** : Chef de projet gère ses activités.
+## Étape 6 — Activités : guard rôle [P1]
 
 ### 6.1 Backend `routes/activities.py` [P1]
-- [ ] Lire `activities.py` (envoyer le fichier)
-- [ ] Ajouter `@require_auth` + admin 403 + guard `is_chef_of_project()`
+- [x] `@require_auth` + admin 403 + messages FR (A-02)
+- [ ] **Répliquer le modèle owner/chef/responsable** (D-09) — même logique que `tasks.py` A-04, pas seulement `is_chef_of_project()` comme prévu initialement
 - [ ] Vérifier cascade suppression via `ON DELETE CASCADE`
+- [ ] Évaluer si `activities` a besoin d'un `owner_id` propre ou hérite du projet parent (à trancher avec l'utilisateur avant implémentation)
 
-### 6.2 Frontend `ActivitiesView.jsx` [P2]
-- [ ] Masquer boutons créer/modifier/supprimer si `isAdmin`
+### 6.2 Frontend `ActivitiesView.jsx` [P1] ✅ (A-03)
+- [x] Boutons créer/modifier/supprimer masqués si `!isChef` (A-03, B-05 fermé)
+- [ ] **À revoir en A-05** : aligner sur le modèle `permission` par entité (comme `tasks.py`), au lieu de `isChef` global — cohérence avec le nouveau modèle D-09
 
 ---
 
 ## Étape 7 — Filtres & recherche avancée [P1]
 
-> **CDC BF-12** : filtrer par projet, membre, statut, priorité, période, texte.
-
-- [x] Filtre `priority` fonctionnel : DB ✅, API ✅
-- [x] Filtres dates (`date_from`, `date_to`, `single_date`) fonctionnels dans `tasks.py`
+- [x] Filtre `priority` : DB ✅, API ✅
+- [x] Filtres dates fonctionnels
 - [x] Filtre `show_archived` fonctionnel
-- [x] Recherche texte sur `id`, `description`, `project_name`, `activity_name`
-- [ ] Vérifier filtre `show_critical` → dépend du PERT backend (Étape 2)
-- [ ] Vérifier filtre `show_overdue` → vérifier saisie `due_date` dans `TaskModal`
-- [ ] Ajouter filtre `priority` dans la vue Gantt si absent
+- [x] Recherche texte fonctionnelle
+- [~] Filtre `show_critical` → champ `critical` présent côté backend (A-02) ; vérifier côté frontend
+- [ ] Vérifier filtre `show_overdue`
+- [ ] Ajouter filtre `priority` dans Gantt si absent
 
 ---
 
 ## Étape 8 — Performance & qualité [P1 / P2]
 
-### 8.1 Protection JWT des endpoints Poste A [P1]
-- [x] `tasks.py` — toutes les routes protégées (session A-01)
-- [ ] `projects.py` — audit et ajout `@require_auth`
-- [ ] `activities.py` — audit et ajout `@require_auth`
-- [ ] Tester token expiré → `401` propre (CDC BF-06)
+### 8.1 Protection JWT [P1]
+- [x] `tasks.py` — toutes les routes protégées (A-01)
+- [x] `projects.py` — toutes les routes protégées (A-02)
+- [x] `activities.py` — toutes les routes protégées (A-02)
+- [x] **Tester token expiré → `401` propre (CDC BF-06)** ✅ Fermé (A-04, D-07) : déconnexion automatique via `setUnauthorizedHandler`
 
 ### 8.2 Performance PERT [P1]
-- [ ] Mesurer temps de calcul PERT backend après Étape 2
-- [ ] Si > 100 ms pour 100 tâches : mettre en cache par projet
+- [ ] Mesurer temps de calcul PERT backend (cible < 100 ms pour 100 tâches)
+- [ ] Si dépassé : cache par projet
 
 ### 8.3 Messages d'erreur en français [P2]
-- [x] `tasks.py` — messages en français (session A-01)
-- [ ] `projects.py` — messages en français
-- [ ] `activities.py` — messages en français
+- [x] `tasks.py` (A-01)
+- [x] `projects.py` (A-02)
+- [x] `activities.py` (A-02)
+
+### 8.4 Gestion de session [P1] ✅ Fermé (A-04)
+- [x] `client.js` ⚠️ : `setUnauthorizedHandler` — intercepte tout 401
+- [x] `useData.js` ⚠️ : chargement conditionné à `isLogged`, reset propre au logout, garde anti race-condition
+- [x] `App.jsx` ⚠️ : branchements `useData(isLogged)` + enregistrement du handler
+- [x] Validé par l'utilisateur : premier login sans erreur + retour propre au login après expiration de session
 
 ---
 
-## Bugs ouverts
+## Bugs
 
-| ID | Fichier | Description | Priorité |
-|---|---|---|---|
-| B-01 | `TaskModal.jsx` | Sémantique `isAdmin` à auditer : admin doit voir formulaire en lecture seule | Haute |
-| B-02 | `App.jsx` ⚠️ transversal | Cloche `<Bell>` et `diffCounts` encore gatés sur `isAdmin=true` — doit être `!isAdmin` per CDC BF-24 | Moyenne |
+| ID | Fichier | Description | Priorité | Statut |
+|---|---|---|---|---|
+| B-01 | `TaskModal.jsx` | Admin formulaire lecture seule | Haute | ✅ Fermé (A-02) |
+| B-02 | `App.jsx` ⚠️ transversal | Cloche `<Bell>` gatée `isAdmin=true` | Moyenne | 🔴 Ouvert — Poste B |
+| B-03 | `TaskModal.jsx` | Chef voit MemberModal au lieu du formulaire | Bloquant | ✅ Fermé (A-03) |
+| B-04 | `App.jsx` ⚠️ | `isChef` non transmis à `TaskModal` | Bloquant | ✅ Fermé (A-03) |
+| B-05 | `ActivitiesView.jsx` | CRUD visible pour tous | Haute | ✅ Fermé (A-03) |
+| B-06 | `ProjectsView.jsx` | CRUD visible pour tous | Haute | ✅ Fermé (A-03) |
+| B-07 | `TeamView.jsx` | Ajout membre accessible + 🗑️ non restreint | Haute | ✅ Fermé (A-03) |
+| B-08 | `TasksView.jsx` | "Nouvelle tâche" visible pour Membre | Moyenne | ✅ Fermé (A-03) |
+| B-09 | `TaskModal.jsx` | `disabled` HTML manquant sur Enregistrer | Moyenne | ✅ Fermé (A-03) |
+| B-10 | `TaskModal.jsx` | Cast `String()` manquant sur `member_id` | Moyenne | ✅ Fermé (A-03) |
+| D-07 | `App.jsx`, `useData.js`, `client.js` ⚠️ | Session défaillante : token invalide au 1er login + session expirée sans retour possible | Bloquant | ✅ Fermé (A-04) |
 
 ---
 
-## Résumé des dépendances inter-postes
+## Résumé dépendances inter-postes
 
-| Sujet | Poste A (Josué) | Poste B (Darelle) | Statut |
+| Sujet | Poste A | Poste B | Statut |
 |---|---|---|---|
 | `@require_auth` / JWT | Consomme | Crée et maintient | ✅ Opérationnel |
-| `projects.chef_id` | Crée endpoint PATCH (Étape 5.1) | Lit pour rapports | À faire |
-| Contrat JSON PERT | Produit le calcul (Étape 2) | Consomme dans rapports | À définir |
-| `useData.js` ⚠️ | Brancher PERT backend (Étape 2.3) | Hook partagé | En attente Étape 2 |
-| `App.jsx` ⚠️ | Bug B-02 : cloche non-admin | Shell partagé | À coordonner |
+| `@require_role` | Consomme (projects.py) | Crée et maintient | ✅ Opérationnel |
+| `projects.chef_id` | GET + ownership ✅ | Lit pour rapports | ✅ Complet |
+| Contrat JSON PERT | Produit ✅ (D-05) | Consomme dans rapports | À documenter (A-05) |
+| `useData.js` ⚠️ | PERT backend branché ✅ (A-03) ; `isLogged` ajouté (A-04) | Hook partagé | ✅ Fait — informer Darelle |
+| `App.jsx` ⚠️ | Props isChef/currentUser ajoutés (A-03) ; isChef retiré de TasksView/TaskModal, handler 401 ajouté (A-04) | Bug B-02 cloche | Informer Darelle |
+| `client.js` ⚠️ | `setUnauthorizedHandler` ajouté (A-04) | Consomme les fonctions existantes, aucune signature changée | ✅ Rétrocompatible |
+| Modèle permissions tâches (D-09) | Owner/chef/responsable implémenté (A-04) | À répliquer si Darelle a des vues similaires (difficultés, notifications) | Informer Darelle |
 
 ---
 
-## Ordre de traitement recommandé (sessions suivantes)
+## Ordre de traitement recommandé
 
 ```
-A-02 : Bug B-01 (TaskModal audit + fix)
-     → Étape 2 (PERT backend)
-     → Étape 8.1 (projects.py + activities.py JWT guards)
-
-A-03 : Étape 3 (guards chef/membre dans tasks.py)
-     → Étape 5 (projets : chef_id endpoint + UI)
-     → Étape 6 (activités : guards)
-
-A-04 : Étape 4 (Gantt améliorations)
-     → Étape 7 (filtres complets)
-     → Étape 8 (qualité, perf)
+A-05 : Étape 6.1 — répliquer le modèle owner/chef/responsable dans activities.py [P1]
+       Étape 6.2 — aligner ActivitiesView.jsx sur le modèle `permission` par entité [P1]
+       Étape 2.2 — PERT_CONTRACT.md + documenter le champ `permission` [P1]
+       Étape 4   — Gantt : flèches de dépendances, filtres membre/projet [P1/P2]
+       Étape 7   — Vérifier show_critical / show_overdue côté frontend [P1]
+       Étape 8.2 — Mesure perf PERT (< 100 ms / 100 tâches) [P1]
 ```
 
 ---
 
-*Ce fichier ne doit pas être réorganisé sans accord explicite de Josué.*
-*Décisions numérotées D-xx en continu commun avec le Poste B (dernière en date : D-03).*
+*Ce fichier ne doit pas être réorganisé sans accord explicite de Josué.*  
+*Décisions numérotées D-xx en continu commun avec le Poste B (dernière en date : D-12).*

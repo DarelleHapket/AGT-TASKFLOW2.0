@@ -1,23 +1,50 @@
 // frontend/src/components/tasks/TasksView.jsx
+//
+// A-04 — Refonte permissions (owner / chef_projet / responsable) :
+//   • Chaque tâche porte désormais `task.permission` calculé par le backend :
+//       "full"        → owner ou chef du projet : tous les boutons actifs
+//       "status_only" → responsable (ni owner ni chef) : select statut inline
+//       "read_only"   → aucun droit : bouton œil uniquement
+//   • "Nouvelle tâche" visible pour tout non-admin (plus de restriction isChef)
+//   • Badge difficulté : conservé pour permission "full" (équivalent ex-Chef)
+
 import { useState, useEffect } from "react";
 import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Eye, AlertTriangle, Archive, ArchiveRestore } from "lucide-react";
 import { FilterBar } from "../shared/FilterBar";
 import { StatusBadge, CriticalBadge, MemberBadge, TaskIdBadge } from "../shared/Badges";
+import { STATUSES } from "../../utils/pert";
 import * as api from "../../api/client";
 import { useSeenDifficulties } from "../../hooks/useSeenDifficulties";
 
-export function TasksView({ tasks, projects, activities, members, pert, filters, setFilters, memberColor, onAdd, onEdit, onDelete, onArchive, onUnarchive, isAdmin }) {
-  const [collapsed, setCollapsed]   = useState({});
+// ── Style du select statut inline (mode "status_only") ──────────────────────
+const statusSelectStyle = {
+  fontSize: 11, fontWeight: 700, padding: "3px 6px", borderRadius: 6,
+  border: "1px solid var(--border)", background: "var(--bg-input)",
+  color: "var(--text)", cursor: "pointer", fontFamily: "inherit",
+};
+
+export function TasksView({
+  tasks, projects, activities, members, pert, filters, setFilters, memberColor,
+  onAdd, onEdit, onDelete, onArchive, onUnarchive, onStatusChange,
+  isAdmin, currentUser,
+}) {
+  const [collapsed,  setCollapsed]  = useState({});
   const [diffCounts, setDiffCounts] = useState({});
   const { markAsSeen, hasUnseen }   = useSeenDifficulties();
 
   const tog = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
 
+  // Un utilisateur peut créer une tâche s'il n'est pas admin (tout membre, y
+  // compris sans rôle chef — la tâche peut exister hors de tout projet).
+  const canCreate = !isAdmin;
+
   // ── Chargement des compteurs de difficultés ──────────────────────────────
-  // CDC BF-23 / BF-24 : le Chef de projet (non-admin) suit les difficultés.
-  // L'Admin consulte en lecture seule → pas besoin de tracker les "vus".
+  // Utile pour quiconque a au moins une tâche en "full" (équivalent ex-Chef) ;
+  // simplifié ici : on charge dès qu'il existe des tâches en permission "full".
+  const hasFullEditRights = tasks.some((t) => t.permission === "full");
+
   useEffect(() => {
-    if (isAdmin) return;  // Admin = lecture seule, pas de tracking difficulté
+    if (!hasFullEditRights) return;
     const loadCounts = async () => {
       const counts = {};
       await Promise.all(
@@ -31,13 +58,11 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
       setDiffCounts(counts);
     };
     loadCounts();
-  }, [tasks, isAdmin]);
+  }, [tasks, hasFullEditRights]);
 
   // ── Ouverture d'une tâche ────────────────────────────────────────────────
-  // Non-admin ouvre en mode édition et marque les difficultés comme vues.
-  // Admin ouvre en lecture seule (géré dans TaskModal via isAdmin).
   const handleOpen = (t) => {
-    if (!isAdmin && diffCounts[t.id]) markAsSeen(t.id, diffCounts[t.id]);
+    if (t.permission === "full" && diffCounts[t.id]) markAsSeen(t.id, diffCounts[t.id]);
     onEdit(t);
   };
 
@@ -61,8 +86,7 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
           </span>
         </div>
 
-        {/* CDC BF-07 / BF-08 : seul le Chef de projet (non-admin) crée des tâches */}
-        {!isAdmin && (
+        {canCreate && (
           <button onClick={onAdd} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
             <Plus size={15} /> Nouvelle tâche
           </button>
@@ -105,8 +129,11 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
                 const isArchived = t.is_archived;
                 const diffCount  = diffCounts[t.id] || 0;
 
-                // CDC BF-23 : badge difficulté visible pour le Chef de projet (non-admin)
-                const showBadge  = !isAdmin && hasUnseen(t.id, diffCount);
+                // ── Permission calculée côté backend ─────────────────────────
+                const canFullEdit   = t.permission === "full";
+                const isStatusOnly  = t.permission === "status_only";
+
+                const showBadge = canFullEdit && hasUnseen(t.id, diffCount);
 
                 return (
                   <div key={t.id} style={{
@@ -167,51 +194,62 @@ export function TasksView({ tasks, projects, activities, members, pert, filters,
 
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                       <MemberBadge name={t.responsible} color={memberColor(t.responsible)} />
-                      <StatusBadge status={t.status} />
 
-                      {/* Bouton voir/modifier — visible par TOUS ──────────────────────────
-                          CDC BF-08 :
-                          - Non-admin (chef/membre) → crayon (édition)
-                          - Admin                  → œil (lecture seule)           */}
+                      {/* Statut : select inline si "status_only", badge figé sinon */}
+                      {isStatusOnly ? (
+                        <select
+                          value={t.status}
+                          onChange={(e) => onStatusChange(t.id, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          title="Modifier le statut de votre tâche"
+                          style={statusSelectStyle}
+                        >
+                          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                      ) : (
+                        <StatusBadge status={t.status} />
+                      )}
+
+                      {/* Bouton ouvrir — visible par TOUS.
+                          Pencil si édition complète possible, Eye sinon
+                          (y compris pour "status_only" : le formulaire complet
+                          s'ouvre en lecture grisée, seul le statut est actif
+                          via le select ci-dessus). */}
                       <button
                         onClick={() => handleOpen(t)}
-                        title={!isAdmin ? "Modifier la tâche" : "Voir les détails"}
+                        title={isAdmin ? "Voir les détails" : canFullEdit ? "Modifier la tâche" : "Voir la tâche"}
                         style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}
                       >
-                        {!isAdmin ? <Pencil size={13} /> : <Eye size={13} />}
+                        {isAdmin || !canFullEdit ? <Eye size={13} /> : <Pencil size={13} />}
                       </button>
 
-                      {/* Boutons d'action — non-admin (chef de projet) uniquement ─────────
-                          CDC BF-08 : l'Admin ne modifie ni ne supprime rien.            */}
-                      {!isAdmin && (
-                        <>
-                          {/* Archiver / Désarchiver */}
-                          {isArchived ? (
-                            <button
-                              onClick={() => onUnarchive(t.id)}
-                              title="Désarchiver cette tâche"
-                              style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#16a34a", display: "flex", alignItems: "center" }}
-                            >
-                              <ArchiveRestore size={13} />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => { if (window.confirm("Archiver cette tâche ?")) onArchive(t.id); }}
-                              title="Archiver cette tâche"
-                              style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-3)", display: "flex", alignItems: "center" }}
-                            >
-                              <Archive size={13} />
-                            </button>
-                          )}
-
-                          {/* Supprimer */}
-                          <button
-                            onClick={() => { if (window.confirm("Supprimer cette tâche ?")) onDelete(t.id); }}
-                            style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </>
+                      {/* Archive / Désarchiver / Supprimer — owner ou chef du projet uniquement */}
+                      {canFullEdit && !isArchived && (
+                        <button
+                          onClick={() => { if (window.confirm("Archiver cette tâche ?")) onArchive(t.id); }}
+                          title="Archiver cette tâche"
+                          style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-3)", display: "flex", alignItems: "center" }}
+                        >
+                          <Archive size={13} />
+                        </button>
+                      )}
+                      {canFullEdit && isArchived && (
+                        <button
+                          onClick={() => onUnarchive(t.id)}
+                          title="Désarchiver cette tâche"
+                          style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#16a34a", display: "flex", alignItems: "center" }}
+                        >
+                          <ArchiveRestore size={13} />
+                        </button>
+                      )}
+                      {canFullEdit && (
+                        <button
+                          onClick={() => { if (window.confirm("Supprimer cette tâche ?")) onDelete(t.id); }}
+                          title="Supprimer cette tâche"
+                          style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       )}
                     </div>
                   </div>

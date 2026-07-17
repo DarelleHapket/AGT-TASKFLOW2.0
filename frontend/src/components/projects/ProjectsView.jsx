@@ -107,14 +107,6 @@ export function ProjectsView({ projects, onAdd, onUpdate, onDelete, isAdmin, isC
       </div>
 
       <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        {isChef && adding && (
-          <ProjectForm
-            onSave={async (d) => { await onAdd(d); setAdding(false); }}
-            onCancel={() => setAdding(false)}
-          />
-        )}
-      </div>
-      <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
         {adding && isChef && (<ProjectForm onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />)}
         {projects.length === 0 && !adding && (
           <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>

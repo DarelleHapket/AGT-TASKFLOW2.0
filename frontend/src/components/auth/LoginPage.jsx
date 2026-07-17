@@ -1,19 +1,31 @@
 // frontend/src/components/auth/LoginPage.jsx
 import { useState, useEffect } from "react";
-import { LogIn, Mail, Lock, AlertCircle, Zap } from "lucide-react";
+import { LogIn, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, UserPlus, Zap } from "lucide-react";
 
 export function LoginPage({ onLogin }) {
+  const [mode, setMode]         = useState("login"); // "login" | "register"
+  const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError]       = useState(null);
+  const [success, setSuccess]   = useState(null);
   const [loading, setLoading]   = useState(false);
   const [focused, setFocused]   = useState(null);
   const [mounted, setMounted]   = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
+  function switchMode() {
+    setMode((m) => (m === "login" ? "register" : "login"));
+    setError(null);
+    setSuccess(null);
+  }
+
   async function handleSubmit() {
     setError(null);
+    setSuccess(null);
+    if (mode === "register") { handleRegister(); return; }
     if (!email || !password) { setError("Email et mot de passe requis"); return; }
     setLoading(true);
     try {
@@ -25,6 +37,27 @@ export function LoginPage({ onLogin }) {
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Identifiants incorrects"); return; }
       onLogin(data.access_token, data.user);
+    } catch {
+      setError("Impossible de contacter le serveur");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRegister() {
+    if (!name || !email || !password) { setError("Nom, email et mot de passe requis"); return; }
+    if (password.length < 6) { setError("Le mot de passe doit faire au moins 6 caractères"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Impossible d'envoyer la demande"); return; }
+      setSuccess(data.message || "Demande envoyée. En attente de validation par l'administrateur.");
+      setName(""); setEmail(""); setPassword("");
     } catch {
       setError("Impossible de contacter le serveur");
     } finally {
@@ -142,11 +175,26 @@ export function LoginPage({ onLogin }) {
         }}>
 
           <h2 style={{ fontSize: 22, fontWeight: 800, color: "white", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
-            Connexion
+            {mode === "login" ? "Connexion" : "Demande de compte"}
           </h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: "0 0 32px" }}>
-            Entrez vos identifiants pour accéder à votre espace
+            {mode === "login"
+              ? "Entrez vos identifiants pour accéder à votre espace"
+              : "Votre demande sera transmise à l'administrateur pour validation"}
           </p>
+
+          {/* Succès */}
+          {success && (
+            <div style={{
+              background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+              borderRadius: 12, padding: "12px 16px", marginBottom: 24,
+              display: "flex", alignItems: "center", gap: 10,
+              color: "#86efac", fontSize: 13,
+            }}>
+              <CheckCircle size={15} />
+              {success}
+            </div>
+          )}
 
           {/* Erreur */}
           {error && (
@@ -159,6 +207,40 @@ export function LoginPage({ onLogin }) {
             }}>
               <AlertCircle size={15} />
               {error}
+            </div>
+          )}
+
+          {/* Champ Nom — inscription uniquement */}
+          {mode === "register" && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
+                NOM
+              </label>
+              <div style={{ position: "relative" }}>
+                <User size={15} style={{
+                  position: "absolute", left: 14, top: "50%",
+                  transform: "translateY(-50%)",
+                  color: focused === "name" ? "#6366f1" : "rgba(255,255,255,0.25)",
+                  transition: "color 0.2s",
+                }} />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onFocus={() => setFocused("name")}
+                  onBlur={() => setFocused(null)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                  placeholder="Votre nom"
+                  style={{
+                    width: "100%", padding: "13px 14px 13px 40px",
+                    background: "rgba(255,255,255,0.06)",
+                    border: `1.5px solid ${focused === "name" ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 12, fontSize: 13, color: "white",
+                    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+                    transition: "border-color 0.2s, background 0.2s",
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -207,7 +289,7 @@ export function LoginPage({ onLogin }) {
                 transition: "color 0.2s",
               }} />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setFocused("password")}
@@ -215,7 +297,7 @@ export function LoginPage({ onLogin }) {
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 placeholder="••••••••"
                 style={{
-                  width: "100%", padding: "13px 14px 13px 40px",
+                  width: "100%", padding: "13px 44px 13px 40px",
                   background: "rgba(255,255,255,0.06)",
                   border: `1.5px solid ${focused === "password" ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.08)"}`,
                   borderRadius: 12, fontSize: 13, color: "white",
@@ -223,6 +305,21 @@ export function LoginPage({ onLogin }) {
                   transition: "border-color 0.2s, background 0.2s",
                 }}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                style={{
+                  position: "absolute", right: 12, top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: 4, display: "flex", alignItems: "center",
+                  color: focused === "password" ? "#6366f1" : "rgba(255,255,255,0.35)",
+                  transition: "color 0.2s",
+                }}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
             </div>
           </div>
 
@@ -248,14 +345,30 @@ export function LoginPage({ onLogin }) {
                   borderTopColor: "white", borderRadius: "50%",
                   animation: "spin 0.8s linear infinite",
                 }} />
-                Connexion en cours…
+                {mode === "login" ? "Connexion en cours…" : "Envoi en cours…"}
               </>
-            ) : (
+            ) : mode === "login" ? (
               <><LogIn size={16} /> Se connecter</>
+            ) : (
+              <><UserPlus size={16} /> Envoyer la demande</>
             )}
           </button>
 
-          <p style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 24, marginBottom: 0 }}>
+          {/* Bascule login / inscription */}
+          <p style={{ textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 24, marginBottom: 0 }}>
+            {mode === "login" ? "Pas encore de compte ? " : "Vous avez déjà un compte ? "}
+            <span
+              onClick={switchMode}
+              style={{
+                color: "#a78bfa", fontWeight: 700, cursor: "pointer",
+                textDecoration: "none",
+              }}
+            >
+              {mode === "login" ? "Demander un compte" : "Se connecter"}
+            </span>
+          </p>
+
+          <p style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 16, marginBottom: 0 }}>
             AG Technologies · Usage interne uniquement
           </p>
         </div>

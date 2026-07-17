@@ -121,6 +121,7 @@ def init_db():
         ("members", "is_active",           "ALTER TABLE members ADD COLUMN is_active BOOLEAN DEFAULT 1"),
         ("members", "daily_coupon_target", "ALTER TABLE members ADD COLUMN daily_coupon_target INTEGER DEFAULT 2"),
         ("members", "role",                "ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'membre'"),
+        ("members", "status",              "ALTER TABLE members ADD COLUMN status TEXT DEFAULT 'active'"),
         ("projects", "chef_id",            "ALTER TABLE projects ADD COLUMN chef_id INTEGER DEFAULT NULL REFERENCES members(id)"),
         ("tasks",   "start_date",          "ALTER TABLE tasks ADD COLUMN start_date DATE DEFAULT NULL"),
         ("tasks",   "end_date",            "ALTER TABLE tasks ADD COLUMN end_date DATE DEFAULT NULL"),
@@ -196,7 +197,8 @@ def init_db():
                password_hash=?,
                is_admin=1,
                is_active=1,
-               role='admin'
+               role='admin',
+               status='active'
                WHERE LOWER(name)='gabriel'""",
             (hash_password("AGT2026!"),)
         )
@@ -211,7 +213,7 @@ def init_db():
         email = f"{m['name'].lower()}@ag-technologies.tech"
         c.execute(
             """UPDATE members SET
-               email=?, password_hash=?, is_admin=0, is_active=1, role='membre'
+               email=?, password_hash=?, is_admin=0, is_active=1, role='membre', status='active'
                WHERE id=?""",
             (email, hash_password("AGT2026!"), m["id"])
         )
@@ -221,6 +223,10 @@ def init_db():
     #  synchronise avec is_admin : is_admin=1 → 'admin', sinon 'membre')
     c.execute("UPDATE members SET role='admin'  WHERE is_admin=1 AND (role IS NULL OR role='' OR role='membre')")
     c.execute("UPDATE members SET role='membre' WHERE is_admin=0 AND (role IS NULL OR role='')")
+
+    # ── Rattrapage status pour bases déjà initialisées ──────────────────────
+    # (comptes existants avant l'ajout de la colonne → considérés actifs)
+    c.execute("UPDATE members SET status='active' WHERE status IS NULL OR status=''")
 
     conn.commit()
     conn.close()

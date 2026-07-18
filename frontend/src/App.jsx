@@ -323,7 +323,7 @@ export default function App() {
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
-        {tab === "reports"     && <ReportsView members={members} user={user} isAdmin={isAdmin} />}
+        {tab === "reports"     && <ReportsView members={members} projects={projects} user={user} isAdmin={isAdmin} isChef={isChef} />}
         {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
       </div>
 

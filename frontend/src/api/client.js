@@ -71,7 +71,8 @@ export const getProjects = () => req("GET", "/projects/");
 export const createProject = (p) => req("POST", "/projects/", p);
 export const updateProject = (id, p) => req("PUT", `/projects/${id}`, p);
 export const deleteProject = (id) => req("DELETE", `/projects/${id}`);
-export const setProjectChef = (id, chefId) => req("PUT", `/projects/${id}/chef`, { chef_id: chefId });
+export const setProjectChef = (id, chefId) =>
+  req("PUT", `/projects/${id}/chef`, { chef_id: chefId });
 
 // ── Activities ──────────────────────────────────────────────────────────────
 export const getActivities = (pid) =>
@@ -86,8 +87,10 @@ export const getMembers = () => req("GET", "/members/");
 export const createMember = (m) => req("POST", "/members/", m);
 export const deleteMember = (id) => req("DELETE", `/members/${id}`);
 export const getPendingMembers = () => req("GET", "/members/pending");
-export const validateMember    = (id, action) => req("PUT", `/members/${id}/validate`, { action });
-export const setMemberRole     = (id, role) => req("PUT", `/members/${id}/role`, { role });
+export const validateMember = (id, action) =>
+  req("PUT", `/members/${id}/validate`, { action });
+export const setMemberRole = (id, role) =>
+  req("PUT", `/members/${id}/role`, { role });
 
 // ── Needs ───────────────────────────────────────────────────────────────────
 export const getNeeds = () => req("GET", "/needs/");
@@ -137,4 +140,12 @@ export const getReportData = (params = {}) => {
     if (v !== null && v !== undefined && v !== "") qs.set(k, v);
   });
   return req("GET", `/reports/data/?${qs.toString()}`);
+};
+
+export const getProjectReport = (params = {}) => {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== "") qs.set(k, v);
+  });
+  return req("GET", `/reports/project/?${qs.toString()}`);
 };

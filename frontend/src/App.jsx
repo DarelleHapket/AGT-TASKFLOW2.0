@@ -349,7 +349,8 @@ useEffect(() => {
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
                   {user?.name}
-                  {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+{isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+{!isAdmin && user?.role === "chef_projet" && <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
               </div>

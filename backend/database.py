@@ -223,6 +223,24 @@ def init_db():
         except Exception:
             pass
 
+    # ── Notifications (A-06) ─────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipient_id INTEGER NOT NULL,
+            sender_id INTEGER DEFAULT NULL,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT DEFAULT '',
+            task_id TEXT DEFAULT NULL,
+            read_at TIMESTAMP DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (recipient_id) REFERENCES members(id) ON DELETE CASCADE,
+            FOREIGN KEY (sender_id) REFERENCES members(id) ON DELETE SET NULL,
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )
+    """)
+
     # ── Seed membres par défaut si table vide ───────────────────────────────
 
     c.execute("SELECT COUNT(*) FROM members")

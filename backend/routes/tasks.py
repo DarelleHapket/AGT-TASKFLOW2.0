@@ -284,6 +284,27 @@ def create_task(current_user):
                 (task_id, dep)
             )
         conn.commit()
+
+        # A-06 — Notification au responsable désigné
+        responsible_name = (data.get("responsible") or "").strip()
+        if responsible_name:
+            from utils.notif import notify as _notify
+            member_row = conn.execute(
+                "SELECT id FROM members WHERE LOWER(name)=?",
+                (responsible_name.lower(),)
+            ).fetchone()
+            if member_row and member_row["id"] != current_user["id"]:
+                _notify(
+                    conn,
+                    recipient_id=member_row["id"],
+                    sender_id=current_user["id"],
+                    type_="task_assigned",
+                    title=f"Tâche assignée : {task_id}",
+                    body=f"{current_user['name']} vous a désigné responsable de la tâche « {description} ».",
+                    task_id=task_id
+                )
+                conn.commit()
+
         task = fetch_task(conn, task_id)
         task["permission"] = get_permission_level(conn, current_user, task)
         conn.close()

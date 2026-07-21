@@ -149,3 +149,8 @@ export const getProjectReport = (params = {}) => {
   });
   return req("GET", `/reports/project/?${qs.toString()}`);
 };
+
+// ── Notifications (A-06) ─────────────────────────────────────────────────────
+export const getNotifications = () => req("GET", "/notifications/");
+export const markNotificationRead = (id) => req("PATCH", `/notifications/${id}/read`);
+export const markAllNotificationsRead = () => req("PATCH", "/notifications/read-all");

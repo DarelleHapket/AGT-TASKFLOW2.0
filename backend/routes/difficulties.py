@@ -130,6 +130,24 @@ def create_difficulty(current_user):
     )
     conn.commit()
 
+    # A-06 — Notification au chef du projet de la tâche
+    if task.get("project_id"):
+        from utils.notif import notify as _notify
+        proj = conn.execute(
+            "SELECT chef_id FROM projects WHERE id=?", (task["project_id"],)
+        ).fetchone()
+        if proj and proj["chef_id"] and proj["chef_id"] != current_user["id"]:
+            _notify(
+                conn,
+                recipient_id=proj["chef_id"],
+                sender_id=current_user["id"],
+                type_="difficulty_reported",
+                title=f"Difficulté signalée : {task_id}",
+                body=f"{current_user['name']} a signalé : « {content[:100]} ».",
+                task_id=task_id
+            )
+            conn.commit()
+
     row = conn.execute(
         """SELECT d.*, m.name as member_name
            FROM task_difficulties d

@@ -1,28 +1,23 @@
 // frontend/src/App.jsx
 // ⚠️  Fichier TRANSVERSAL — Poste A + Poste B
 //
-// A-03 — B-04 : isChef={isChef} ajouté sur <TaskModal>
-//              isChef propagé à <TasksView>, <ProjectsView>, <ActivitiesView>
-//
-// A-04 — Bugfix gestion de session (D-07) :
-//   • useData() reçoit désormais isLogged en argument, pour ne charger les
-//     données qu'une fois l'utilisateur authentifié.
-//   • api.setUnauthorizedHandler(logout) enregistré au montage : tout 401
-//     déclenche une déconnexion propre.
-//
-// A-06 — Corrections et notifications membres :
-//   • Fix ProjectsView : currentUser={user} désormais transmis (boutons
-//     ✏️/🗑️ visibles pour le chef propriétaire d'un projet).
-//   • Fix cloche : markAsSeen() appelé au clic sur une difficulté.
-//   • Notifications d'affectation : tout non-admin voit la cloche et est
-//     notifié lorsqu'il est désigné responsable d'une tâche (useSeenAssignments).
+// A-03 — isChef propagé à TasksView, ProjectsView, ActivitiesView
+// A-04 — Gestion de session : useData(isLogged) + setUnauthorizedHandler
+// A-06 — Corrections et notifications backend :
+//   • Fix ProjectsView : currentUser={user} transmis (boutons ✏️/🗑️ visibles)
+//   • Fix cloche : markAsSeen() appelé au clic sur une difficulté
+//   • Notifications persistantes via GET /api/notifications/ :
+//       - task_assigned      → responsable notifié à la création d'une tâche
+//       - difficulty_reported → chef notifié lors d'un signalement
+//       - register_request   → admin(s) notifié(s) lors d'une demande de compte
+//   • Cloche visible pour TOUS les utilisateurs connectés
+//   • Refresh auto toutes les 30 s + purge 7 jours côté backend
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList, ChevronDown, User } from "lucide-react";
 import { useData } from "./hooks/useData";
 import { useAuth } from "./hooks/useAuth";
 import { useSeenDifficulties } from "./hooks/useSeenDifficulties";
-import { useSeenAssignments } from "./hooks/useSeenAssignments";
 import * as api from "./api/client";
 import { LoginPage } from "./components/auth/LoginPage";
 import { TasksView } from "./components/tasks/TasksView";
@@ -50,11 +45,19 @@ const TABS = [
   { id: "team",        label: "Équipe",        Icon: Users        },
 ];
 
+// Icône et libellé par type de notification
+function notifMeta(type) {
+  switch (type) {
+    case "task_assigned":       return { icon: "📋", label: "Affectation" };
+    case "difficulty_reported": return { icon: "⚠️",  label: "Difficulté" };
+    case "register_request":    return { icon: "👤",  label: "Demande de compte" };
+    default:                    return { icon: "🔔",  label: "Notification" };
+  }
+}
+
 export default function App() {
   const { token, user, isAdmin, isChef, isLogged, login, logout } = useAuth();
   const { markAsSeen, hasUnseen, totalUnseen }                    = useSeenDifficulties();
-  // A-06 : hook affectations, une clé par utilisateur connecté
-  const { markSeen: markAssignmentSeen, markAllSeen, isNew: isNewAssignment, countNew } = useSeenAssignments(user?.id);
 
   const [tab, setTab]         = useState("tasks");
   const [modal, setModal]     = useState(null);
@@ -89,7 +92,7 @@ export default function App() {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [showProfile]);
 
-  // A-04 (D-07) : handler de déconnexion automatique sur 401
+  // A-04 — déconnexion automatique sur 401
   useEffect(() => {
     api.setUnauthorizedHandler(() => logout());
   }, [logout]);
@@ -101,10 +104,48 @@ export default function App() {
     loading, error, memberColor, pert,
   } = useData(isLogged);
 
+  // ── Notifications backend (A-06) ─────────────────────────────────────────
+  const [notifications, setNotifications] = useState([]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const data = await api.getNotifications();
+      setNotifications(data);
+    } catch { /* silencieux — pas bloquant */ }
+  }, []);
+
+  useEffect(() => {
+    if (!isLogged) return;
+    loadNotifications();
+    const iv = setInterval(loadNotifications, 30_000); // refresh toutes les 30 s
+    return () => clearInterval(iv);
+  }, [isLogged, loadNotifications]);
+
+  const unreadNotifs = notifications.filter((n) => !n.read_at);
+
+  const handleNotifClick = async (notif) => {
+    if (!notif.read_at) {
+      await api.markNotificationRead(notif.id).catch(() => {});
+      setNotifications((prev) =>
+        prev.map((n) => n.id === notif.id ? { ...n, read_at: new Date().toISOString() } : n)
+      );
+    }
+    if (notif.task_id) {
+      const task = tasks.find((t) => t.id === notif.task_id);
+      if (task) { setModal({ mode: "edit", task }); setTab("tasks"); }
+    }
+    setShowBell(false);
+  };
+
+  const handleMarkAllRead = async () => {
+    await api.markAllNotificationsRead().catch(() => {});
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
+    );
+  };
+
   // ── Compteurs de difficultés (admin + chef uniquement) ───────────────────
   const canSeeNotifications = isAdmin || isChef;
-  // A-06 : tous les non-admin voient la cloche (affectations)
-  const canSeeBell = !isAdmin;
 
   useEffect(() => {
     if (!canSeeNotifications || !tasks.length) return;
@@ -123,14 +164,8 @@ export default function App() {
     loadCounts();
   }, [tasks, canSeeNotifications]);
 
-  // A-06 : tâches où l'utilisateur connecté est responsable
-  const myAssignedTasks = (!isAdmin && tasks.length)
-    ? tasks.filter((t) => t.responsible === user?.name)
-    : [];
-
-  // A-06 : badge = difficultés non vues (chef/admin) + affectations non vues (tous)
-  const unseenAssignments = countNew(myAssignedTasks);
-  const unseenTotal = (canSeeNotifications ? totalUnseen(diffCounts) : 0) + unseenAssignments;
+  // Badge = notifs non lues (backend) + difficultés non vues (local, chef/admin)
+  const unseenTotal = unreadNotifs.length + (canSeeNotifications ? totalUnseen(diffCounts) : 0);
 
   // ── Auth guard ───────────────────────────────────────────────────────────
   if (!isLogged) return <LoginPage onLogin={login} />;
@@ -194,6 +229,7 @@ export default function App() {
     if (modal.mode === "add") {
       const t = await api.createTask(payload);
       setTasks((prev) => [...prev, t]);
+      await loadNotifications(); // rafraîchit si le backend a créé une notif
     } else {
       const t = await api.updateTask(f.id, payload);
       setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
@@ -285,133 +321,142 @@ export default function App() {
           </div>
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
-          {/* Cloche — A-06 : visible pour tous les non-admin */}
-          {canSeeBell && (
-            <div ref={bellRef} style={{ position: "relative" }}>
-              <button onClick={() => setShowBell((v) => !v)} style={{
-                position: "relative",
-                background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
-                border: `1px solid ${unseenTotal > 0 ? "#fed7aa" : "var(--border)"}`,
-                borderRadius: 8, padding: "6px 9px", cursor: "pointer",
-                color: unseenTotal > 0 ? "#ea580c" : "var(--text-2)",
-                display: "flex", alignItems: "center",
-              }}>
-                <Bell size={14} />
-                {unseenTotal > 0 && (
-                  <span style={{
-                    position: "absolute", top: -3, right: -3,
-                    background: "var(--danger)", color: "white",
-                    borderRadius: "50%", minWidth: 15, height: 15,
-                    fontSize: 9, fontWeight: 700, lineHeight: "15px",
-                    textAlign: "center", padding: "0 1px",
-                    border: "1.5px solid var(--bg-card)",
-                  }}>
-                    {unseenTotal > 9 ? "9+" : unseenTotal}
-                  </span>
-                )}
-              </button>
-
-              {showBell && (
-                <div style={{
-                  position: "absolute", right: 0, top: "calc(100% + 8px)",
-                  background: "var(--bg-card)", border: "1px solid var(--border)",
-                  borderRadius: 12, boxShadow: "var(--shadow-md)",
-                  minWidth: 280, maxWidth: 340, zIndex: 200, overflow: "hidden",
+          {/* Cloche — A-06 : visible pour tous les utilisateurs connectés */}
+          <div ref={bellRef} style={{ position: "relative" }}>
+            <button onClick={() => setShowBell((v) => !v)} style={{
+              position: "relative",
+              background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
+              border: `1px solid ${unseenTotal > 0 ? "#fed7aa" : "var(--border)"}`,
+              borderRadius: 8, padding: "6px 9px", cursor: "pointer",
+              color: unseenTotal > 0 ? "#ea580c" : "var(--text-2)",
+              display: "flex", alignItems: "center",
+            }}>
+              <Bell size={14} />
+              {unseenTotal > 0 && (
+                <span style={{
+                  position: "absolute", top: -3, right: -3,
+                  background: "var(--danger)", color: "white",
+                  borderRadius: "50%", minWidth: 15, height: 15,
+                  fontSize: 9, fontWeight: 700, lineHeight: "15px",
+                  textAlign: "center", padding: "0 1px",
+                  border: "1.5px solid var(--bg-card)",
                 }}>
-                  {/* Section difficultés — admin / chef uniquement */}
-                  {canSeeNotifications && (
-                    <>
-                      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-                        Signalements non lus
-                      </div>
-                      {Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).length === 0 ? (
-                        <div style={{ padding: "16px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
-                          Aucun signalement non lu ✓
-                        </div>
-                      ) : (
-                        Object.entries(diffCounts)
-                          .filter(([tid, count]) => hasUnseen(tid, count))
-                          .map(([tid, count]) => {
-                            const task = tasks.find((t) => t.id === tid);
-                            return (
-                              <div
-                                key={tid}
-                                onClick={() => {
-                                  markAsSeen(tid, count);
-                                  setModal({ mode: "edit", task });
-                                  setShowBell(false);
-                                  setTab("tasks");
-                                }}
-                                style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                              >
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{tid}</div>
-                                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{task?.description?.slice(0, 40)}…</div>
-                                </div>
-                                <span style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#ea580c" }}>
-                                  {count} ⚠️
-                                </span>
-                              </div>
-                            );
-                          })
-                      )}
-                    </>
-                  )}
+                  {unseenTotal > 9 ? "9+" : unseenTotal}
+                </span>
+              )}
+            </button>
 
-                  {/* Section affectations — A-06 : tous les non-admin */}
-                  <div style={{
-                    padding: "12px 16px",
-                    borderBottom: "1px solid var(--border)",
-                    borderTop: canSeeNotifications ? "1px solid var(--border)" : "none",
-                    fontSize: 12, fontWeight: 700, color: "var(--text)",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                  }}>
-                    <span>Mes affectations</span>
-                    {unseenAssignments > 0 && (
-                      <button
-                        onClick={() => markAllSeen(myAssignedTasks.map((t) => t.id))}
-                        style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                      >
-                        Tout marquer comme lu
-                      </button>
-                    )}
-                  </div>
-                  {myAssignedTasks.length === 0 ? (
-                    <div style={{ padding: "16px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
-                      Aucune tâche assignée
+            {showBell && (
+              <div style={{
+                position: "absolute", right: 0, top: "calc(100% + 8px)",
+                background: "var(--bg-card)", border: "1px solid var(--border)",
+                borderRadius: 12, boxShadow: "var(--shadow-md)",
+                minWidth: 300, maxWidth: 360, zIndex: 200, overflow: "hidden",
+              }}>
+
+                {/* Section difficultés — admin / chef uniquement (local tracking) */}
+                {canSeeNotifications && (
+                  <>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
+                      Signalements en cours
                     </div>
-                  ) : (
-                    myAssignedTasks.map((t) => (
-                      <div
-                        key={t.id}
-                        onClick={() => {
-                          markAssignmentSeen(t.id);
-                          setModal({ mode: "edit", task: t });
-                          setShowBell(false);
-                          setTab("tasks");
-                        }}
-                        style={{
-                          padding: "10px 16px", borderBottom: "1px solid var(--border)",
-                          cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
-                          background: isNewAssignment(t.id) ? "#f0f9ff" : "transparent",
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{t.id}</div>
-                          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{t.description?.slice(0, 40)}…</div>
-                        </div>
-                        {isNewAssignment(t.id) && (
-                          <span style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#2563eb" }}>
-                            Nouveau
-                          </span>
-                        )}
+                    {Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).length === 0 ? (
+                      <div style={{ padding: "14px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
+                        Aucun signalement non lu ✓
                       </div>
-                    ))
+                    ) : (
+                      Object.entries(diffCounts)
+                        .filter(([tid, count]) => hasUnseen(tid, count))
+                        .map(([tid, count]) => {
+                          const task = tasks.find((t) => t.id === tid);
+                          return (
+                            <div
+                              key={tid}
+                              onClick={() => {
+                                markAsSeen(tid, count);
+                                setModal({ mode: "edit", task });
+                                setShowBell(false);
+                                setTab("tasks");
+                              }}
+                              style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                            >
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{tid}</div>
+                                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{task?.description?.slice(0, 40)}…</div>
+                              </div>
+                              <span style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#ea580c" }}>
+                                {count} ⚠️
+                              </span>
+                            </div>
+                          );
+                        })
+                    )}
+                  </>
+                )}
+
+                {/* Section notifications backend — tous les utilisateurs */}
+                <div style={{
+                  padding: "12px 16px",
+                  borderTop: canSeeNotifications ? "1px solid var(--border)" : "none",
+                  borderBottom: notifications.length > 0 ? "1px solid var(--border)" : "none",
+                  fontSize: 12, fontWeight: 700, color: "var(--text)",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <span>Notifications</span>
+                  {unreadNotifs.length > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Tout marquer comme lu
+                    </button>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "20px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
+                    Aucune notification cette semaine
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                    {notifications.map((n) => {
+                      const { icon, label } = notifMeta(n.type);
+                      const isNew = !n.read_at;
+                      return (
+                        <div
+                          key={n.id}
+                          onClick={() => handleNotifClick(n)}
+                          style={{
+                            padding: "10px 16px",
+                            borderBottom: "1px solid var(--border)",
+                            cursor: "pointer",
+                            background: isNew ? "#f0f9ff" : "transparent",
+                            display: "flex", gap: 10, alignItems: "flex-start",
+                          }}
+                        >
+                          <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text)" }}>{n.title}</span>
+                              {isNew && (
+                                <span style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 4, padding: "1px 6px", fontSize: 9, fontWeight: 700, color: "#2563eb", flexShrink: 0 }}>
+                                  Nouveau
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>{n.body}</div>
+                            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 3, opacity: 0.7 }}>
+                              {label} · {new Date(n.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div ref={profileRef} style={{ position: "relative" }}>
             <button
@@ -448,7 +493,6 @@ export default function App() {
                 borderRadius: 14, boxShadow: "var(--shadow-md)",
                 minWidth: 260, zIndex: 200, overflow: "hidden",
               }}>
-                {/* Bloc identité */}
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 14px" }}>
                   <div style={{
                     width: 44, height: 44, borderRadius: "50%", background: "var(--accent)",
@@ -524,7 +568,7 @@ export default function App() {
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} isChef={isChef} />}
-        {/* A-06 : currentUser={user} ajouté — fix boutons ✏️/🗑️ invisibles pour le chef propriétaire */}
+        {/* A-06 : currentUser={user} — fix boutons ✏️/🗑️ pour le chef propriétaire */}
         {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} currentUser={user} />}
         {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}

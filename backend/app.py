@@ -13,6 +13,7 @@ from routes.auth import auth_bp
 from routes.difficulties import difficulties_bp
 from routes.daily_order import daily_order_bp
 from routes.reports import reports_bp
+from routes.notifications import notifications_bp
 
 app = Flask(__name__)
 CORS(app)
@@ -33,6 +34,7 @@ app.register_blueprint(difficulties_bp,url_prefix="/api/difficulties")
 # ── Blueprints v2 Bloc 2 ───────────────────────────────────────────────────
 app.register_blueprint(daily_order_bp, url_prefix="/api/daily-order")
 app.register_blueprint(reports_bp,     url_prefix="/api/reports")
+app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
 
 if __name__ == "__main__":
     init_db()

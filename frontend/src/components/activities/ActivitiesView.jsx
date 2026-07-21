@@ -1,10 +1,12 @@
 // frontend/src/components/activities/ActivitiesView.jsx
 //
-// A-03 — B-05 :
-//   • isChef ajouté à la signature (was: prop ignoré)
-//   • "Nouvelle activité" → visible uniquement si isChef
-//   • Boutons ✏️ et 🗑️ → visibles uniquement si isChef
-//   • Admin et Membre → consultation seule
+// A-05 :
+//   • "Nouvelle activité" → visible pour tout non-admin (was: isChef uniquement)
+//   • Boutons ✏️ et 🗑️ → visibles uniquement si activity.is_owner (créateur),
+//     champ calculé et renvoyé par le backend (plus de dépendance à isChef)
+//   • Admin → consultation seule (inchangé)
+//   • prop `isChef` retirée : le modèle repose maintenant sur l'ownership par
+//     activité, comme pour les tâches (A-04)
 
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
@@ -46,10 +48,13 @@ function ActivityForm({ initial, projects, onSave, onCancel }) {
   );
 }
 
-export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete, isAdmin, isChef }) {
+export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete, isAdmin }) {
   const [adding,    setAdding]    = useState(false);
   const [editing,   setEditing]   = useState(null);
   const [filterPid, setFilterPid] = useState("all");
+
+  // Tout non-admin peut créer une activité (A-05).
+  const canCreate = !isAdmin;
 
   const visible = filterPid === "all" ? activities : activities.filter((a) => String(a.project_id) === filterPid);
 
@@ -60,8 +65,7 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Activités</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>{activities.length} activité{activities.length !== 1 ? "s" : ""}</span>
         </div>
-        {/* B-05 : création réservée au Chef */}
-        {isChef && (
+        {canCreate && (
           <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
             <Plus size={15} /> Nouvelle activité
           </button>
@@ -82,7 +86,7 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
       </div>
 
       <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        {isChef && adding && (
+        {canCreate && adding && (
           <ActivityForm projects={projects} onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />
         )}
         {visible.length === 0 && !adding && (
@@ -92,7 +96,7 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
           </div>
         )}
         {visible.map((a) =>
-          isChef && editing?.id === a.id ? (
+          canCreate && editing?.id === a.id ? (
             <ActivityForm key={a.id} initial={a} projects={projects} onSave={async (d) => { await onUpdate(a.id, d); setEditing(null); }} onCancel={() => setEditing(null)} />
           ) : (
             <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}>
@@ -101,8 +105,8 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
                 <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{a.name}</div>
                 <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>📁 {a.project_name}{a.description ? ` · ${a.description}` : ""}</div>
               </div>
-              {/* B-05 : boutons CRUD réservés au Chef */}
-              {isChef && (
+              {/* A-05 : boutons réservés au créateur de l'activité (is_owner, calculé backend) */}
+              {a.is_owner && (
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setEditing(a)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
                     <Pencil size={13} />

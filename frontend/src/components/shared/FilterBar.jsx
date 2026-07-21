@@ -63,7 +63,74 @@ const pill = (active, label, onClick) => (
     {label}
   </button>
 );
+// ── Menu déroulant générique (Projet / Membre / Statut) ─────────────────────
+function FilterDropdown({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
 
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const selected = options.find((o) => String(o.value) === String(value)) || options[0];
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "flex", alignItems: "center", gap: 5 }}>
+      <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>{label}</span>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 5,
+          padding: "3px 10px", borderRadius: 20,
+          border: `1px solid ${open ? "var(--accent)" : "var(--border)"}`,
+          background: open ? "var(--accent-bg)" : "transparent",
+          color: open ? "var(--accent)" : "var(--text-2)",
+          cursor: "pointer", fontSize: 11, fontWeight: 700,
+          whiteSpace: "nowrap", transition: "all .15s",
+        }}
+      >
+        {selected?.label || "Tous"}
+        <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 300,
+          minWidth: 180, maxHeight: 260, overflowY: "auto",
+          background: "var(--bg-card)", border: "1px solid var(--border)",
+          borderRadius: 10, boxShadow: "var(--shadow-md)", padding: 4,
+        }}>
+          {options.map((o) => {
+            const active = String(o.value) === String(value);
+            return (
+              <button
+                key={o.value}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "7px 10px", borderRadius: 7, border: "none",
+                  background: active ? "var(--accent-bg)" : "transparent",
+                  color: active ? "var(--accent)" : "var(--text)",
+                  fontWeight: active ? 700 : 400,
+                  fontSize: 12, cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 export function FilterBar({ filters, setFilters, projects, members, showStatus = true }) {
   const set         = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
   const [search, setSearch]     = useState(filters.search || "");
@@ -106,29 +173,32 @@ export function FilterBar({ filters, setFilters, projects, members, showStatus =
     <div style={{
       background: "var(--bg-card)", borderRadius: "var(--radius)",
       border: "1px solid var(--border)", boxShadow: "var(--shadow)",
-      marginBottom: 16, overflow: "hidden",
+      marginBottom: 16, 
     }}>
-      {/* Ligne 1 — Projet + Membre + Statut (existants) */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>PROJET</span>
-          {pill(filters.project === "all", "Tous", () => set("project", "all"))}
-          {projects.map((p) => pill(String(filters.project) === String(p.id), p.name, () => set("project", p.id)))}
-        </div>
+      {/* Ligne 1 — Projet + Membre + Statut (menus déroulants) */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+        <FilterDropdown
+          label="PROJET"
+          value={filters.project ?? "all"}
+          onChange={(v) => set("project", v)}
+          options={[{ value: "all", label: "Tous" }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+        />
         <div style={{ width: 1, background: "var(--border)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>MEMBRE</span>
-          {pill(filters.member === "all", "Tous", () => set("member", "all"))}
-          {members.map((m) => pill(filters.member === m.name, m.name, () => set("member", m.name)))}
-        </div>
+        <FilterDropdown
+          label="MEMBRE"
+          value={filters.member ?? "all"}
+          onChange={(v) => set("member", v)}
+          options={[{ value: "all", label: "Tous" }, ...members.map((m) => ({ value: m.name, label: m.name }))]}
+        />
         {showStatus && (
           <>
             <div style={{ width: 1, background: "var(--border)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".08em" }}>STATUT</span>
-              {pill(filters.status === "all", "Tous", () => set("status", "all"))}
-              {STATUSES.map((s) => pill(filters.status === s.value, s.label, () => set("status", s.value)))}
-            </div>
+            <FilterDropdown
+              label="STATUT"
+              value={filters.status ?? "all"}
+              onChange={(v) => set("status", v)}
+              options={[{ value: "all", label: "Tous" }, ...STATUSES.map((s) => ({ value: s.value, label: s.label }))]}
+            />
           </>
         )}
       </div>

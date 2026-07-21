@@ -150,3 +150,104 @@ Format d'une entrée :
 1. Faire un `git pull` avant de toucher `App.jsx`
 2. Vérifier si des composants du Poste B consomment `isChef` transmis via `TasksView`/`TaskModal` (peu probable, ces composants sont du périmètre A, mais à vérifier si Darelle a étendu l'un d'eux)
 3. Prendre connaissance du nouveau modèle owner/chef/responsable (D-09) si des vues transversales (notifications, rapports) doivent refléter les mêmes règles d'accès sur les tâches
+---
+
+## 2026-07-21 · Poste A · `backend/database.py` ⚠️ FIX URGENT
+
+**Nature :** Correction d'un bug bloquant introduit par la fusion manuelle entre mes changements A-04 et les tiens
+
+**Problème rencontré :**
+Après fusion de ma migration `activities.owner_id` (A-04) avec tes ajouts (`daily_task_order.start_time`/`duration_min`, `notes.member_id`), le fichier contenait :
+- Une boucle `for table, column, sql in migrations_b1 + ... + migrations_b4:` **sans corps** (un commentaire suivait directement les deux-points) → `IndentationError` au démarrage du backend
+- Le nom `migrations_b4` réutilisé deux fois pour deux listes de migrations différentes (les tiennes, puis les miennes)
+
+**Correction appliquée :**
+- Suppression de la boucle orpheline
+- Renommage clarifié : **`migrations_b4` = tes migrations** (`daily_task_order`, `notes.member_id`), **`migrations_b5` = ma migration** (`activities.owner_id`)
+- `migrations_b4` est rejouée après le `CREATE TABLE IF NOT EXISTS daily_task_order`, exactement comme c'était structuré dans ta version (car cette table est créée plus loin dans le fichier)
+- Vérifié avec `python3 -m py_compile` avant livraison — plus d'erreur de syntaxe
+
+**Impact pour toi :**
+- Tes migrations (`daily_task_order.start_time`, `duration_min`, `notes.member_id`) sont **intactes et fonctionnelles**, simplement renommées en interne (`migrations_b4`)
+- Aucune perte de données ni de logique de ta part
+
+**Action requise :**
+1. Relire le fichier avant ta prochaine session dessus, pour t'assurer que la structure te convient
+2. À l'avenir, si on doit fusionner nos migrations manuellement, on peut se prévenir mutuellement pour éviter ce genre de collision de noms de variables
+
+---
+
+## 2026-07-21 · Poste A · `backend/database.py` — Migration Bloc 5
+
+**Nature :** Ownership des activités (D-13)
+
+**Changements :**
+- Nouvelle migration (Bloc 5, non destructive) : `activities.owner_id INTEGER DEFAULT NULL REFERENCES members(id)`
+- Pas de rattrapage automatique : les activités créées avant cette migration ont `owner_id = NULL`
+
+**Impact pour toi :** Aucun — colonne additive, ne touche à rien de ton périmètre.
+
+**Action requise :** Aucune.
+
+---
+
+## 2026-07-21 · Poste A · `backend/routes/difficulties.py` ⚠️ FICHIER HORS PÉRIMÈTRE POSTE A
+
+**Nature :** Bugfix (D-14) — modifié avec l'accord explicite de l'utilisateur, car ce fichier est normalement de ton périmètre (Auth, Rôles, Difficultés, Notifications, Rapports, Modules)
+
+**Problème rencontré :**
+Un utilisateur avec le rôle global `chef_projet` (chef d'un autre projet), assigné comme `responsible` sur une tâche dont il n'était ni owner ni chef, recevait "Vous n'avez pas accès à cette tâche" en tentant de signaler une difficulté — alors que l'UI l'autorisait correctement à changer le statut de cette même tâche.
+
+**Cause :** la fonction `can_access_task()` faisait un `if/elif` **exclusif** sur le rôle global de l'utilisateur (`admin` / `chef_projet` / `membre`). Un utilisateur au rôle `chef_projet` tombait dans la branche `chef_projet` et ne retombait jamais sur la vérification `responsible` si ce n'était pas son projet — cette logique ne connaissait pas le modèle owner/chef/responsable introduit en A-04 dans `tasks.py`.
+
+**Correction appliquée :**
+
+```diff
+def can_access_task(conn, user, task):
+-   role = _user_role(user)
+-
+-   if role == "admin":
+-       return True
+-
+-   if role == "chef_projet":
+-       project_id = task.get("project_id")
+-       if not project_id:
+-           return False
+-       proj = conn.execute(
+-           "SELECT chef_id FROM projects WHERE id=?", (project_id,)
+-       ).fetchone()
+-       return bool(proj) and proj["chef_id"] == user["id"]
+-
+-   # membre
+-   return task.get("responsible") == user.get("name")
++   if user.get("is_admin"):
++       return True
++
++   project_id = task.get("project_id")
++   if project_id:
++       proj = conn.execute(
++           "SELECT chef_id FROM projects WHERE id=?", (project_id,)
++       ).fetchone()
++       if proj and proj["chef_id"] == user["id"]:
++           return True
++
++   if task.get("owner_id") is not None and task["owner_id"] == user["id"]:
++       return True
++
++   if task.get("responsible") == user.get("name"):
++       return True
++
++   return False
+```
+
+La fonction `_user_role()` n'est plus utilisée par `can_access_task()` (elle a été retirée du fichier) — je l'ai laissée de côté car elle ne semblait utilisée nulle part ailleurs dans ce fichier, mais **vérifie si tu t'en sers ou comptais t'en servir ailleurs** avant de considérer ce retrait comme définitif.
+
+**Impact pour toi :**
+- Le comportement pour un admin ou un chef légitime de son propre projet est **inchangé**
+- Le comportement change **seulement** pour les cas qui étaient buggés (responsable non-chef-de-ce-projet) — c'est une correction, pas une régression attendue
+- Si tu avais des tests ou une logique qui dépendait du comportement buggé, il faudra les ajuster
+
+**Action requise :**
+1. **Relire ce fichier en priorité** avant ta prochaine session dessus — c'est le fichier le plus sensible de cette livraison car il est hors de mon périmètre habituel
+2. Vérifier si `_user_role()` est utilisée ailleurs avant de la supprimer définitivement si tu la juges inutile
+3. Si tu as d'autres vues qui vérifient l'accès à une tâche par rôle global (notifications, rapports), envisager de les aligner sur le même modèle cumulatif (admin / chef du projet / owner / responsable)

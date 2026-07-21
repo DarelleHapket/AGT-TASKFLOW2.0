@@ -104,6 +104,27 @@ def register():
             (name, email, hash_password(password))
         )
         conn.commit()
+
+        # A-06 — Notification aux admins actifs
+        from utils.notif import notify as _notify
+        new_member = conn.execute(
+            "SELECT id FROM members WHERE LOWER(email)=?", (email,)
+        ).fetchone()
+        admins = conn.execute(
+            "SELECT id FROM members WHERE is_admin=1 AND is_active=1"
+        ).fetchall()
+        if new_member:
+            for admin in admins:
+                _notify(
+                    conn,
+                    recipient_id=admin["id"],
+                    sender_id=new_member["id"],
+                    type_="register_request",
+                    title=f"Demande de compte : {name}",
+                    body=f"{name} ({email}) a soumis une demande de création de compte.",
+                )
+            conn.commit()
+
         conn.close()
         return jsonify({"message": "Demande envoyée. En attente de validation par l'administrateur."}), 201
     except Exception as e:

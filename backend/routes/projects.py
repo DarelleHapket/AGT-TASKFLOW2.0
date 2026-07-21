@@ -177,6 +177,7 @@ def delete_project(pid, current_user):
         conn.close()
         return jsonify({"error": _NOT_YOUR_PROJECT}), 403
 
+    old_chef = dict(project).get("chef_id")
     conn.execute("DELETE FROM projects WHERE id=?", (pid,))
     _demote_if_orphan(conn, old_chef)
     conn.commit()

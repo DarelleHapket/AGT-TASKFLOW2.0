@@ -184,3 +184,17 @@ agt-taskflow/
 | `DB_PATH` | `taskflow.db` | Chemin de la base SQLite |
 
 Modifiable dans `docker-compose.yml` sous `environment`.
+
+
+### Clear BD
+
+## Avant de lancer : si tu veux pouvoir revenir en arrière, fais d'abord un dump de sécurité :
+sudo cp /var/lib/docker/volumes/agt-taskflow20_db_data/_data/taskflow.db taskflow_dump.db
+# ou
+docker compose exec backend sh -c 'sqlite3 $DB_PATH .dump' > backup_avant_reset.sql
+
+# 1. Copier le script dans le container backend
+docker compose cp reset_db_keep_admin.py backend:/app/reset_db_keep_admin.py
+
+# 2. L'exécuter à l'intérieur du container (là où DB_PATH pointe vers la vraie base)
+docker compose exec backend python3 reset_db_keep_admin.py

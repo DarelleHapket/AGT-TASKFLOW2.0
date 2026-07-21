@@ -62,6 +62,15 @@ export default function App() {
   });
   const [diffCounts, setDiffCounts] = useState({});
   const [showBell, setShowBell]     = useState(false);
+const bellRef = useRef(null);
+useEffect(() => {
+  if (!showBell) return;
+  const onDocClick = (e) => {
+    if (bellRef.current && !bellRef.current.contains(e.target)) setShowBell(false);
+  };
+  document.addEventListener("mousedown", onDocClick);
+  return () => document.removeEventListener("mousedown", onDocClick);
+}, [showBell]);
 const [showProfile, setShowProfile] = useState(false);
 const profileRef = useRef(null);
 const [confirmLogout, setConfirmLogout] = useState(false);
@@ -246,27 +255,43 @@ useEffect(() => {
         </nav>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
-            <span style={{ color: "var(--text-3)" }}>{tasks.length} tâche{tasks.length !== 1 ? "s" : ""}</span>
-            {critCount > 0 && <span style={{ color: "#ef4444", fontWeight: 700 }}>● {critCount} critique{critCount > 1 ? "s" : ""}</span>}
-            {critCount === 0 && tasks.length > 0 && <span style={{ color: "#22c55e", fontWeight: 600 }}>✓ OK</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-3)" }}>
+            <span>{tasks.length} tâche{tasks.length !== 1 ? "s" : ""}</span>
+            {critCount > 0 && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                background: "var(--danger-bg)", color: "var(--danger)",
+                fontWeight: 700, fontSize: 10, padding: "2px 7px", borderRadius: 20,
+              }}>
+                {critCount} critique{critCount > 1 ? "s" : ""}
+              </span>
+            )}
+            {critCount === 0 && tasks.length > 0 && <span style={{ color: "var(--success)" }}>✓ OK</span>}
           </div>
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
           {/* Cloche */}
           {canSeeNotifications && (
-            <div style={{ position: "relative" }}>
+            <div ref={bellRef} style={{ position: "relative" }}>
               <button onClick={() => setShowBell((v) => !v)} style={{
+                position: "relative",
                 background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
                 border: `1px solid ${unseenTotal > 0 ? "#fed7aa" : "var(--border)"}`,
-                borderRadius: 8, padding: "5px 9px", cursor: "pointer",
+                borderRadius: 8, padding: "6px 9px", cursor: "pointer",
                 color: unseenTotal > 0 ? "#ea580c" : "var(--text-2)",
-                display: "flex", alignItems: "center", gap: 5,
+                display: "flex", alignItems: "center",
               }}>
                 <Bell size={14} />
                 {unseenTotal > 0 && (
-                  <span style={{ background: "#ea580c", color: "white", borderRadius: 10, fontSize: 10, fontWeight: 800, padding: "1px 5px" }}>
-                    {unseenTotal}
+                  <span style={{
+                    position: "absolute", top: -3, right: -3,
+                    background: "var(--danger)", color: "white",
+                    borderRadius: "50%", minWidth: 15, height: 15,
+                    fontSize: 9, fontWeight: 700, lineHeight: "15px",
+                    textAlign: "center", padding: "0 1px",
+                    border: "1.5px solid var(--bg-card)",
+                  }}>
+                    {unseenTotal > 9 ? "9+" : unseenTotal}
                   </span>
                 )}
               </button>
@@ -335,49 +360,76 @@ useEffect(() => {
               <div style={{
                 position: "absolute", right: 0, top: "calc(100% + 8px)",
                 background: "var(--bg-card)", border: "1px solid var(--border)",
-                borderRadius: 12, boxShadow: "var(--shadow-md)",
-                minWidth: 200, zIndex: 200, padding: 6,
+                borderRadius: 14, boxShadow: "var(--shadow-md)",
+                minWidth: 260, zIndex: 200, overflow: "hidden",
               }}>
-                <button
-                  onClick={() => { setTab("daily"); setShowProfile(false); }}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: 8,
-                    padding: "9px 10px", borderRadius: 8, border: "none",
-                    background: tab === "daily" ? "var(--accent-bg)" : "transparent",
-                    color: tab === "daily" ? "var(--accent)" : "var(--text)",
-                    fontWeight: tab === "daily" ? 700 : 400,
-                    fontSize: 13, cursor: "pointer", textAlign: "left",
-                  }}
-                >
-                  <ClipboardList size={14} /> Ma journée
-                </button>
-                <button
-                  onClick={() => { setTab("notes"); setShowProfile(false); }}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: 8,
-                    padding: "9px 10px", borderRadius: 8, border: "none",
-                    background: tab === "notes" ? "var(--accent-bg)" : "transparent",
-                    color: tab === "notes" ? "var(--accent)" : "var(--text)",
-                    fontWeight: tab === "notes" ? 700 : 400,
-                    fontSize: 13, cursor: "pointer", textAlign: "left",
-                  }}
-                >
-                  <FileText size={14} /> Notes
-                </button>
+                {/* Bloc identité — avatar large + nom + email */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "16px 16px 14px",
+                }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: "50%", background: "var(--accent)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "white", fontSize: 18, fontWeight: 800, flexShrink: 0,
+                  }}>
+                    {(user?.name || "?")[0].toUpperCase()}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
+                      {user?.name}
+                      {isAdmin && <span style={{ fontSize: 9, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {user?.email}
+                    </div>
+                  </div>
+                </div>
 
-                <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+                <div style={{ height: 1, background: "var(--border)" }} />
 
-                <button
-                    onClick={() => { setShowProfile(false); setConfirmLogout(true); }}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: 8,
-                    padding: "9px 10px", borderRadius: 8, border: "none",
-                    background: "transparent", color: "var(--danger)",
-                    fontWeight: 600, fontSize: 13, cursor: "pointer", textAlign: "left",
-                  }}
-                >
-                  <LogOut size={14} /> Déconnexion
-                </button>
+                <div style={{ padding: 6 }}>
+                  <button
+                    onClick={() => { setTab("daily"); setShowProfile(false); }}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 8,
+                      padding: "9px 10px", borderRadius: 8, border: "none",
+                      background: tab === "daily" ? "var(--accent-bg)" : "transparent",
+                      color: tab === "daily" ? "var(--accent)" : "var(--text)",
+                      fontWeight: tab === "daily" ? 700 : 400,
+                      fontSize: 13, cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <ClipboardList size={14} /> Ma journée
+                  </button>
+                  <button
+                    onClick={() => { setTab("notes"); setShowProfile(false); }}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 8,
+                      padding: "9px 10px", borderRadius: 8, border: "none",
+                      background: tab === "notes" ? "var(--accent-bg)" : "transparent",
+                      color: tab === "notes" ? "var(--accent)" : "var(--text)",
+                      fontWeight: tab === "notes" ? 700 : 400,
+                      fontSize: 13, cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <FileText size={14} /> Notes
+                  </button>
+
+                  <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+
+                  <button
+                      onClick={() => { setShowProfile(false); setConfirmLogout(true); }}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 8,
+                      padding: "9px 10px", borderRadius: 8, border: "none",
+                      background: "transparent", color: "var(--danger)",
+                      fontWeight: 600, fontSize: 13, cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <LogOut size={14} /> Déconnexion
+                  </button>
+                </div>
               </div>
             )}
           </div>

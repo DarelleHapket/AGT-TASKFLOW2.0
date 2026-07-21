@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2, Check, X, Clock } from "lucide-react";
+import { Check, X, Clock } from "lucide-react";
 import * as api from "../../api/client";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 
@@ -96,11 +96,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, isAdmin })
                 {(m.is_admin || m.role === "admin") ? "Admin" : m.role === "chef_projet" ? "Chef de projet" : "Membre"}
               </span>
             )}
-            <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color, border: "2px solid var(--border)" }} />
-            <button onClick={() => setConfirm({ title: "Retirer le membre", message: `${m.name} sera retiré de l'équipe. Cette action est irréversible.`, confirmLabel: "Retirer", danger: true, onConfirm: () => onDelete(m.id) })}
-              style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}>
-              <Trash2 size={13} />
-            </button>
+           <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color, border: "2px solid var(--border)" }} />
           </div>
         ))}
       </div>

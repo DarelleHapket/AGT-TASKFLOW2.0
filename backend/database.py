@@ -148,7 +148,19 @@ def init_db():
         ("tasks", "owner_id", "ALTER TABLE tasks ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3:
+    # ── Migrations v2 Bloc 4 — non destructives ─────────────────────────────
+    # A-05 : ownership des activités (même principe que Bloc 3 pour les tâches).
+    # owner_id = créateur de l'activité. NULL pour les activités déjà existantes
+    # avant cette migration (pas de rattrapage automatique — décision produit :
+    # ces activités restent gérables par personne côté UI jusqu'à ce qu'un
+    # nouveau propriétaire les reprenne naturellement, ou par l'admin en direct
+    # DB si besoin exceptionnel).
+
+    migrations_b4 = [
+        ("activities", "owner_id", "ALTER TABLE activities ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
+    ]
+
+    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b4:
         try:
             c.execute(sql)
         except Exception:

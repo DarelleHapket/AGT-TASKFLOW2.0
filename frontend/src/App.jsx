@@ -14,8 +14,10 @@
 //     propre et un retour à l'écran de login, au lieu de laisser
 //     l'utilisateur bloqué sur une session expirée indéfiniment.
 
-import { useState, useEffect } from "react";
-import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList } from "lucide-react";
+//import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+//import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList } from "lucide-react";
+import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList, ChevronDown, User } from "lucide-react";
 import { useData } from "./hooks/useData";
 import { useAuth } from "./hooks/useAuth";
 import { useSeenDifficulties } from "./hooks/useSeenDifficulties";
@@ -38,11 +40,9 @@ const TABS = [
   { id: "tasks",       label: "Tâches",       Icon: LayoutList   },
   { id: "gantt",       label: "Gantt",         Icon: GanttChart   },
   { id: "pert",        label: "PERT",          Icon: Network      },
-  { id: "daily",       label: "Ma journée",    Icon: ClipboardList },
   { id: "projects",    label: "Projets",       Icon: FolderOpen   },
   { id: "activities",  label: "Activités",     Icon: Tag          },
   { id: "needs",       label: "Besoins",       Icon: Target       },
-  { id: "notes",       label: "Notes",         Icon: FileText     },
   { id: "performance", label: "Performances",  Icon: BarChart2    },
   { id: "reports",     label: "Rapports",      Icon: FileText     },
   { id: "team",        label: "Équipe",        Icon: Users        },
@@ -62,7 +62,17 @@ export default function App() {
   });
   const [diffCounts, setDiffCounts] = useState({});
   const [showBell, setShowBell]     = useState(false);
-
+const [showProfile, setShowProfile] = useState(false);
+const profileRef = useRef(null);
+const [confirmLogout, setConfirmLogout] = useState(false);
+useEffect(() => {
+  if (!showProfile) return;
+  const onDocClick = (e) => {
+    if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
+  };
+  document.addEventListener("mousedown", onDocClick);
+  return () => document.removeEventListener("mousedown", onDocClick);
+}, [showProfile]);
   // A-04 (D-07) : enregistre le handler de déconnexion automatique dès le
   // montage. N'importe quel appel API recevant un 401 (token absent, invalide
   // ou expiré) déclenchera logout(), qui renvoie proprement vers LoginPage.
@@ -294,21 +304,83 @@ export default function App() {
             </div>
           )}
 
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-              {user?.name}
-              {isAdmin && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
-              {isChef  && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#0ea5e9",    color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
-            </div>
-            <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
+          <div ref={profileRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowProfile((v) => !v)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: showProfile ? "var(--accent-bg)" : "transparent",
+                border: `1px solid ${showProfile ? "var(--accent)" : "transparent"}`,
+                borderRadius: 10, padding: "5px 10px", cursor: "pointer",
+              }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: "50%", background: "var(--accent)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "white", flexShrink: 0,
+              }}>
+                <User size={14} />
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
+                  {user?.name}
+                  {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
+              </div>
+              <ChevronDown size={13} color="var(--text-3)" style={{ transform: showProfile ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+            </button>
+
+            {showProfile && (
+              <div style={{
+                position: "absolute", right: 0, top: "calc(100% + 8px)",
+                background: "var(--bg-card)", border: "1px solid var(--border)",
+                borderRadius: 12, boxShadow: "var(--shadow-md)",
+                minWidth: 200, zIndex: 200, padding: 6,
+              }}>
+                <button
+                  onClick={() => { setTab("daily"); setShowProfile(false); }}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 8,
+                    padding: "9px 10px", borderRadius: 8, border: "none",
+                    background: tab === "daily" ? "var(--accent-bg)" : "transparent",
+                    color: tab === "daily" ? "var(--accent)" : "var(--text)",
+                    fontWeight: tab === "daily" ? 700 : 400,
+                    fontSize: 13, cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <ClipboardList size={14} /> Ma journée
+                </button>
+                <button
+                  onClick={() => { setTab("notes"); setShowProfile(false); }}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 8,
+                    padding: "9px 10px", borderRadius: 8, border: "none",
+                    background: tab === "notes" ? "var(--accent-bg)" : "transparent",
+                    color: tab === "notes" ? "var(--accent)" : "var(--text)",
+                    fontWeight: tab === "notes" ? 700 : 400,
+                    fontSize: 13, cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <FileText size={14} /> Notes
+                </button>
+
+                <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+
+                <button
+                    onClick={() => { setShowProfile(false); setConfirmLogout(true); }}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 8,
+                    padding: "9px 10px", borderRadius: 8, border: "none",
+                    background: "transparent", color: "var(--danger)",
+                    fontWeight: 600, fontSize: 13, cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <LogOut size={14} /> Déconnexion
+                </button>
+              </div>
+            )}
           </div>
-          <button onClick={logout} style={{
-            background: "var(--danger-bg)", border: "1px solid #fecaca",
-            borderRadius: 8, padding: "5px 9px", cursor: "pointer",
-            color: "var(--danger)", display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-          }}>
-            <LogOut size={12} /> Déco
-          </button>
         </div>
       </div>
 
@@ -335,6 +407,49 @@ export default function App() {
             onClose={() => setModal(null)}
             isAdmin={isAdmin} currentUser={user}
           />
+        )}
+        {confirmLogout && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500,
+          }} onClick={() => setConfirmLogout(false)}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "var(--bg-card)", borderRadius: 14, padding: 24,
+                width: 340, boxShadow: "var(--shadow-md)", border: "1px solid var(--border)",
+              }}
+            >
+              <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 800, color: "var(--text)" }}>
+                Se déconnecter ?
+              </h3>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-2)" }}>
+                Tu devras te reconnecter pour accéder à ton compte.
+              </p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setConfirmLogout(false)}
+                  style={{
+                    padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
+                    background: "transparent", color: "var(--text-2)", fontWeight: 600,
+                    fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => { setConfirmLogout(false); logout(); }}
+                  style={{
+                    padding: "8px 16px", borderRadius: 8, border: "none",
+                    background: "var(--danger)", color: "white", fontWeight: 700,
+                    fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  Se déconnecter
+                </button>
+              </div>
+            </div>
+          </div>
         )}
     </div>
   );

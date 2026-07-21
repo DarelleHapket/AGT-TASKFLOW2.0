@@ -6,21 +6,23 @@
 //
 // A-04 — Bugfix gestion de session (D-07) :
 //   • useData() reçoit désormais isLogged en argument, pour ne charger les
-//     données qu'une fois l'utilisateur authentifié (corrige le "token
-//     invalide" affiché au tout premier login, avant correctif résolu
-//     seulement par un rafraîchissement manuel).
+//     données qu'une fois l'utilisateur authentifié.
 //   • api.setUnauthorizedHandler(logout) enregistré au montage : tout 401
-//     reçu par n'importe quel appel API déclenche désormais une déconnexion
-//     propre et un retour à l'écran de login, au lieu de laisser
-//     l'utilisateur bloqué sur une session expirée indéfiniment.
+//     déclenche une déconnexion propre.
+//
+// A-06 — Corrections et notifications membres :
+//   • Fix ProjectsView : currentUser={user} désormais transmis (boutons
+//     ✏️/🗑️ visibles pour le chef propriétaire d'un projet).
+//   • Fix cloche : markAsSeen() appelé au clic sur une difficulté.
+//   • Notifications d'affectation : tout non-admin voit la cloche et est
+//     notifié lorsqu'il est désigné responsable d'une tâche (useSeenAssignments).
 
-//import { useState, useEffect } from "react";
 import { useState, useEffect, useRef } from "react";
-//import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList } from "lucide-react";
 import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList, ChevronDown, User } from "lucide-react";
 import { useData } from "./hooks/useData";
 import { useAuth } from "./hooks/useAuth";
 import { useSeenDifficulties } from "./hooks/useSeenDifficulties";
+import { useSeenAssignments } from "./hooks/useSeenAssignments";
 import * as api from "./api/client";
 import { LoginPage } from "./components/auth/LoginPage";
 import { TasksView } from "./components/tasks/TasksView";
@@ -51,6 +53,9 @@ const TABS = [
 export default function App() {
   const { token, user, isAdmin, isChef, isLogged, login, logout } = useAuth();
   const { markAsSeen, hasUnseen, totalUnseen }                    = useSeenDifficulties();
+  // A-06 : hook affectations, une clé par utilisateur connecté
+  const { markSeen: markAssignmentSeen, markAllSeen, isNew: isNewAssignment, countNew } = useSeenAssignments(user?.id);
+
   const [tab, setTab]         = useState("tasks");
   const [modal, setModal]     = useState(null);
   const [filters, setFilters] = useState({
@@ -62,29 +67,29 @@ export default function App() {
   });
   const [diffCounts, setDiffCounts] = useState({});
   const [showBell, setShowBell]     = useState(false);
-const bellRef = useRef(null);
-useEffect(() => {
-  if (!showBell) return;
-  const onDocClick = (e) => {
-    if (bellRef.current && !bellRef.current.contains(e.target)) setShowBell(false);
-  };
-  document.addEventListener("mousedown", onDocClick);
-  return () => document.removeEventListener("mousedown", onDocClick);
-}, [showBell]);
-const [showProfile, setShowProfile] = useState(false);
-const profileRef = useRef(null);
-const [confirmLogout, setConfirmLogout] = useState(false);
-useEffect(() => {
-  if (!showProfile) return;
-  const onDocClick = (e) => {
-    if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
-  };
-  document.addEventListener("mousedown", onDocClick);
-  return () => document.removeEventListener("mousedown", onDocClick);
-}, [showProfile]);
-  // A-04 (D-07) : enregistre le handler de déconnexion automatique dès le
-  // montage. N'importe quel appel API recevant un 401 (token absent, invalide
-  // ou expiré) déclenchera logout(), qui renvoie proprement vers LoginPage.
+  const bellRef = useRef(null);
+  useEffect(() => {
+    if (!showBell) return;
+    const onDocClick = (e) => {
+      if (bellRef.current && !bellRef.current.contains(e.target)) setShowBell(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [showBell]);
+
+  const [showProfile, setShowProfile] = useState(false);
+  const profileRef = useRef(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  useEffect(() => {
+    if (!showProfile) return;
+    const onDocClick = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [showProfile]);
+
+  // A-04 (D-07) : handler de déconnexion automatique sur 401
   useEffect(() => {
     api.setUnauthorizedHandler(() => logout());
   }, [logout]);
@@ -94,10 +99,13 @@ useEffect(() => {
     activities, setActivities, members, setMembers,
     needs, setNeeds, notes, setNotes,
     loading, error, memberColor, pert,
-  } = useData(isLogged); // A-04 (D-07) : ne charge qu'une fois authentifié
+  } = useData(isLogged);
 
   // ── Compteurs de difficultés (admin + chef uniquement) ───────────────────
   const canSeeNotifications = isAdmin || isChef;
+  // A-06 : tous les non-admin voient la cloche (affectations)
+  const canSeeBell = !isAdmin;
+
   useEffect(() => {
     if (!canSeeNotifications || !tasks.length) return;
     const loadCounts = async () => {
@@ -115,7 +123,14 @@ useEffect(() => {
     loadCounts();
   }, [tasks, canSeeNotifications]);
 
-  const unseenTotal = canSeeNotifications ? totalUnseen(diffCounts) : 0;
+  // A-06 : tâches où l'utilisateur connecté est responsable
+  const myAssignedTasks = (!isAdmin && tasks.length)
+    ? tasks.filter((t) => t.responsible === user?.name)
+    : [];
+
+  // A-06 : badge = difficultés non vues (chef/admin) + affectations non vues (tous)
+  const unseenAssignments = countNew(myAssignedTasks);
+  const unseenTotal = (canSeeNotifications ? totalUnseen(diffCounts) : 0) + unseenAssignments;
 
   // ── Auth guard ───────────────────────────────────────────────────────────
   if (!isLogged) return <LoginPage onLogin={login} />;
@@ -194,7 +209,7 @@ useEffect(() => {
   };
 
   const onStatusChange = async (id, status) => {
-    const t = await api.updateTask(id, { status }); // payload minimal : le backend ignore le reste en mode status_only
+    const t = await api.updateTask(id, { status });
     setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
   };
 
@@ -270,8 +285,8 @@ useEffect(() => {
           </div>
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
-          {/* Cloche */}
-          {canSeeNotifications && (
+          {/* Cloche — A-06 : visible pour tous les non-admin */}
+          {canSeeBell && (
             <div ref={bellRef} style={{ position: "relative" }}>
               <button onClick={() => setShowBell((v) => !v)} style={{
                 position: "relative",
@@ -295,6 +310,7 @@ useEffect(() => {
                   </span>
                 )}
               </button>
+
               {showBell && (
                 <div style={{
                   position: "absolute", right: 0, top: "calc(100% + 8px)",
@@ -302,27 +318,95 @@ useEffect(() => {
                   borderRadius: 12, boxShadow: "var(--shadow-md)",
                   minWidth: 280, maxWidth: 340, zIndex: 200, overflow: "hidden",
                 }}>
-                  <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-                    Signalements non lus
-                  </div>
-                  {Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).length === 0 ? (
-                    <div style={{ padding: "20px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>Aucun signalement non lu ✓</div>
-                  ) : (
-                    Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).map(([tid, count]) => {
-                      const task = tasks.find((t) => t.id === tid);
-                      return (
-                        <div key={tid} onClick={() => { setModal({ mode: "edit", task }); setShowBell(false); setTab("tasks"); }}
-                          style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{tid}</div>
-                            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{task?.description?.slice(0, 40)}…</div>
-                          </div>
-                          <span style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#ea580c" }}>
-                            {count} ⚠️
-                          </span>
+                  {/* Section difficultés — admin / chef uniquement */}
+                  {canSeeNotifications && (
+                    <>
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
+                        Signalements non lus
+                      </div>
+                      {Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).length === 0 ? (
+                        <div style={{ padding: "16px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
+                          Aucun signalement non lu ✓
                         </div>
-                      );
-                    })
+                      ) : (
+                        Object.entries(diffCounts)
+                          .filter(([tid, count]) => hasUnseen(tid, count))
+                          .map(([tid, count]) => {
+                            const task = tasks.find((t) => t.id === tid);
+                            return (
+                              <div
+                                key={tid}
+                                onClick={() => {
+                                  markAsSeen(tid, count);
+                                  setModal({ mode: "edit", task });
+                                  setShowBell(false);
+                                  setTab("tasks");
+                                }}
+                                style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              >
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{tid}</div>
+                                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{task?.description?.slice(0, 40)}…</div>
+                                </div>
+                                <span style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#ea580c" }}>
+                                  {count} ⚠️
+                                </span>
+                              </div>
+                            );
+                          })
+                      )}
+                    </>
+                  )}
+
+                  {/* Section affectations — A-06 : tous les non-admin */}
+                  <div style={{
+                    padding: "12px 16px",
+                    borderBottom: "1px solid var(--border)",
+                    borderTop: canSeeNotifications ? "1px solid var(--border)" : "none",
+                    fontSize: 12, fontWeight: 700, color: "var(--text)",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                  }}>
+                    <span>Mes affectations</span>
+                    {unseenAssignments > 0 && (
+                      <button
+                        onClick={() => markAllSeen(myAssignedTasks.map((t) => t.id))}
+                        style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        Tout marquer comme lu
+                      </button>
+                    )}
+                  </div>
+                  {myAssignedTasks.length === 0 ? (
+                    <div style={{ padding: "16px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
+                      Aucune tâche assignée
+                    </div>
+                  ) : (
+                    myAssignedTasks.map((t) => (
+                      <div
+                        key={t.id}
+                        onClick={() => {
+                          markAssignmentSeen(t.id);
+                          setModal({ mode: "edit", task: t });
+                          setShowBell(false);
+                          setTab("tasks");
+                        }}
+                        style={{
+                          padding: "10px 16px", borderBottom: "1px solid var(--border)",
+                          cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                          background: isNewAssignment(t.id) ? "#f0f9ff" : "transparent",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{t.id}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{t.description?.slice(0, 40)}…</div>
+                        </div>
+                        {isNewAssignment(t.id) && (
+                          <span style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#2563eb" }}>
+                            Nouveau
+                          </span>
+                        )}
+                      </div>
+                    ))
                   )}
                 </div>
               )}
@@ -349,8 +433,8 @@ useEffect(() => {
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
                   {user?.name}
-{isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
-{!isAdmin && user?.role === "chef_projet" && <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
+                  {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+                  {!isAdmin && user?.role === "chef_projet" && <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
               </div>
@@ -364,11 +448,8 @@ useEffect(() => {
                 borderRadius: 14, boxShadow: "var(--shadow-md)",
                 minWidth: 260, zIndex: 200, overflow: "hidden",
               }}>
-                {/* Bloc identité — avatar large + nom + email */}
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  padding: "16px 16px 14px",
-                }}>
+                {/* Bloc identité */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 14px" }}>
                   <div style={{
                     width: 44, height: 44, borderRadius: "50%", background: "var(--accent)",
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -420,7 +501,7 @@ useEffect(() => {
                   <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
 
                   <button
-                      onClick={() => { setShowProfile(false); setConfirmLogout(true); }}
+                    onClick={() => { setShowProfile(false); setConfirmLogout(true); }}
                     style={{
                       width: "100%", display: "flex", alignItems: "center", gap: 8,
                       padding: "9px 10px", borderRadius: 8, border: "none",
@@ -439,12 +520,13 @@ useEffect(() => {
 
       {/* Contenu */}
       <div style={{ padding: 20, maxWidth: 1440, margin: "0 auto" }}>
-        {tab === "tasks" && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} onArchive={onArchiveTask} onUnarchive={onUnarchiveTask} onStatusChange={onStatusChange} isAdmin={isAdmin} currentUser={user} />}
+        {tab === "tasks"       && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} onArchive={onArchiveTask} onUnarchive={onUnarchiveTask} onStatusChange={onStatusChange} isAdmin={isAdmin} currentUser={user} />}
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} isChef={isChef} />}
-        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} />}
-        {tab === "activities" && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
+        {/* A-06 : currentUser={user} ajouté — fix boutons ✏️/🗑️ invisibles pour le chef propriétaire */}
+        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} currentUser={user} />}
+        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} user={user} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
@@ -452,58 +534,59 @@ useEffect(() => {
         {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
       </div>
 
-        {modal && (
-          <TaskModal
-            mode={modal.mode} initial={modal.task} tasks={tasks} members={members}
-            projects={projects} activities={activities} onSave={onSaveTask}
-            onStatusChange={onStatusChange}
-            onClose={() => setModal(null)}
-            isAdmin={isAdmin} currentUser={user}
-          />
-        )}
-        {confirmLogout && (
-          <div style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500,
-          }} onClick={() => setConfirmLogout(false)}>
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                background: "var(--bg-card)", borderRadius: 14, padding: 24,
-                width: 340, boxShadow: "var(--shadow-md)", border: "1px solid var(--border)",
-              }}
-            >
-              <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 800, color: "var(--text)" }}>
-                Se déconnecter ?
-              </h3>
-              <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-2)" }}>
-                Tu devras te reconnecter pour accéder à ton compte.
-              </p>
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => setConfirmLogout(false)}
-                  style={{
-                    padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
-                    background: "transparent", color: "var(--text-2)", fontWeight: 600,
-                    fontSize: 13, cursor: "pointer",
-                  }}
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={() => { setConfirmLogout(false); logout(); }}
-                  style={{
-                    padding: "8px 16px", borderRadius: 8, border: "none",
-                    background: "var(--danger)", color: "white", fontWeight: 700,
-                    fontSize: 13, cursor: "pointer",
-                  }}
-                >
-                  Se déconnecter
-                </button>
-              </div>
+      {modal && (
+        <TaskModal
+          mode={modal.mode} initial={modal.task} tasks={tasks} members={members}
+          projects={projects} activities={activities} onSave={onSaveTask}
+          onStatusChange={onStatusChange}
+          onClose={() => setModal(null)}
+          isAdmin={isAdmin} currentUser={user}
+        />
+      )}
+
+      {confirmLogout && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500,
+        }} onClick={() => setConfirmLogout(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--bg-card)", borderRadius: 14, padding: 24,
+              width: 340, boxShadow: "var(--shadow-md)", border: "1px solid var(--border)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 800, color: "var(--text)" }}>
+              Se déconnecter ?
+            </h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-2)" }}>
+              Tu devras te reconnecter pour accéder à ton compte.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConfirmLogout(false)}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
+                  background: "transparent", color: "var(--text-2)", fontWeight: 600,
+                  fontSize: 13, cursor: "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => { setConfirmLogout(false); logout(); }}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "none",
+                  background: "var(--danger)", color: "white", fontWeight: 700,
+                  fontSize: 13, cursor: "pointer",
+                }}
+              >
+                Se déconnecter
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }

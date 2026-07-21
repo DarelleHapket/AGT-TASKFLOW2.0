@@ -2,9 +2,22 @@
 from flask import Blueprint, request, jsonify
 from database import get_db
 from datetime import date
-from utils.auth import require_auth, require_admin
+from utils.auth import require_auth
 
 daily_order_bp = Blueprint("daily_order", __name__)
+
+
+def _user_role(user):
+    return user.get("role") or ("admin" if user.get("is_admin") else "membre")
+
+
+def _can_edit(current_user, member_id):
+    """
+    Un membre ne peut modifier QUE sa propre journée.
+    L'admin/chef ne modifient PAS la journée d'un membre (lecture seule) —
+    Ma Journée est personnelle. On autorise donc uniquement le propriétaire.
+    """
+    return str(current_user["id"]) == str(member_id)
 
 
 @daily_order_bp.route("/", methods=["GET"])
@@ -13,11 +26,16 @@ def get_daily_order(current_user):
     """
     GET /api/daily-order/?member_id=X&date=YYYY-MM-DD
     Retourne l'ordre du jour d'un membre pour une date donnée.
-    Si pas de date → aujourd'hui.
-    Accessible par tous les membres connectés.
+    Lecture : le membre voit la sienne ; admin/chef peuvent consulter celle
+    d'un membre (lecture seule).
     """
-    member_id  = request.args.get("member_id", current_user["id"])
+    member_id   = request.args.get("member_id", current_user["id"])
     target_date = request.args.get("date", date.today().isoformat())
+
+    role = _user_role(current_user)
+    # Un simple membre ne peut lire que sa propre journée
+    if role == "membre" and str(member_id) != str(current_user["id"]):
+        return jsonify({"error": "Accès non autorisé"}), 403
 
     conn = get_db()
     rows = conn.execute(
@@ -37,33 +55,38 @@ def get_daily_order(current_user):
 
 
 @daily_order_bp.route("/", methods=["POST"])
-@require_admin
+@require_auth
 def set_daily_order(current_user):
     """
     POST /api/daily-order/
-    Body: { member_id, task_id, date, order_index, note }
-    Ajoute ou met à jour une entrée dans l'ordre du jour.
-    Réservé à Gabriel (admin).
+    Body: { member_id, task_id, date, order_index, note, start_time, duration_min }
+    Ajoute ou met à jour une entrée. Le membre gère uniquement SA journée.
     """
     data        = request.get_json() or {}
-    member_id   = data.get("member_id")
+    member_id   = data.get("member_id", current_user["id"])
     task_id     = data.get("task_id")
     target_date = data.get("date", date.today().isoformat())
     order_index = data.get("order_index", 0)
     note        = data.get("note", "")
+    start_time  = data.get("start_time")
+    duration_min = data.get("duration_min")
 
-    if not member_id or not task_id:
-        return jsonify({"error": "member_id et task_id requis"}), 400
+    if not task_id:
+        return jsonify({"error": "task_id requis"}), 400
+    if not _can_edit(current_user, member_id):
+        return jsonify({"error": "Vous ne pouvez modifier que votre propre journée"}), 403
 
     conn = get_db()
     conn.execute(
         """INSERT INTO daily_task_order
-           (member_id, task_id, date, order_index, note)
-           VALUES (?, ?, ?, ?, ?)
+           (member_id, task_id, date, order_index, note, start_time, duration_min)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(member_id, task_id, date)
            DO UPDATE SET order_index=excluded.order_index,
-                         note=excluded.note""",
-        (member_id, task_id, target_date, order_index, note)
+                         note=excluded.note,
+                         start_time=excluded.start_time,
+                         duration_min=excluded.duration_min""",
+        (member_id, task_id, target_date, order_index, note, start_time, duration_min)
     )
     conn.commit()
 
@@ -83,35 +106,33 @@ def set_daily_order(current_user):
 
 
 @daily_order_bp.route("/bulk", methods=["POST"])
-@require_admin
+@require_auth
 def set_daily_order_bulk(current_user):
     """
     POST /api/daily-order/bulk
-    Body: { member_id, date, tasks: [{task_id, order_index, note}] }
-    Remplace tout l'ordre du jour d'un membre pour une date.
-    Réservé à Gabriel (admin).
+    Body: { member_id, date, tasks: [{task_id, order_index, note, start_time, duration_min}] }
+    Remplace tout l'ordre du jour du membre pour une date. Sa journée uniquement.
     """
     data        = request.get_json() or {}
-    member_id   = data.get("member_id")
+    member_id   = data.get("member_id", current_user["id"])
     target_date = data.get("date", date.today().isoformat())
     tasks       = data.get("tasks", [])
 
-    if not member_id:
-        return jsonify({"error": "member_id requis"}), 400
+    if not _can_edit(current_user, member_id):
+        return jsonify({"error": "Vous ne pouvez modifier que votre propre journée"}), 403
 
     conn = get_db()
-    # Supprimer l'ordre existant pour ce membre/date
     conn.execute(
         "DELETE FROM daily_task_order WHERE member_id=? AND date=?",
         (member_id, target_date)
     )
-    # Réinsérer dans le nouvel ordre
     for i, t in enumerate(tasks):
         conn.execute(
             """INSERT INTO daily_task_order
-               (member_id, task_id, date, order_index, note)
-               VALUES (?, ?, ?, ?, ?)""",
-            (member_id, t["task_id"], target_date, t.get("order_index", i), t.get("note", ""))
+               (member_id, task_id, date, order_index, note, start_time, duration_min)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (member_id, t["task_id"], target_date, t.get("order_index", i),
+             t.get("note", ""), t.get("start_time"), t.get("duration_min"))
         )
     conn.commit()
     conn.close()
@@ -119,13 +140,21 @@ def set_daily_order_bulk(current_user):
 
 
 @daily_order_bp.route("/<int:oid>", methods=["DELETE"])
-@require_admin
+@require_auth
 def delete_daily_order(oid, current_user):
     """
     DELETE /api/daily-order/<id>
-    Supprime une entrée de l'ordre du jour.
+    Supprime une entrée — uniquement si elle appartient au membre courant.
     """
     conn = get_db()
+    row = conn.execute("SELECT member_id FROM daily_task_order WHERE id=?", (oid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Entrée introuvable"}), 404
+    if not _can_edit(current_user, row["member_id"]):
+        conn.close()
+        return jsonify({"error": "Vous ne pouvez modifier que votre propre journée"}), 403
+
     conn.execute("DELETE FROM daily_task_order WHERE id=?", (oid,))
     conn.commit()
     conn.close()

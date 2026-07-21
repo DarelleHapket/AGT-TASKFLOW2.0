@@ -60,7 +60,7 @@ function NoteForm({ initial, projects, activities, tasks, onSave, onCancel }) {
   );
 }
 
-export function NotesView({ notes, projects, activities, tasks, onAdd, onUpdate, onDelete }) {
+export function NotesView({ notes, projects, activities, tasks, user, onAdd, onUpdate, onDelete }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filterPid, setFilterPid] = useState("all");
@@ -70,6 +70,9 @@ export function NotesView({ notes, projects, activities, tasks, onAdd, onUpdate,
     : notes.filter((n) => String(n.project_id) === filterPid);
 
   const fmt = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+
+  // Une note m'appartient si je suis l'auteur (ou si elle n'a pas d'auteur — ancienne note)
+  const isMine = (n) => n.member_id == null || String(n.member_id) === String(user?.id);
 
   return (
     <div style={{ maxWidth: 800 }}>
@@ -113,16 +116,24 @@ export function NotesView({ notes, projects, activities, tasks, onAdd, onUpdate,
                 <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)", marginBottom: 3 }}>{n.title}</div>
                 {n.content && <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 5, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{n.content.slice(0, 200)}{n.content.length > 200 ? "…" : ""}</div>}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "var(--text-3)" }}>
+                  {n.author_name && <span style={{ fontWeight: 600, color: "var(--text-2)" }}>✍️ {n.author_name}</span>}
                   {n.project_name ? <span>📁 {n.project_name}</span> : <span>🌐 Générale</span>}
                   {n.activity_name && <span>🔖 {n.activity_name}</span>}
                   {n.task_id && <span>📋 {n.task_id}</span>}
                   <span style={{ marginLeft: "auto" }}>🕐 {fmt(n.updated_at)}</span>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                <button onClick={() => setEditing(n)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
-                <button onClick={() => { if (window.confirm("Supprimer cette note ?")) onDelete(n.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>
-              </div>
+              {/* Actions : uniquement sur MES notes */}
+              {isMine(n) ? (
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => setEditing(n)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
+                  <button onClick={() => { if (window.confirm("Supprimer cette note ?")) onDelete(n.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", flexShrink: 0, fontSize: 10, color: "var(--text-3)", fontStyle: "italic", padding: "0 6px" }}>
+                  lecture seule
+                </div>
+              )}
             </div>
           )
         )}

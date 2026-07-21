@@ -148,6 +148,16 @@ def init_db():
         ("tasks", "owner_id", "ALTER TABLE tasks ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
+    # ── Migrations v2 Bloc 4 (B-05) — appliquées APRÈS création de la table ──
+    # (voir plus bas : daily_task_order est créée après cette boucle, donc on
+    #  ne peut pas l'altérer ici — la migration B4 est faite après le CREATE)
+    migrations_b4 = [
+        ("daily_task_order", "start_time",   "ALTER TABLE daily_task_order ADD COLUMN start_time TEXT DEFAULT NULL"),
+        ("daily_task_order", "duration_min", "ALTER TABLE daily_task_order ADD COLUMN duration_min INTEGER DEFAULT NULL"),
+        ("notes",            "member_id",    "ALTER TABLE notes ADD COLUMN member_id INTEGER DEFAULT NULL REFERENCES members(id)"),
+    ]
+
+    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b4
     # ── Migrations v2 Bloc 4 — non destructives ─────────────────────────────
     # A-05 : ownership des activités (même principe que Bloc 3 pour les tâches).
     # owner_id = créateur de l'activité. NULL pour les activités déjà existantes
@@ -156,11 +166,11 @@ def init_db():
     # nouveau propriétaire les reprenne naturellement, ou par l'admin en direct
     # DB si besoin exceptionnel).
 
-    migrations_b4 = [
+    migrations_b5 = [
         ("activities", "owner_id", "ALTER TABLE activities ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b4:
+    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b4 + migrations_b5:
         try:
             c.execute(sql)
         except Exception:
@@ -190,12 +200,21 @@ def init_db():
             date DATE NOT NULL,
             order_index INTEGER NOT NULL,
             note TEXT DEFAULT '',
+            start_time TEXT DEFAULT NULL,
+            duration_min INTEGER DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(member_id, task_id, date),
             FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
         )
     """)
+
+    # Migration B4 pour les bases déjà créées avant l'ajout des plages horaires
+    for table, column, sql in migrations_b4:
+        try:
+            c.execute(sql)
+        except Exception:
+            pass
 
     # ── Seed membres par défaut si table vide ───────────────────────────────
 
@@ -242,13 +261,10 @@ def init_db():
         )
 
     # ── Rattrapage role pour bases déjà initialisées ────────────────────────
-    # (si la colonne role vient d'être ajoutée sur une base existante, on la
-    #  synchronise avec is_admin : is_admin=1 → 'admin', sinon 'membre')
     c.execute("UPDATE members SET role='admin'  WHERE is_admin=1 AND (role IS NULL OR role='' OR role='membre')")
     c.execute("UPDATE members SET role='membre' WHERE is_admin=0 AND (role IS NULL OR role='')")
 
     # ── Rattrapage status pour bases déjà initialisées ──────────────────────
-    # (comptes existants avant l'ajout de la colonne → considérés actifs)
     c.execute("UPDATE members SET status='active' WHERE status IS NULL OR status=''")
 
     conn.commit()

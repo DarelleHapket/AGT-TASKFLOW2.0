@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from database import get_db, NEED_TYPES, NEED_STATUSES
+from utils.auth import require_auth
 
 needs_bp = Blueprint("needs", __name__)
 
@@ -10,17 +11,20 @@ def enrich(row):
 
 
 @needs_bp.route("/types", methods=["GET"])
-def get_types():
+@require_auth
+def get_types(current_user):
     return jsonify(NEED_TYPES)
 
 
 @needs_bp.route("/statuses", methods=["GET"])
-def get_statuses():
+@require_auth
+def get_statuses(current_user):
     return jsonify(NEED_STATUSES)
 
 
 @needs_bp.route("/", methods=["GET"])
-def list_needs():
+@require_auth
+def list_needs(current_user):
     conn = get_db()
     rows = conn.execute(
         """SELECT n.*, p.name as project_name, a.name as activity_name
@@ -34,7 +38,8 @@ def list_needs():
 
 
 @needs_bp.route("/", methods=["POST"])
-def create_need():
+@require_auth
+def create_need(current_user):
     data = request.get_json()
     title = (data.get("title") or "").strip()
     if not title:
@@ -60,7 +65,8 @@ def create_need():
 
 
 @needs_bp.route("/<int:nid>", methods=["PUT"])
-def update_need(nid):
+@require_auth
+def update_need(current_user, nid):
     data = request.get_json()
     title = (data.get("title") or "").strip()
     if not title:
@@ -86,7 +92,8 @@ def update_need(nid):
 
 
 @needs_bp.route("/<int:nid>", methods=["DELETE"])
-def delete_need(nid):
+@require_auth
+def delete_need(current_user, nid):
     conn = get_db()
     conn.execute("DELETE FROM needs WHERE id=?", (nid,))
     conn.commit()

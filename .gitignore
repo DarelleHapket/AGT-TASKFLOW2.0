@@ -19,6 +19,7 @@ dist/
 dist-ssr/
 *.local
 .vite/
+rapport_agt_taskflow_*
 
 # --- Éditeurs / OS ---
 .vscode/

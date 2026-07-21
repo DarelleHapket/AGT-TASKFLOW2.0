@@ -148,17 +148,19 @@ def init_db():
         ("tasks", "owner_id", "ALTER TABLE tasks ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    # ── Migrations v2 Bloc 4 (B-05) — appliquées APRÈS création de la table ──
-    # (voir plus bas : daily_task_order est créée après cette boucle, donc on
-    #  ne peut pas l'altérer ici — la migration B4 est faite après le CREATE)
+    # ── Migrations v2 Bloc 4 (Poste B) — non destructives ───────────────────
+    # daily_task_order.start_time / duration_min et notes.member_id sont
+    # ajoutés ici (colonnes) ; la table daily_task_order elle-même est créée
+    # plus bas dans ce fichier, donc cette migration doit AUSSI être rejouée
+    # après sa création pour couvrir le cas d'une base neuve (voir plus bas).
+
     migrations_b4 = [
         ("daily_task_order", "start_time",   "ALTER TABLE daily_task_order ADD COLUMN start_time TEXT DEFAULT NULL"),
         ("daily_task_order", "duration_min", "ALTER TABLE daily_task_order ADD COLUMN duration_min INTEGER DEFAULT NULL"),
         ("notes",            "member_id",    "ALTER TABLE notes ADD COLUMN member_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b4
-    # ── Migrations v2 Bloc 4 — non destructives ─────────────────────────────
+    # ── Migrations v2 Bloc 5 — non destructives ─────────────────────────────
     # A-05 : ownership des activités (même principe que Bloc 3 pour les tâches).
     # owner_id = créateur de l'activité. NULL pour les activités déjà existantes
     # avant cette migration (pas de rattrapage automatique — décision produit :
@@ -170,7 +172,9 @@ def init_db():
         ("activities", "owner_id", "ALTER TABLE activities ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b4 + migrations_b5:
+    # Bloc 4 volontairement exclu ici : daily_task_order n'existe pas encore
+    # à ce stade (table créée plus bas). Il est rejoué juste après sa création.
+    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b5:
         try:
             c.execute(sql)
         except Exception:
@@ -209,7 +213,10 @@ def init_db():
         )
     """)
 
-    # Migration B4 pour les bases déjà créées avant l'ajout des plages horaires
+    # Migration Bloc 4 rejouée ici : daily_task_order vient d'être créée
+    # (CREATE TABLE IF NOT EXISTS ci-dessus l'inclut déjà pour une base neuve,
+    # mais cette boucle couvre le cas d'une base existante où la table était
+    # déjà là sans start_time/duration_min, ainsi que notes.member_id).
     for table, column, sql in migrations_b4:
         try:
             c.execute(sql)

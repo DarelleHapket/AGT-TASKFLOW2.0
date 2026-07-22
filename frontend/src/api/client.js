@@ -96,12 +96,14 @@ export const deleteActivity = (id)         => req("DELETE",  `/activities/${id}`
 
 // ── Membres ──────────────────────────────────────────────────────────────────
 
-export const getMembers       = ()        => req("GET",    "/members/");
-export const createMember     = (data)    => req("POST",   "/members/",            data);
-export const deleteMember     = (id)      => req("DELETE",  `/members/${id}`);
-export const setMemberRole    = (id, role)=> req("PUT",    `/members/${id}/role`,  { role });
-export const getPendingMembers = ()       => req("GET",    "/members/pending");
-export const validateMember   = (id, action) => req("PUT", `/members/${id}/validate`, { action });
+export const getMembers          = ()           => req("GET",    "/members/");
+export const createMember        = (data)       => req("POST",   "/members/",                  data);
+export const deleteMember        = (id)         => req("DELETE",  `/members/${id}`);
+export const setMemberRole       = (id, role)   => req("PUT",    `/members/${id}/role`,        { role });
+export const getPendingMembers   = ()           => req("GET",    "/members/pending");
+export const getSuspendedMembers = ()           => req("GET",    "/members/suspended");
+export const validateMember      = (id, action) => req("PUT",    `/members/${id}/validate`,    { action });
+export const toggleMemberActive  = (id)         => req("PUT",    `/members/${id}/toggle-active`);
 
 // ── Besoins ──────────────────────────────────────────────────────────────────
 

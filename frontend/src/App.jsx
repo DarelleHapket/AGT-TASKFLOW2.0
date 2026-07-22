@@ -287,6 +287,22 @@ export default function App() {
   const onDeleteMember  = async (id)     => { await api.deleteMember(id);                  setMembers((prev) => prev.filter((m) => m.id !== id)); };
   const onSetMemberRole = async (id, r)  => { const m = await api.setMemberRole(id, r);   setMembers((prev) => prev.map((x) => x.id === id ? { ...x, ...m } : x)); };
 
+  // Suspension / réactivation — met à jour le state global dans les deux sens :
+  //   → suspendu : sort de la liste (GET /members/ ne retourne que les actifs)
+  //   → réactivé : revient dans la liste (trié par nom)
+  const onToggleActive = async (member) => {
+    const updated = await api.toggleMemberActive(member.id);
+    if (updated.is_active) {
+      setMembers((prev) =>
+        [...prev.filter((m) => m.id !== updated.id), updated]
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+    } else {
+      setMembers((prev) => prev.filter((m) => m.id !== updated.id));
+    }
+    return updated; // TeamView utilise ce retour pour mettre à jour son état local
+  };
+
   // ── Need CRUD ─────────────────────────────────────────────────────────────
   const onAddNeed    = async (d)     => { const n = await api.createNeed(d);       setNeeds((prev) => [...prev, n]); };
   const onUpdateNeed = async (id, d) => { const n = await api.updateNeed(id, d);   setNeeds((prev) => prev.map((x) => x.id === id ? n : x)); };
@@ -547,7 +563,7 @@ export default function App() {
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} user={user} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
         {tab === "reports"     && <ReportsView members={members} projects={projects} user={user} isAdmin={isAdmin} isChef={isChef} />}
-        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
+        {tab === "team"        && <TeamView members={members} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} onToggleActive={onToggleActive} isAdmin={isAdmin} currentUser={user} />}
       </div>
 
       {/* ── TaskModal ────────────────────────────────────────────────────────── */}

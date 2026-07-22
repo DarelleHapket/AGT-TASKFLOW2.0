@@ -137,7 +137,7 @@ def add_project_member(pid, current_user):
         }), 400
 
     member = conn.execute(
-        "SELECT id, name, is_active FROM members WHERE id = ?", (member_id,)
+        "SELECT id, name, is_active, is_admin FROM members WHERE id = ?", (member_id,)
     ).fetchone()
     if not member:
         conn.close()
@@ -146,6 +146,10 @@ def add_project_member(pid, current_user):
     if not member["is_active"]:
         conn.close()
         return jsonify({"error": "Ce compte n'est pas encore actif."}), 400
+
+    if member["is_admin"]:
+        conn.close()
+        return jsonify({"error": "L'administrateur ne peut pas être ajouté à une équipe projet."}), 403
 
     if is_project_member(conn, member_id, pid):
         conn.close()

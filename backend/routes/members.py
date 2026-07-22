@@ -31,7 +31,7 @@ def list_members():
     conn = get_db()
     rows = conn.execute(
         f"SELECT {_SAFE_COLS} FROM members "
-        "WHERE status IS NULL OR status = 'active' "
+        "WHERE (status IS NULL OR status = 'active') AND is_admin = 0 "
         "ORDER BY name COLLATE NOCASE"
     ).fetchall()
     conn.close()

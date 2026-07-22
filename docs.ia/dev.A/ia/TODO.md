@@ -1,6 +1,6 @@
 # TODO.md — Poste A (Josué) | AGT TaskFlow
-**Périmètre :** Tâches · PERT · Gantt · Projets · Activités  
-**Mis à jour :** Session A-06 — 21 juillet 2026  
+**Périmètre :** Tâches · PERT · Gantt · Projets · Activités · Équipe  
+**Mis à jour :** Session A-07 — 22 juillet 2026  
 **Référence CDC :** version 1.0 BROUILLON, 14 juillet 2026
 
 > **Légende**
@@ -47,8 +47,11 @@
 
 ### 1.4 Champ `owner_id` [P1] ✅ (A-04)
 - [x] Migration Bloc 3 non destructive dans `database.py`
-- [x] `NULL` pour les tâches existantes (pas de rattrapage automatique, D-10)
 - [x] Renseigné automatiquement à la création (`POST /tasks/`)
+
+### 1.5 Table `project_members` [P1] ✅ (A-07)
+- [x] Bloc 6 database.py : `(project_id, member_id, role, joined_at)`
+- [x] Seed rattrapage idempotent depuis données existantes
 
 ---
 
@@ -57,31 +60,34 @@
 ### 2.1 Moteur PERT backend [P1] ✅
 - [x] `backend/utils/pert.py` créé (A-02)
 - [x] `compute_pert()` appelé dans `GET /tasks/` (A-02)
-- [x] Champs PERT dans la réponse : `es`, `ef`, `ls`, `lf`, `slack`, `critical` (D-05, A-02)
+- [x] Champs PERT dans la réponse : `es`, `ef`, `ls`, `lf`, `slack`, `critical` (D-05)
+- [x] PERT calculé sur graphe complet avant filtre P3 (A-07)
 
 ### 2.2 Contrat API — 🔗 coordination Poste B [P1]
 - [~] D-05 défini (format champs plats + cas cycle)
 - [ ] Documenter dans `docs/ia/PERT_CONTRACT.md` et transmettre à Darelle
-- [ ] Documenter aussi le champ `permission` (`full`/`status_only`/`read_only`) et `is_owner`
+- [ ] Documenter le champ `permission` (`full`/`status_only`/`read_only`) et `can_edit`
 
 ### 2.3 Frontend : branché sur le PERT backend [P1] ✅ (A-03)
 - [x] `useData.js` ⚠️ : `computePERT` retiré, `buildPertFromTasks()` lit les champs backend
-- [x] Double format D-05 géré
-- [x] `pert` migré en état explicite `useState`
 
 ### 2.4 Tests PERT [P1] ✅
-- [x] Cas 1→4 validés
 
 ---
 
-## Étape 3 — Tâches : contrôle d'accès par rôle [P1] ✅ Complété (A-04)
+## Étape 3 — Tâches : contrôle d'accès par rôle [P1] ✅ Complété (A-07)
 
 ### 3.1 Backend `routes/tasks.py` [P1] ✅
-- [x] Modèle owner / chef_projet / responsable implémenté
+- [x] Modèle owner / chef_projet / responsable (A-04)
 - [x] Champ `permission` calculé et renvoyé sur chaque tâche
+- [x] Filtre P3 : visibilité selon membership projet (A-07)
+- [x] `validate_task_creation` : 4 vérifications cascade (A-07)
+- [x] Notify `task_assigned` à la création ET si responsible change en PUT (A-07)
 
 ### 3.2 Frontend `TaskModal.jsx` [P1] ✅
 - [x] Formulaire unique piloté par `task.permission`
+- [x] `saveError` inline — modal reste ouvert en cas de 403/400 (A-07)
+- [x] Mode add : sélecteur projet filtré sur `creatableProjects` (A-07)
 
 ### 3.3 Frontend `TasksView.jsx` [P1] ✅
 - [x] UI pilotée entièrement par `task.permission`
@@ -105,18 +111,25 @@
 
 ---
 
-## Étape 5 — Projets : Chef de projet [P1] ✅ Complété
+## Étape 5 — Projets : RBAC complet [P1] ✅ Complété (A-07)
 
-- [x] Backend : ownership + chef_name + guards
-- [x] Frontend : boutons ✏️/🗑️ visibles pour le chef propriétaire (fix A-06 : `currentUser` manquant)
-- [x] Fix `delete_project` : `old_chef` NameError → database locked (A-06)
+- [x] Ownership + chef_name + guards (A-03/A-06)
+- [x] Table `project_members` (owner/manager/contributor) (A-07)
+- [x] `GET /projects/` enrichi : `user_role`, `member_count` (A-07)
+- [x] `POST /projects/` → auto-insert owner dans `project_members` (A-07)
+- [x] `PUT/DELETE /<id>` → guard via `project_members.role` (A-07)
+- [x] `PUT /<id>/chef` → synchro bidirectionnelle `project_members` + `_demote_if_orphan` (A-07)
+- [x] `ProjectMembersPanel.jsx` : panel inline lazy, gestion équipe owner (A-07)
+- [x] `ProjectsView.jsx` : badges `user_role`, bouton Équipe conditionnel (A-07)
 
 ---
 
-## Étape 6 — Activités : guard rôle [P1] ✅ Complété (A-05)
+## Étape 6 — Activités : guard rôle [P1] ✅ Complété (A-07)
 
-- [x] Ownership créateur implémenté (D-13)
-- [x] `ActivitiesView.jsx` réécrit
+- [x] Ownership créateur implémenté (D-13, A-05)
+- [x] P4 : managers du projet peuvent modifier les activités (A-07)
+- [x] Champ `can_edit` remplace `is_owner` (backend + frontend synchronisés) (A-07)
+- [x] Filtre P3 : visibilité selon membership projet (A-07)
 - [ ] Vérifier cascade suppression via `ON DELETE CASCADE`
 
 ---
@@ -144,32 +157,38 @@
 
 ### 8.4 Gestion de session [P1] ✅ (A-04)
 
-### 8.5 Ownership activités [P1] ✅ (A-05)
+### 8.5 Ownership activités [P1] ✅ (A-05 / A-07)
+
+### 8.6 Sécurité API membres [P1] ✅ (A-07)
+- [x] `password_hash` exclu de tous les `SELECT` exposés
+- [x] Guards auto-suppression et suppression admin
 
 ---
 
-## Étape 9 — Notifications [P1] ✅ Complété (A-06)
+## Étape 9 — Notifications [P1] ✅ Complété (A-06/A-07)
 
 - [x] Table `notifications` en base (D-20) — purge 7 jours automatique
 - [x] Helper `backend/utils/notif.py`
 - [x] Blueprint `backend/routes/notifications.py` (GET, PATCH read, PATCH read-all)
-- [x] Déclencheur `register` → admins (D-20)
-- [x] Déclencheur `task_assigned` → responsable (D-20)
-- [x] Déclencheur `difficulty_reported` → chef du projet (D-20)
+- [x] Déclencheur `register` → admins
+- [x] Déclencheur `task_assigned` → responsable (création ET changement de responsable en PUT) (A-07)
+- [x] Déclencheur `difficulty_reported` → **tous owners et managers** du projet (A-07)
+- [x] `can_access_task()` aligné sur `get_project_role()` (A-07)
 - [x] Cloche visible pour tous les utilisateurs connectés
-- [x] Badge unifié (notifs non lues + difficultés non vues pour chef/admin)
+- [x] Badge unifié sur notifications backend uniquement (A-07 — suppression double-comptage localStorage)
 - [x] Panneau `NotificationsPanel.jsx` : slide-in, filtres par type, groupement par jour (D-21)
 - [x] Navigation contextuelle au clic (tâche ou onglet Équipe)
-- [ ] `useSeenAssignments.js` à supprimer (créé en cours de session, abandonné)
+- [ ] `useSeenAssignments.js` à supprimer (créé en cours de session A-06, abandonné)
 
 ---
 
-## Étape 10 — Révision logique métier ERP [P1] 🔜 A-07
+## Étape 10 — Gestion équipe / membres plateforme [P1] ✅ Complété (A-07)
 
-- [ ] Audit des flux métier actuels (projets → activités → tâches → responsables)
-- [ ] Identifier les incohérences avec le management de projet concret
-- [ ] Proposer et valider un nouveau modèle avec l'utilisateur
-- [ ] Implémenter les ajustements validés
+- [x] `permissions.py` centralisateur RBAC (source de vérité unique)
+- [x] `project_members.py` blueprint CRUD équipe projet
+- [x] `members.py` : endpoint `suspended`, `toggle-active`, guards `delete`
+- [x] `TeamView.jsx` : sections pending / suspendus / actifs · Suspendre / Réactiver / Supprimer
+- [x] `RBAC.md` rédigé et mis à jour (9 règles invariantes, toutes matrices)
 
 ---
 
@@ -185,25 +204,28 @@
 | D-14 | `difficulties.py` ⚠️ | Responsable bloqué pour signaler | Bloquant | ✅ Fermé (A-05) |
 | — | `ProjectsView` | Boutons ✏️/🗑️ invisibles pour chef | Haute | ✅ Fermé (A-06) |
 | — | `projects.py` | `old_chef` NameError → 500 | Bloquant | ✅ Fermé (A-06) |
-| — | `App.jsx` cloche | `markAsSeen` non appelé au clic | Moyenne | ✅ Fermé (A-06) |
+| — | `ProjectMembersPanel` | Noms membres tronqués par le badge rôle | Moyenne | ✅ Fermé (A-07) |
+| — | `difficulties.py` | Notif difficulty envoyée uniquement au chef_id | Haute | ✅ Fermé (A-07) |
+| — | `App.jsx` | Badge cloche double-comptage localStorage | Moyenne | ✅ Fermé (A-07) |
 
 ---
 
-## Ordre de traitement recommandé
+## Prochaines sessions recommandées
 
 ```
-A-07 : Révision logique métier ERP (décidé en clôture A-06)
-       Audit + proposition de nouveau modèle avant toute implémentation
+A-08 : Tests end-to-end RBAC
+       — Vérifier toute la chaîne : inscription → validation → projet → tâche → difficulté → notif
+       — Responsable : filtre membres du projet dans TaskModal (D-33 candidat)
+       — Supprimer useSeenAssignments.js
 
-Reste en attente :
+       Reste en attente (non-RBAC) :
        Étape 2.2 — PERT_CONTRACT.md [P1]
        Étape 4   — Gantt : flèches + filtres [P1/P2]
        Étape 7   — show_critical / show_overdue frontend [P1]
        Étape 8.2 — Mesure perf PERT [P1]
-       Étape 9   — Supprimer useSeenAssignments.js
 ```
 
 ---
 
 *Ce fichier ne doit pas être réorganisé sans accord explicite de Josué.*  
-*Décisions numérotées D-xx en continu commun avec le Poste B (dernière en date : D-21).*
+*Décisions numérotées D-xx en continu commun avec le Poste B (dernière en date : D-32).*

@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { useData }             from "./hooks/useData";
 import { useAuth }             from "./hooks/useAuth";
-import { useSeenDifficulties } from "./hooks/useSeenDifficulties";
 import * as api                from "./api/client";
 import { LoginPage }           from "./components/auth/LoginPage";
 import { TasksView }           from "./components/tasks/TasksView";
@@ -64,7 +63,6 @@ function notifMeta(type) {
 
 export default function App() {
   const { token, user, isAdmin, isChef, isLogged, login, logout } = useAuth();
-  const { markAsSeen, hasUnseen, totalUnseen }                    = useSeenDifficulties();
 
   const [tab, setTab]         = useState("tasks");
   const [modal, setModal]     = useState(null);
@@ -75,7 +73,6 @@ export default function App() {
     show_overdue: false, show_critical: false, show_archived: false,
     search: "",
   });
-  const [diffCounts, setDiffCounts]           = useState({});
   const [showBell, setShowBell]               = useState(false);
   const [showNotifPanel, setShowNotifPanel]   = useState(false);
   const [confirmLogout, setConfirmLogout]     = useState(false);
@@ -156,27 +153,11 @@ export default function App() {
     );
   };
 
-  // ── Compteurs difficultés (admin + chef) ─────────────────────────────────
-  const canSeeNotifications = isAdmin || isChef;
-
-  useEffect(() => {
-    if (!canSeeNotifications || !tasks.length) return;
-    const loadCounts = async () => {
-      const counts = {};
-      await Promise.all(
-        tasks.map(async (t) => {
-          try {
-            const diffs = await api.getDifficulties(t.id);
-            if (diffs.length > 0) counts[t.id] = diffs.length;
-          } catch { }
-        })
-      );
-      setDiffCounts(counts);
-    };
-    loadCounts();
-  }, [tasks, canSeeNotifications]);
-
-  const unseenTotal = unreadNotifs.length + (canSeeNotifications ? totalUnseen(diffCounts) : 0);
+  // Badge unifié (A-07) : uniquement les notifications backend non lues.
+  // Les difficultés génèrent des notifications persistantes pour tous les
+  // owners et managers concernés → plus de double comptage localStorage
+  // ni d'appels getDifficulties() en parallèle par tâche.
+  const unseenTotal = unreadNotifs.length;
 
   // ── Auth guard ───────────────────────────────────────────────────────────
   if (!isLogged) return <LoginPage onLogin={login} />;

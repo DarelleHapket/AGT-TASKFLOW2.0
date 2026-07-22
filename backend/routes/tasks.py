@@ -323,6 +323,29 @@ def update_task(task_id, current_user):
                 (task_id, dep)
             )
 
+        # Notification si le responsable a changé (A-07)
+        old_resp = (task.get("responsible") or "").strip().lower()
+        new_resp = (data.get("responsible") or "").strip().lower()
+        if new_resp and new_resp != old_resp:
+            from utils.notif import notify as _notify
+            member_row = conn.execute(
+                "SELECT id FROM members WHERE LOWER(TRIM(name)) = ?", (new_resp,)
+            ).fetchone()
+            if member_row and member_row["id"] != current_user["id"]:
+                _notify(
+                    conn,
+                    recipient_id=member_row["id"],
+                    sender_id=current_user["id"],
+                    type_="task_assigned",
+                    title=f"Tâche assignée : {task_id}",
+                    body=(
+                        f"{current_user['name']} vous a désigné responsable de la tâche "
+                        f"«\u202f{data.get('description') or task.get('description', task_id)}\u202f»."
+                    ),
+                    task_id=task_id,
+                )
+                conn.commit()
+
     else:  # status_only
         new_status = data.get("status")
         if new_status is None:

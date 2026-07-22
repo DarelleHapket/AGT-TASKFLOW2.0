@@ -1,9 +1,21 @@
 // frontend/src/components/auth/LoginPage.jsx
+//
+// A-08 — Fond remplacé : bleu nuit (#0a0f1e) → cyan clair (#E1F2F5)
+// Toutes les couleurs de texte adaptées pour rester lisibles sur fond clair.
+
 import { useState, useEffect } from "react";
 import { LogIn, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, UserPlus, Zap } from "lucide-react";
 
+// Palette
+const NAVY   = "#0D1B2A";   // texte principal
+const SLATE  = "#475569";   // texte secondaire
+const MUTED  = "#64748b";   // texte discret
+const GHOST  = "#94a3b8";   // texte très discret
+const ACCENT = "#6366f1";   // indigo (accent)
+const BG     = "#E1F2F5";   // fond page
+
 export function LoginPage({ onLogin }) {
-  const [mode, setMode]         = useState("login"); // "login" | "register"
+  const [mode, setMode]         = useState("login");
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -72,34 +84,52 @@ export function LoginPage({ onLogin }) {
     }
   }
 
+  // Style partagé champ de saisie
+  const inputStyle = (field) => ({
+    width: "100%",
+    padding: field === "password" ? "13px 44px 13px 40px" : "13px 14px 13px 40px",
+    background: focused === field ? "white" : "rgba(255,255,255,0.6)",
+    border: `1.5px solid ${focused === field ? ACCENT : "rgba(0,150,170,0.25)"}`,
+    borderRadius: 12, fontSize: 13, color: NAVY,
+    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+    transition: "border-color 0.2s, background 0.2s",
+  });
+
+  const iconColor = (field) => focused === field ? ACCENT : MUTED;
+
   return (
     <div style={{
       minHeight: "100vh",
       display: "flex",
-      background: "#0a0f1e",
+      background: BG,
       fontFamily: "'DM Sans', system-ui, sans-serif",
       overflow: "hidden",
       position: "relative",
     }}>
-      {/* ── Fond animé avec grille et lueurs ── */}
+      {/* ── Grille subtile sur fond clair ── */}
       <div style={{
         position: "absolute", inset: 0,
         backgroundImage: `
-          linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px)
+          linear-gradient(rgba(0,150,170,0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,150,170,0.07) 1px, transparent 1px)
         `,
         backgroundSize: "48px 48px",
+        pointerEvents: "none",
       }} />
+
+      {/* ── Lueur indigo haut-gauche ── */}
       <div style={{
         position: "absolute", top: "-20%", left: "-10%",
         width: "60%", height: "70%",
-        background: "radial-gradient(ellipse, rgba(99,102,241,0.15) 0%, transparent 65%)",
+        background: "radial-gradient(ellipse, rgba(99,102,241,0.1) 0%, transparent 65%)",
         pointerEvents: "none",
       }} />
+
+      {/* ── Lueur cyan bas-droite ── */}
       <div style={{
         position: "absolute", bottom: "-20%", right: "-10%",
         width: "55%", height: "65%",
-        background: "radial-gradient(ellipse, rgba(139,92,246,0.12) 0%, transparent 65%)",
+        background: "radial-gradient(ellipse, rgba(0,176,195,0.12) 0%, transparent 65%)",
         pointerEvents: "none",
       }} />
 
@@ -120,34 +150,34 @@ export function LoginPage({ onLogin }) {
               width: 44, height: 44, borderRadius: 14,
               background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 32px rgba(99,102,241,0.5)",
+              boxShadow: "0 0 28px rgba(99,102,241,0.35)",
             }}>
               <Zap size={22} color="white" fill="white" />
             </div>
-            <span style={{ fontSize: 18, fontWeight: 800, color: "white", letterSpacing: "-0.02em" }}>
+            <span style={{ fontSize: 18, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>
               AGT TaskFlow
             </span>
           </div>
 
           {/* Titre principal */}
           <h1 style={{
-            fontSize: 52, fontWeight: 800, color: "white",
+            fontSize: 52, fontWeight: 800, color: NAVY,
             lineHeight: 1.1, letterSpacing: "-0.03em", margin: "0 0 20px",
           }}>
             Pilotez vos<br />
             <span style={{
-              background: "linear-gradient(90deg, #6366f1, #a78bfa)",
+              background: "linear-gradient(90deg, #6366f1, #00B4C8)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             }}>
               projets
             </span>{" "}avec<br />précision.
           </h1>
 
-          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.45)", lineHeight: 1.7, maxWidth: 380, margin: 0 }}>
+          <p style={{ fontSize: 16, color: SLATE, lineHeight: 1.7, maxWidth: 380, margin: 0 }}>
             Outil de pilotage interne d'AG Technologies — Tâches, Gantt, PERT et performances en temps réel.
           </p>
 
-          {/* Stats décoratifs */}
+          {/* Stats */}
           <div style={{ display: "flex", gap: 40, marginTop: 56 }}>
             {[
               { val: "100%", label: "Usage interne" },
@@ -155,8 +185,8 @@ export function LoginPage({ onLogin }) {
               { val: "∞",    label: "Productivité" },
             ].map(({ val, label }) => (
               <div key={label}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: "white", letterSpacing: "-0.02em" }}>{val}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{label}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>{val}</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{label}</div>
               </div>
             ))}
           </div>
@@ -171,58 +201,64 @@ export function LoginPage({ onLogin }) {
       }}>
         <div style={{
           width: "100%",
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.72)",
+          border: "1px solid rgba(0,176,195,0.18)",
           borderRadius: 24, padding: 40,
           backdropFilter: "blur(24px)",
-          boxShadow: "0 32px 80px rgba(0,0,0,0.5)",
+          boxShadow: "0 32px 80px rgba(0,100,130,0.12)",
           opacity: mounted ? 1 : 0,
           transform: mounted ? "translateY(0)" : "translateY(32px)",
           transition: "all 0.8s cubic-bezier(.16,1,.3,1) 0.15s",
         }}>
 
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: "white", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: "0 0 6px", letterSpacing: "-0.02em" }}>
             {mode === "login" ? "Connexion" : "Demande de compte"}
           </h2>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: "0 0 32px" }}>
+          <p style={{ fontSize: 13, color: MUTED, margin: "0 0 32px" }}>
             {mode === "login"
               ? "Entrez vos identifiants pour accéder à votre espace"
               : "Votre demande sera transmise à l'administrateur pour validation"}
           </p>
 
           {/* Session expirée */}
-          {sessionExpired && mode === "login" && (
+          {sessionExpired && (
             <div style={{
-              background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)",
-              borderRadius: 12, padding: "12px 16px", marginBottom: 24,
-              display: "flex", alignItems: "center", gap: 10,
-              color: "#fbbf24", fontSize: 13,
+              marginBottom: 16, padding: "10px 14px",
+              background: "rgba(251,191,36,0.12)",
+              border: "1px solid rgba(251,191,36,0.3)",
+              borderRadius: 10,
+              display: "flex", alignItems: "center", gap: 8,
+              color: "#92400e", fontSize: 13,
             }}>
               <AlertCircle size={15} />
-              Votre session a expiré. Veuillez vous reconnecter.
+              Session expirée. Veuillez vous reconnecter.
             </div>
           )}
 
-          {/* Succès */}
+          {/* Message succès */}
           {success && (
             <div style={{
-              background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
-              borderRadius: 12, padding: "12px 16px", marginBottom: 24,
-              display: "flex", alignItems: "center", gap: 10,
-              color: "#86efac", fontSize: 13,
+              marginBottom: 16, padding: "10px 14px",
+              background: "rgba(34,197,94,0.1)",
+              border: "1px solid rgba(34,197,94,0.25)",
+              borderRadius: 10,
+              display: "flex", alignItems: "center", gap: 8,
+              color: "#15803d", fontSize: 13,
             }}>
               <CheckCircle size={15} />
               {success}
             </div>
           )}
 
-          {/* Erreur */}
+          {/* Message erreur */}
           {error && (
             <div style={{
-              background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: 12, padding: "12px 16px", marginBottom: 24,
-              display: "flex", alignItems: "center", gap: 10,
-              color: "#fca5a5", fontSize: 13,
+              marginBottom: 16, padding: "10px 14px",
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.2)",
+              borderRadius: 10,
+              display: "flex", alignItems: "center", gap: 8,
+              color: "#dc2626", fontSize: 13,
               animation: "shake 0.3s ease",
             }}>
               <AlertCircle size={15} />
@@ -233,15 +269,14 @@ export function LoginPage({ onLogin }) {
           {/* Champ Nom — inscription uniquement */}
           {mode === "register" && (
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: SLATE, display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
                 NOM
               </label>
               <div style={{ position: "relative" }}>
                 <User size={15} style={{
                   position: "absolute", left: 14, top: "50%",
                   transform: "translateY(-50%)",
-                  color: focused === "name" ? "#6366f1" : "rgba(255,255,255,0.25)",
-                  transition: "color 0.2s",
+                  color: iconColor("name"), transition: "color 0.2s",
                 }} />
                 <input
                   type="text"
@@ -251,14 +286,7 @@ export function LoginPage({ onLogin }) {
                   onBlur={() => setFocused(null)}
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                   placeholder="Votre nom"
-                  style={{
-                    width: "100%", padding: "13px 14px 13px 40px",
-                    background: "rgba(255,255,255,0.06)",
-                    border: `1.5px solid ${focused === "name" ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.08)"}`,
-                    borderRadius: 12, fontSize: 13, color: "white",
-                    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
-                    transition: "border-color 0.2s, background 0.2s",
-                  }}
+                  style={inputStyle("name")}
                 />
               </div>
             </div>
@@ -266,15 +294,14 @@ export function LoginPage({ onLogin }) {
 
           {/* Champ Email */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: SLATE, display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
               ADRESSE EMAIL
             </label>
             <div style={{ position: "relative" }}>
               <Mail size={15} style={{
                 position: "absolute", left: 14, top: "50%",
                 transform: "translateY(-50%)",
-                color: focused === "email" ? "#6366f1" : "rgba(255,255,255,0.25)",
-                transition: "color 0.2s",
+                color: iconColor("email"), transition: "color 0.2s",
               }} />
               <input
                 type="email"
@@ -284,29 +311,21 @@ export function LoginPage({ onLogin }) {
                 onBlur={() => setFocused(null)}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 placeholder="gabriel@ag-technologies.tech"
-                style={{
-                  width: "100%", padding: "13px 14px 13px 40px",
-                  background: "rgba(255,255,255,0.06)",
-                  border: `1.5px solid ${focused === "email" ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.08)"}`,
-                  borderRadius: 12, fontSize: 13, color: "white",
-                  outline: "none", fontFamily: "inherit", boxSizing: "border-box",
-                  transition: "border-color 0.2s, background 0.2s",
-                }}
+                style={inputStyle("email")}
               />
             </div>
           </div>
 
           {/* Champ Mot de passe */}
           <div style={{ marginBottom: 28 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: SLATE, display: "block", marginBottom: 8, letterSpacing: "0.08em" }}>
               MOT DE PASSE
             </label>
             <div style={{ position: "relative" }}>
               <Lock size={15} style={{
                 position: "absolute", left: 14, top: "50%",
                 transform: "translateY(-50%)",
-                color: focused === "password" ? "#6366f1" : "rgba(255,255,255,0.25)",
-                transition: "color 0.2s",
+                color: iconColor("password"), transition: "color 0.2s",
               }} />
               <input
                 type={showPassword ? "text" : "password"}
@@ -316,26 +335,18 @@ export function LoginPage({ onLogin }) {
                 onBlur={() => setFocused(null)}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 placeholder="••••••••"
-                style={{
-                  width: "100%", padding: "13px 44px 13px 40px",
-                  background: "rgba(255,255,255,0.06)",
-                  border: `1.5px solid ${focused === "password" ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.08)"}`,
-                  borderRadius: 12, fontSize: 13, color: "white",
-                  outline: "none", fontFamily: "inherit", boxSizing: "border-box",
-                  transition: "border-color 0.2s, background 0.2s",
-                }}
+                style={inputStyle("password")}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                aria-label={showPassword ? "Masquer" : "Afficher"}
                 style={{
                   position: "absolute", right: 12, top: "50%",
                   transform: "translateY(-50%)",
                   background: "none", border: "none", cursor: "pointer",
                   padding: 4, display: "flex", alignItems: "center",
-                  color: focused === "password" ? "#6366f1" : "rgba(255,255,255,0.35)",
-                  transition: "color 0.2s",
+                  color: iconColor("password"), transition: "color 0.2s",
                 }}
               >
                 {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -343,7 +354,7 @@ export function LoginPage({ onLogin }) {
             </div>
           </div>
 
-          {/* Bouton connexion */}
+          {/* Bouton principal */}
           <button
             onClick={handleSubmit}
             disabled={loading}
@@ -353,7 +364,7 @@ export function LoginPage({ onLogin }) {
               border: "none", borderRadius: 12, color: "white",
               fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: loading ? "none" : "0 8px 32px rgba(99,102,241,0.4)",
+              boxShadow: loading ? "none" : "0 8px 28px rgba(99,102,241,0.35)",
               transition: "all 0.2s", letterSpacing: "-0.01em",
               transform: loading ? "scale(0.98)" : "scale(1)",
             }}
@@ -375,20 +386,17 @@ export function LoginPage({ onLogin }) {
           </button>
 
           {/* Bascule login / inscription */}
-          <p style={{ textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 24, marginBottom: 0 }}>
+          <p style={{ textAlign: "center", fontSize: 13, color: MUTED, marginTop: 24, marginBottom: 0 }}>
             {mode === "login" ? "Pas encore de compte ? " : "Vous avez déjà un compte ? "}
             <span
               onClick={switchMode}
-              style={{
-                color: "#a78bfa", fontWeight: 700, cursor: "pointer",
-                textDecoration: "none",
-              }}
+              style={{ color: ACCENT, fontWeight: 700, cursor: "pointer" }}
             >
               {mode === "login" ? "Demander un compte" : "Se connecter"}
             </span>
           </p>
 
-          <p style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 16, marginBottom: 0 }}>
+          <p style={{ textAlign: "center", color: GHOST, fontSize: 11, marginTop: 16, marginBottom: 0 }}>
             AG Technologies · Usage interne uniquement
           </p>
         </div>
@@ -401,10 +409,10 @@ export function LoginPage({ onLogin }) {
           25% { transform: translateX(-6px); }
           75% { transform: translateX(6px); }
         }
-        input::placeholder { color: rgba(255,255,255,0.2); }
+        input::placeholder { color: rgba(100,116,139,0.55); }
         input:-webkit-autofill {
-          -webkit-box-shadow: 0 0 0 100px #1a1f35 inset !important;
-          -webkit-text-fill-color: white !important;
+          -webkit-box-shadow: 0 0 0 100px #E1F2F5 inset !important;
+          -webkit-text-fill-color: #0D1B2A !important;
         }
       `}</style>
     </div>

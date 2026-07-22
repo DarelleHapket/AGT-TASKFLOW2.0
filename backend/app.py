@@ -4,6 +4,7 @@ from flask_cors import CORS
 from database import init_db
 from routes.tasks import tasks_bp
 from routes.projects import projects_bp
+from routes.project_members import project_members_bp
 from routes.activities import activities_bp
 from routes.members import members_bp
 from routes.needs import needs_bp
@@ -19,22 +20,27 @@ app = Flask(__name__)
 CORS(app)
 
 # ── Blueprints v1 (inchangés) ──────────────────────────────────────────────
-app.register_blueprint(tasks_bp,       url_prefix="/api/tasks")
-app.register_blueprint(projects_bp,    url_prefix="/api/projects")
-app.register_blueprint(activities_bp,  url_prefix="/api/activities")
-app.register_blueprint(members_bp,     url_prefix="/api/members")
-app.register_blueprint(needs_bp,       url_prefix="/api/needs")
-app.register_blueprint(notes_bp,       url_prefix="/api/notes")
-app.register_blueprint(performance_bp, url_prefix="/api/performance")
+app.register_blueprint(tasks_bp,          url_prefix="/api/tasks")
+app.register_blueprint(projects_bp,       url_prefix="/api/projects")
+app.register_blueprint(activities_bp,     url_prefix="/api/activities")
+app.register_blueprint(members_bp,        url_prefix="/api/members")
+app.register_blueprint(needs_bp,          url_prefix="/api/needs")
+app.register_blueprint(notes_bp,          url_prefix="/api/notes")
+app.register_blueprint(performance_bp,    url_prefix="/api/performance")
 
 # ── Blueprints v2 Bloc 1 ───────────────────────────────────────────────────
-app.register_blueprint(auth_bp,        url_prefix="/api/auth")
-app.register_blueprint(difficulties_bp,url_prefix="/api/difficulties")
+app.register_blueprint(auth_bp,           url_prefix="/api/auth")
+app.register_blueprint(difficulties_bp,   url_prefix="/api/difficulties")
 
 # ── Blueprints v2 Bloc 2 ───────────────────────────────────────────────────
-app.register_blueprint(daily_order_bp, url_prefix="/api/daily-order")
-app.register_blueprint(reports_bp,     url_prefix="/api/reports")
-app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+app.register_blueprint(daily_order_bp,    url_prefix="/api/daily-order")
+app.register_blueprint(reports_bp,        url_prefix="/api/reports")
+app.register_blueprint(notifications_bp,  url_prefix="/api/notifications")
+
+# ── Blueprints v2 Bloc 6 (A-07) ───────────────────────────────────────────
+# project_members est enregistré sous le même préfixe que projects.
+# Les routes /<id>/members ne conflictuent pas avec /<id> et /<id>/chef.
+app.register_blueprint(project_members_bp, url_prefix="/api/projects")
 
 if __name__ == "__main__":
     init_db()

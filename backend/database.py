@@ -1,4 +1,11 @@
 # backend/database.py
+#
+# A-07 — Bloc 6 : table project_members
+#   • Rôles par projet : 'owner' | 'manager' | 'contributor'
+#   • Seed rattrapage : recrée les entrées depuis les données existantes
+#     (chef_id, task owners, responsibles, activity owners) pour que
+#     aucune tâche/activité existante ne devienne invisible après la migration.
+
 import sqlite3
 import os
 import hashlib
@@ -138,21 +145,12 @@ def init_db():
     ]
 
     # ── Migrations v2 Bloc 3 — non destructives ─────────────────────────────
-    # Étape 3.1bis (A-04) : ownership des tâches.
-    # owner_id = créateur de la tâche. NULL pour les tâches déjà existantes
-    # avant cette migration (pas de rattrapage automatique — décision produit :
-    # ces tâches restent gérables uniquement par le chef du projet ou l'admin
-    # jusqu'à ce qu'un nouveau propriétaire les reprenne naturellement).
 
     migrations_b3 = [
         ("tasks", "owner_id", "ALTER TABLE tasks ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
     # ── Migrations v2 Bloc 4 (Poste B) — non destructives ───────────────────
-    # daily_task_order.start_time / duration_min et notes.member_id sont
-    # ajoutés ici (colonnes) ; la table daily_task_order elle-même est créée
-    # plus bas dans ce fichier, donc cette migration doit AUSSI être rejouée
-    # après sa création pour couvrir le cas d'une base neuve (voir plus bas).
 
     migrations_b4 = [
         ("daily_task_order", "start_time",   "ALTER TABLE daily_task_order ADD COLUMN start_time TEXT DEFAULT NULL"),
@@ -161,19 +159,12 @@ def init_db():
     ]
 
     # ── Migrations v2 Bloc 5 — non destructives ─────────────────────────────
-    # A-05 : ownership des activités (même principe que Bloc 3 pour les tâches).
-    # owner_id = créateur de l'activité. NULL pour les activités déjà existantes
-    # avant cette migration (pas de rattrapage automatique — décision produit :
-    # ces activités restent gérables par personne côté UI jusqu'à ce qu'un
-    # nouveau propriétaire les reprenne naturellement, ou par l'admin en direct
-    # DB si besoin exceptionnel).
 
     migrations_b5 = [
         ("activities", "owner_id", "ALTER TABLE activities ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    # Bloc 4 volontairement exclu ici : daily_task_order n'existe pas encore
-    # à ce stade (table créée plus bas). Il est rejoué juste après sa création.
+    # Blocs 1-3 + 5 : appliqués avant la création des nouvelles tables
     for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b5:
         try:
             c.execute(sql)
@@ -213,10 +204,7 @@ def init_db():
         )
     """)
 
-    # Migration Bloc 4 rejouée ici : daily_task_order vient d'être créée
-    # (CREATE TABLE IF NOT EXISTS ci-dessus l'inclut déjà pour une base neuve,
-    # mais cette boucle couvre le cas d'une base existante où la table était
-    # déjà là sans start_time/duration_min, ainsi que notes.member_id).
+    # Bloc 4 rejoué ici (daily_task_order vient d'être créée)
     for table, column, sql in migrations_b4:
         try:
             c.execute(sql)
@@ -224,6 +212,7 @@ def init_db():
             pass
 
     # ── Notifications (A-06) ─────────────────────────────────────────────────
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,6 +227,25 @@ def init_db():
             FOREIGN KEY (recipient_id) REFERENCES members(id) ON DELETE CASCADE,
             FOREIGN KEY (sender_id) REFERENCES members(id) ON DELETE SET NULL,
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )
+    """)
+
+    # ── Table project_members (A-07 — Bloc 6) ───────────────────────────────
+    # Rôles par projet, indépendants du rôle global du membre.
+    #   owner       → créateur du projet (1 seul, ne peut pas être retiré)
+    #   manager     → promu par l'owner, full edit sur tâches et activités
+    #   contributor → défaut à l'ajout, status_only sur les tâches dont il est responsable
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS project_members (
+            project_id  INTEGER NOT NULL,
+            member_id   INTEGER NOT NULL,
+            role        TEXT    NOT NULL DEFAULT 'contributor'
+                        CHECK(role IN ('owner', 'manager', 'contributor')),
+            joined_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, member_id),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (member_id)  REFERENCES members(id)  ON DELETE CASCADE
         )
     """)
 
@@ -285,12 +293,52 @@ def init_db():
             (email, hash_password("AGT2026!"), m["id"])
         )
 
-    # ── Rattrapage role pour bases déjà initialisées ────────────────────────
+    # ── Rattrapage role / status ─────────────────────────────────────────────
     c.execute("UPDATE members SET role='admin'  WHERE is_admin=1 AND (role IS NULL OR role='' OR role='membre')")
     c.execute("UPDATE members SET role='membre' WHERE is_admin=0 AND (role IS NULL OR role='')")
-
-    # ── Rattrapage status pour bases déjà initialisées ──────────────────────
     c.execute("UPDATE members SET status='active' WHERE status IS NULL OR status=''")
+
+    # ── Seed rattrapage project_members (A-07) ───────────────────────────────
+    # Garantit qu'aucune donnée existante ne devient invisible après la migration.
+    # Exécuté à chaque démarrage (INSERT OR IGNORE = idempotent).
+
+    # 1. Chefs de projet existants → owner
+    c.execute("""
+        INSERT OR IGNORE INTO project_members (project_id, member_id, role)
+        SELECT id, chef_id, 'owner'
+        FROM projects
+        WHERE chef_id IS NOT NULL
+    """)
+
+    # 2. Créateurs de tâches → contributor (si projet défini et membre actif)
+    c.execute("""
+        INSERT OR IGNORE INTO project_members (project_id, member_id, role)
+        SELECT DISTINCT t.project_id, t.owner_id, 'contributor'
+        FROM tasks t
+        JOIN members m ON m.id = t.owner_id AND m.is_active = 1
+        WHERE t.project_id IS NOT NULL AND t.owner_id IS NOT NULL
+    """)
+
+    # 3. Responsables de tâches (par nom) → contributor
+    c.execute("""
+        INSERT OR IGNORE INTO project_members (project_id, member_id, role)
+        SELECT DISTINCT t.project_id, m.id, 'contributor'
+        FROM tasks t
+        JOIN members m ON LOWER(TRIM(m.name)) = LOWER(TRIM(t.responsible))
+                       AND m.is_active = 1
+        WHERE t.project_id IS NOT NULL
+          AND t.responsible IS NOT NULL
+          AND t.responsible != ''
+    """)
+
+    # 4. Créateurs d'activités → contributor
+    c.execute("""
+        INSERT OR IGNORE INTO project_members (project_id, member_id, role)
+        SELECT DISTINCT a.project_id, a.owner_id, 'contributor'
+        FROM activities a
+        JOIN members m ON m.id = a.owner_id AND m.is_active = 1
+        WHERE a.owner_id IS NOT NULL
+    """)
 
     conn.commit()
     conn.close()

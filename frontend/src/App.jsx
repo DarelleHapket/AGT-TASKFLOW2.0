@@ -10,38 +10,47 @@
 //   • Cloche visible pour TOUS les utilisateurs connectés
 //   • Refresh auto toutes les 30 s + purge 7 jours côté backend
 //   • NotificationsPanel : panneau plein écran slide-in depuis la cloche
+// A-07 — Intégration RBAC project_members :
+//   • 4 handlers onGetProjectMembers / onAddProjectMember /
+//     onUpdateProjectMember / onRemoveProjectMember
+//   • Propagés à ProjectsView
+//   • onSaveTask : plus de setModal(null) si erreur — TaskModal gère l'affichage
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList, ChevronDown, User } from "lucide-react";
-import { useData } from "./hooks/useData";
-import { useAuth } from "./hooks/useAuth";
+import {
+  LayoutList, GanttChart, Network, FolderOpen, Tag,
+  Users, Zap, Target, FileText, BarChart2, LogOut,
+  Bell, ClipboardList, ChevronDown, User,
+} from "lucide-react";
+import { useData }             from "./hooks/useData";
+import { useAuth }             from "./hooks/useAuth";
 import { useSeenDifficulties } from "./hooks/useSeenDifficulties";
-import * as api from "./api/client";
-import { LoginPage } from "./components/auth/LoginPage";
-import { TasksView } from "./components/tasks/TasksView";
-import { TaskModal } from "./components/tasks/TaskModal";
-import { GanttView } from "./components/gantt/GanttView";
-import { PERTView } from "./components/pert/PERTView";
-import { ProjectsView } from "./components/projects/ProjectsView";
-import { ActivitiesView } from "./components/activities/ActivitiesView";
-import { TeamView } from "./components/team/TeamView";
-import { NeedsView } from "./components/needs/NeedsView";
-import { NotesView } from "./components/notes/NotesView";
-import { PerformanceView } from "./components/performance/PerformanceView";
-import { DailyOrderView } from "./components/daily/DailyOrderView";
-import { ReportsView } from "./components/reports/ReportsView";
-import { NotificationsPanel } from "./components/notifications/NotificationsPanel";
+import * as api                from "./api/client";
+import { LoginPage }           from "./components/auth/LoginPage";
+import { TasksView }           from "./components/tasks/TasksView";
+import { TaskModal }           from "./components/tasks/TaskModal";
+import { GanttView }           from "./components/gantt/GanttView";
+import { PERTView }            from "./components/pert/PERTView";
+import { ProjectsView }        from "./components/projects/ProjectsView";
+import { ActivitiesView }      from "./components/activities/ActivitiesView";
+import { TeamView }            from "./components/team/TeamView";
+import { NeedsView }           from "./components/needs/NeedsView";
+import { NotesView }           from "./components/notes/NotesView";
+import { PerformanceView }     from "./components/performance/PerformanceView";
+import { DailyOrderView }      from "./components/daily/DailyOrderView";
+import { ReportsView }         from "./components/reports/ReportsView";
+import { NotificationsPanel }  from "./components/notifications/NotificationsPanel";
 
 const TABS = [
-  { id: "tasks",       label: "Tâches",       Icon: LayoutList   },
-  { id: "gantt",       label: "Gantt",         Icon: GanttChart   },
-  { id: "pert",        label: "PERT",          Icon: Network      },
-  { id: "projects",    label: "Projets",       Icon: FolderOpen   },
-  { id: "activities",  label: "Activités",     Icon: Tag          },
-  { id: "needs",       label: "Besoins",       Icon: Target       },
-  { id: "performance", label: "Performances",  Icon: BarChart2    },
-  { id: "reports",     label: "Rapports",      Icon: FileText     },
-  { id: "team",        label: "Équipe",        Icon: Users        },
+  { id: "tasks",       label: "Tâches",       Icon: LayoutList  },
+  { id: "gantt",       label: "Gantt",         Icon: GanttChart  },
+  { id: "pert",        label: "PERT",          Icon: Network     },
+  { id: "projects",    label: "Projets",       Icon: FolderOpen  },
+  { id: "activities",  label: "Activités",     Icon: Tag         },
+  { id: "needs",       label: "Besoins",       Icon: Target      },
+  { id: "performance", label: "Performances",  Icon: BarChart2   },
+  { id: "reports",     label: "Rapports",      Icon: FileText    },
+  { id: "team",        label: "Équipe",        Icon: Users       },
 ];
 
 function notifMeta(type) {
@@ -66,11 +75,11 @@ export default function App() {
     show_overdue: false, show_critical: false, show_archived: false,
     search: "",
   });
-  const [diffCounts, setDiffCounts]     = useState({});
-  const [showBell, setShowBell]         = useState(false);
-  const [showNotifPanel, setShowNotifPanel] = useState(false);
-  const [confirmLogout, setConfirmLogout]   = useState(false);
-  const [showProfile, setShowProfile]       = useState(false);
+  const [diffCounts, setDiffCounts]           = useState({});
+  const [showBell, setShowBell]               = useState(false);
+  const [showNotifPanel, setShowNotifPanel]   = useState(false);
+  const [confirmLogout, setConfirmLogout]     = useState(false);
+  const [showProfile, setShowProfile]         = useState(false);
 
   const bellRef    = useRef(null);
   const profileRef = useRef(null);
@@ -147,7 +156,7 @@ export default function App() {
     );
   };
 
-  // ── Compteurs de difficultés (admin + chef uniquement) ───────────────────
+  // ── Compteurs difficultés (admin + chef) ─────────────────────────────────
   const canSeeNotifications = isAdmin || isChef;
 
   useEffect(() => {
@@ -189,7 +198,7 @@ export default function App() {
   );
 
   // ── Filtrage frontend ────────────────────────────────────────────────────
-  const today = new Date().toISOString().slice(0, 10);
+  const today    = new Date().toISOString().slice(0, 10);
   const filtered = tasks.filter((t) => {
     if (!filters.show_archived && t.is_archived) return false;
     if (filters.project  !== "all" && String(t.project_id) !== String(filters.project)) return false;
@@ -219,7 +228,9 @@ export default function App() {
 
   const critCount = tasks.filter((t) => pert.slack[t.id] === 0).length;
 
-  // ── Task CRUD ─────────────────────────────────────────────────────────────
+  // ── Task CRUD ────────────────────────────────────────────────────────────
+  // A-07 : onSaveTask ne ferme plus le modal — TaskModal le fait si succès.
+  // En cas d'erreur 403 (droits insuffisants), TaskModal affiche l'erreur inline.
   const onSaveTask = async (f) => {
     const payload = {
       ...f,
@@ -227,21 +238,22 @@ export default function App() {
       activity_id: f.activity_id ? Number(f.activity_id) : null,
     };
     if (modal.mode === "add") {
-      const t = await api.createTask(payload);
+      const t = await api.createTask(payload);   // lève une erreur si 403/400
       setTasks((prev) => [...prev, t]);
       await loadNotifications();
     } else {
       const t = await api.updateTask(f.id, payload);
       setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
     }
-    setModal(null);
+    setModal(null);   // fermeture uniquement en cas de succès
   };
 
   const onDeleteTask = async (id) => {
     await api.deleteTask(id);
-    setTasks((prev) => prev.filter((t) => t.id !== id).map((t) => ({
-      ...t, dependencies: (t.dependencies || []).filter((d) => d !== id)
-    })));
+    setTasks((prev) =>
+      prev.filter((t) => t.id !== id)
+          .map((t) => ({ ...t, dependencies: (t.dependencies || []).filter((d) => d !== id) }))
+    );
   };
 
   const onStatusChange = async (id, status) => {
@@ -252,85 +264,107 @@ export default function App() {
   const onArchiveTask   = async (id) => { const t = await api.archiveTask(id);   setTasks((prev) => prev.map((x) => x.id === t.id ? t : x)); };
   const onUnarchiveTask = async (id) => { const t = await api.unarchiveTask(id); setTasks((prev) => prev.map((x) => x.id === t.id ? t : x)); };
 
-  const onAddProject    = async (d)    => { const p = await api.createProject(d);         setProjects((prev) => [...prev, p]); };
-  const onUpdateProject = async (id,d) => { const p = await api.updateProject(id, d);     setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
-  const onDeleteProject = async (id)   => { await api.deleteProject(id);                  setProjects((prev) => prev.filter((p) => p.id !== id)); };
-  const onSetChef       = async (id,c) => { const p = await api.setProjectChef(id, c);    setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
+  // ── Project CRUD ─────────────────────────────────────────────────────────
+  const onAddProject    = async (d)      => { const p = await api.createProject(d);       setProjects((prev) => [...prev, p]); };
+  const onUpdateProject = async (id, d)  => { const p = await api.updateProject(id, d);   setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
+  const onDeleteProject = async (id)     => { await api.deleteProject(id);                 setProjects((prev) => prev.filter((p) => p.id !== id)); };
+  const onSetChef       = async (id, c)  => { const p = await api.setProjectChef(id, c);  setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
 
-  const onAddActivity    = async (d)    => { const a = await api.createActivity(d);        setActivities((prev) => [...prev, a]); };
-  const onUpdateActivity = async (id,d) => { const a = await api.updateActivity(id, d);   setActivities((prev) => prev.map((x) => x.id === id ? a : x)); };
-  const onDeleteActivity = async (id)   => { await api.deleteActivity(id);                 setActivities((prev) => prev.filter((a) => a.id !== id)); };
+  // ── Project members (A-07) ────────────────────────────────────────────────
+  // Chargement lazy — les membres d'un projet ne sont pas dans le state global.
+  const onGetProjectMembers    = (pid)          => api.getProjectMembers(pid);
+  const onAddProjectMember     = (pid, d)        => api.addProjectMember(pid, d);
+  const onUpdateProjectMember  = (pid, mid, d)   => api.updateProjectMember(pid, mid, d);
+  const onRemoveProjectMember  = (pid, mid)      => api.removeProjectMember(pid, mid);
 
-  const onAddMember     = async (d)      => { const m = await api.createMember(d);         setMembers((prev) => [...prev, m]); };
+  // ── Activity CRUD ─────────────────────────────────────────────────────────
+  const onAddActivity    = async (d)     => { const a = await api.createActivity(d);      setActivities((prev) => [...prev, a]); };
+  const onUpdateActivity = async (id, d) => { const a = await api.updateActivity(id, d);  setActivities((prev) => prev.map((x) => x.id === id ? a : x)); };
+  const onDeleteActivity = async (id)    => { await api.deleteActivity(id);                setActivities((prev) => prev.filter((a) => a.id !== id)); };
+
+  // ── Member CRUD ───────────────────────────────────────────────────────────
+  const onAddMember     = async (d)      => { const m = await api.createMember(d);        setMembers((prev) => [...prev, m]); };
   const onDeleteMember  = async (id)     => { await api.deleteMember(id);                  setMembers((prev) => prev.filter((m) => m.id !== id)); };
-  const onSetMemberRole = async (id, r)  => { const m = await api.setMemberRole(id, r);    setMembers((prev) => prev.map((x) => x.id === id ? { ...x, ...m } : x)); };
+  const onSetMemberRole = async (id, r)  => { const m = await api.setMemberRole(id, r);   setMembers((prev) => prev.map((x) => x.id === id ? { ...x, ...m } : x)); };
 
-  const onAddNeed    = async (d)    => { const n = await api.createNeed(d);        setNeeds((prev) => [...prev, n]); };
-  const onUpdateNeed = async (id,d) => { const n = await api.updateNeed(id, d);   setNeeds((prev) => prev.map((x) => x.id === id ? n : x)); };
-  const onDeleteNeed = async (id)   => { await api.deleteNeed(id);                 setNeeds((prev) => prev.filter((n) => n.id !== id)); };
+  // ── Need CRUD ─────────────────────────────────────────────────────────────
+  const onAddNeed    = async (d)     => { const n = await api.createNeed(d);       setNeeds((prev) => [...prev, n]); };
+  const onUpdateNeed = async (id, d) => { const n = await api.updateNeed(id, d);   setNeeds((prev) => prev.map((x) => x.id === id ? n : x)); };
+  const onDeleteNeed = async (id)    => { await api.deleteNeed(id);                 setNeeds((prev) => prev.filter((n) => n.id !== id)); };
 
-  const onAddNote    = async (d)    => { const n = await api.createNote(d);        setNotes((prev) => [...prev, n]); };
-  const onUpdateNote = async (id,d) => { const n = await api.updateNote(id, d);   setNotes((prev) => prev.map((x) => x.id === id ? n : x)); };
-  const onDeleteNote = async (id)   => { await api.deleteNote(id);                 setNotes((prev) => prev.filter((n) => n.id !== id)); };
+  // ── Note CRUD ─────────────────────────────────────────────────────────────
+  const onAddNote    = async (d)     => { const n = await api.createNote(d);       setNotes((prev) => [...prev, n]); };
+  const onUpdateNote = async (id, d) => { const n = await api.updateNote(id, d);   setNotes((prev) => prev.map((x) => x.id === id ? n : x)); };
+  const onDeleteNote = async (id)    => { await api.deleteNote(id);                 setNotes((prev) => prev.filter((n) => n.id !== id)); };
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{
-        background: "var(--bg-card)", borderBottom: "1px solid var(--border)",
-        padding: "0 20px", display: "flex", alignItems: "center",
-        justifyContent: "space-between", height: 52,
         position: "sticky", top: 0, zIndex: 100,
+        background: "var(--bg-card)", borderBottom: "1px solid var(--border)",
+        boxShadow: "var(--shadow)",
       }}>
-        <nav style={{ display: "flex", gap: 2, overflowX: "auto" }}>
-          {TABS.map(({ id, label, Icon }) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12,
-              fontWeight: tab === id ? 700 : 400,
-              background: tab === id ? "var(--accent-bg)" : "transparent",
-              color: tab === id ? "var(--accent)" : "var(--text-2)",
-              cursor: "pointer", whiteSpace: "nowrap",
-            }}>
-              <Icon size={13} /> {label}
-            </button>
-          ))}
-        </nav>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-3)" }}>
-            <span>{tasks.length} tâche{tasks.length !== 1 ? "s" : ""}</span>
-            {critCount > 0 && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--danger-bg)", color: "var(--danger)", fontWeight: 700, fontSize: 10, padding: "2px 7px", borderRadius: 20 }}>
-                {critCount} critique{critCount > 1 ? "s" : ""}
-              </span>
-            )}
-            {critCount === 0 && tasks.length > 0 && <span style={{ color: "var(--success)" }}>✓ OK</span>}
+        <div style={{
+          maxWidth: 1440, margin: "0 auto", padding: "0 20px",
+          display: "flex", alignItems: "center", gap: 8, height: 56,
+        }}>
+          {/* Logo */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 16, flexShrink: 0 }}>
+            <Zap size={20} color="var(--accent)" strokeWidth={2.5} />
+            <span style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", letterSpacing: "-.02em" }}>
+              AGT TaskFlow
+            </span>
           </div>
-          <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
-          {/* ── Cloche ── */}
-          <div ref={bellRef} style={{ position: "relative" }}>
-            <button onClick={() => setShowBell((v) => !v)} style={{
-              position: "relative",
-              background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
-              border: `1px solid ${unseenTotal > 0 ? "#fed7aa" : "var(--border)"}`,
-              borderRadius: 8, padding: "6px 9px", cursor: "pointer",
-              color: unseenTotal > 0 ? "#ea580c" : "var(--text-2)",
-              display: "flex", alignItems: "center",
-            }}>
-              <Bell size={14} />
+          {/* Navigation */}
+          <nav style={{ display: "flex", gap: 2, flex: 1, overflowX: "auto" }}>
+            {TABS.map(({ id, label, Icon }) => {
+              const active = tab === id;
+              return (
+                <button key={id} onClick={() => setTab(id)} style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "6px 10px", borderRadius: 8,
+                  border: "none", cursor: "pointer", whiteSpace: "nowrap",
+                  background: active ? "var(--accent-bg)" : "transparent",
+                  color: active ? "var(--accent)" : "var(--text-2)",
+                  fontWeight: active ? 700 : 400, fontSize: 13,
+                }}>
+                  <Icon size={14} strokeWidth={active ? 2.5 : 2} />
+                  {label}
+                  {id === "pert" && critCount > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 800, background: "#ef4444", color: "white", borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {critCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Cloche */}
+          <div ref={bellRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              onClick={() => setShowBell((v) => !v)}
+              style={{
+                position: "relative", width: 36, height: 36,
+                borderRadius: 10, border: `1px solid ${showBell ? "var(--accent)" : "var(--border)"}`,
+                background: showBell ? "var(--accent-bg)" : "transparent",
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                color: showBell ? "var(--accent)" : "var(--text-2)",
+              }}
+            >
+              <Bell size={16} />
               {unseenTotal > 0 && (
                 <span style={{
-                  position: "absolute", top: -3, right: -3,
-                  background: "var(--danger)", color: "white",
-                  borderRadius: "50%", minWidth: 15, height: 15,
-                  fontSize: 9, fontWeight: 700, lineHeight: "15px",
-                  textAlign: "center", padding: "0 1px",
-                  border: "1.5px solid var(--bg-card)",
+                  position: "absolute", top: -4, right: -4,
+                  fontSize: 9, fontWeight: 800, background: "#ef4444", color: "white",
+                  borderRadius: "50%", minWidth: 16, height: 16,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: "0 3px",
                 }}>
-                  {unseenTotal > 9 ? "9+" : unseenTotal}
+                  {unseenTotal > 99 ? "99+" : unseenTotal}
                 </span>
               )}
             </button>
@@ -339,84 +373,52 @@ export default function App() {
               <div style={{
                 position: "absolute", right: 0, top: "calc(100% + 8px)",
                 background: "var(--bg-card)", border: "1px solid var(--border)",
-                borderRadius: 12, boxShadow: "var(--shadow-md)",
-                minWidth: 300, maxWidth: 360, zIndex: 200, overflow: "hidden",
+                borderRadius: 14, boxShadow: "var(--shadow-md)", width: 320,
+                zIndex: 200, overflow: "hidden",
               }}>
-                {/* Difficultés — admin / chef */}
-                {canSeeNotifications && (
-                  <>
-                    <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-                      Signalements en cours
-                    </div>
-                    {Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).length === 0 ? (
-                      <div style={{ padding: "14px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>Aucun signalement non lu ✓</div>
-                    ) : (
-                      Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).map(([tid, count]) => {
-                        const task = tasks.find((t) => t.id === tid);
-                        return (
-                          <div key={tid} onClick={() => { markAsSeen(tid, count); setModal({ mode: "edit", task }); setShowBell(false); setTab("tasks"); }}
-                            style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{tid}</div>
-                              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{task?.description?.slice(0, 40)}…</div>
-                            </div>
-                            <span style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#ea580c" }}>
-                              {count} ⚠️
-                            </span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </>
-                )}
-
-                {/* Notifications backend */}
-                <div style={{
-                  padding: "12px 16px",
-                  borderTop: canSeeNotifications ? "1px solid var(--border)" : "none",
-                  borderBottom: notifications.length > 0 ? "1px solid var(--border)" : "none",
-                  fontSize: 12, fontWeight: 700, color: "var(--text)",
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
-                  <span>Notifications</span>
+                <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>Notifications</span>
                   {unreadNotifs.length > 0 && (
-                    <button onClick={handleMarkAllRead}
-                      style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                      Tout marquer comme lu
+                    <button onClick={handleMarkAllRead} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                      Tout lire
                     </button>
                   )}
                 </div>
 
-                {notifications.length === 0 ? (
-                  <div style={{ padding: "20px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>Aucune notification cette semaine</div>
+                {notifications.slice(0, 5).length === 0 ? (
+                  <div style={{ padding: "20px 16px", textAlign: "center", fontSize: 13, color: "var(--text-3)" }}>
+                    Aucune notification
+                  </div>
                 ) : (
-                  <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                    {notifications.slice(0, 5).map((n) => {
-                      const { icon, label } = notifMeta(n.type);
-                      const isNew = !n.read_at;
-                      return (
-                        <div key={n.id} onClick={() => handleNotifClick(n)}
-                          style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", background: isNew ? "#f0f9ff" : "transparent", display: "flex", gap: 10, alignItems: "flex-start" }}>
-                          <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text)" }}>{n.title}</span>
-                              {isNew && (
-                                <span style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 4, padding: "1px 6px", fontSize: 9, fontWeight: 700, color: "#2563eb", flexShrink: 0 }}>Nouveau</span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>{n.body}</div>
-                            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 3, opacity: 0.7 }}>
-                              {label} · {new Date(n.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                            </div>
+                  notifications.slice(0, 5).map((n) => {
+                    const { icon, label } = notifMeta(n.type);
+                    return (
+                      <div
+                        key={n.id}
+                        onClick={() => handleNotifClick(n)}
+                        style={{
+                          padding: "10px 16px", cursor: "pointer",
+                          background: n.read_at ? "transparent" : "var(--accent-bg)",
+                          borderBottom: "1px solid var(--border)",
+                          display: "flex", gap: 10, alignItems: "flex-start",
+                        }}
+                      >
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.body}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
+                            {new Date(n.created_at).toLocaleDateString("fr-FR")}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                        {!n.read_at && (
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", flexShrink: 0, marginTop: 4 }} />
+                        )}
+                      </div>
+                    );
+                  })
                 )}
 
-                {/* Voir toutes */}
                 <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)" }}>
                   <button
                     onClick={() => { setShowBell(false); setShowNotifPanel(true); }}
@@ -433,7 +435,7 @@ export default function App() {
             )}
           </div>
 
-          {/* ── Profil ── */}
+          {/* Profil */}
           <div ref={profileRef} style={{ position: "relative" }}>
             <button onClick={() => setShowProfile((v) => !v)} style={{
               display: "flex", alignItems: "center", gap: 8,
@@ -441,14 +443,26 @@ export default function App() {
               border: `1px solid ${showProfile ? "var(--accent)" : "transparent"}`,
               borderRadius: 10, padding: "5px 10px", cursor: "pointer",
             }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", flexShrink: 0 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: "50%", background: "var(--accent)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "white", flexShrink: 0,
+              }}>
                 <User size={14} />
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
                   {user?.name}
-                  {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
-                  {!isAdmin && user?.role === "chef_projet" && <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
+                  {isAdmin && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>
+                      ADMIN
+                    </span>
+                  )}
+                  {!isAdmin && user?.role === "chef_projet" && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>
+                      CHEF
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user?.email}</div>
               </div>
@@ -456,17 +470,32 @@ export default function App() {
             </button>
 
             {showProfile && (
-              <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, boxShadow: "var(--shadow-md)", minWidth: 260, zIndex: 200, overflow: "hidden" }}>
+              <div style={{
+                position: "absolute", right: 0, top: "calc(100% + 8px)",
+                background: "var(--bg-card)", border: "1px solid var(--border)",
+                borderRadius: 14, boxShadow: "var(--shadow-md)", minWidth: 260,
+                zIndex: 200, overflow: "hidden",
+              }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 14px" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: "50%", background: "var(--accent)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "white", fontSize: 18, fontWeight: 800, flexShrink: 0,
+                  }}>
                     {(user?.name || "?")[0].toUpperCase()}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
                       {user?.name}
-                      {isAdmin && <span style={{ fontSize: 9, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
+                      {isAdmin && (
+                        <span style={{ fontSize: 9, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>
+                          ADMIN
+                        </span>
+                      )}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {user?.email}
+                    </div>
                   </div>
                 </div>
                 <div style={{ height: 1, background: "var(--border)" }} />
@@ -488,14 +517,32 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Contenu ─────────────────────────────────────────────────────── */}
+      {/* ── Contenu ─────────────────────────────────────────────────────────── */}
       <div style={{ padding: 20, maxWidth: 1440, margin: "0 auto" }}>
         {tab === "tasks"       && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} onArchive={onArchiveTask} onUnarchive={onUnarchiveTask} onStatusChange={onStatusChange} isAdmin={isAdmin} currentUser={user} />}
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} isChef={isChef} />}
-        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} currentUser={user} />}
-        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
+
+        {tab === "projects"    && (
+          <ProjectsView
+            projects={projects}
+            members={members}
+            onAdd={onAddProject}
+            onUpdate={onUpdateProject}
+            onDelete={onDeleteProject}
+            onSetChef={onSetChef}
+            isAdmin={isAdmin}
+            isChef={isChef}
+            currentUser={user}
+            onGetProjectMembers={onGetProjectMembers}
+            onAddProjectMember={onAddProjectMember}
+            onUpdateProjectMember={onUpdateProjectMember}
+            onRemoveProjectMember={onRemoveProjectMember}
+          />
+        )}
+
+        {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} currentUser={user} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} user={user} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
@@ -503,16 +550,24 @@ export default function App() {
         {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
       </div>
 
-      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      {/* ── TaskModal ────────────────────────────────────────────────────────── */}
       {modal && (
         <TaskModal
-          mode={modal.mode} initial={modal.task} tasks={tasks} members={members}
-          projects={projects} activities={activities} onSave={onSaveTask}
-          onStatusChange={onStatusChange} onClose={() => setModal(null)}
-          isAdmin={isAdmin} currentUser={user}
+          mode={modal.mode}
+          initial={modal.task}
+          tasks={tasks}
+          members={members}
+          projects={projects}
+          activities={activities}
+          onSave={onSaveTask}
+          onStatusChange={onStatusChange}
+          onClose={() => setModal(null)}
+          isAdmin={isAdmin}
+          currentUser={user}
         />
       )}
 
+      {/* ── Confirm déconnexion ───────────────────────────────────────────────── */}
       {confirmLogout && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500 }} onClick={() => setConfirmLogout(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-card)", borderRadius: 14, padding: 24, width: 340, boxShadow: "var(--shadow-md)", border: "1px solid var(--border)" }}>
@@ -526,7 +581,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Panneau notifications ────────────────────────────────────────── */}
+      {/* ── Panneau notifications ─────────────────────────────────────────────── */}
       {showNotifPanel && (
         <NotificationsPanel
           notifications={notifications}

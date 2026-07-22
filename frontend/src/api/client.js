@@ -1,27 +1,23 @@
 // frontend/src/api/client.js
+// ⚠️  Fichier TRANSVERSAL — Poste A + Poste B
 //
-// A-04 — Bugfix gestion de session (D-07) :
-//   • Ajout d'un registre `onUnauthorized` : callback appelé chaque fois
-//     qu'une requête reçoit un 401 (token absent, invalide ou expiré).
-//   • App.jsx enregistre ce callback au montage pour déclencher logout()
-//     proprement dès qu'une session devient invalide, au lieu de laisser
-//     l'utilisateur bloqué sur un token périmé indéfiniment.
-//   • Aucune signature de fonction exportée n'a changé : tous les appels
-//     existants (getTasks, createTask, etc.) restent strictement identiques.
+// A-04 — setUnauthorizedHandler (intercepteur 401)
+// A-06 — getNotifications, markNotificationRead, markAllNotificationsRead
+// A-07 — getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember
 
 const BASE = "/api";
+const TOKEN_KEY = "agt_token";
 
-function getToken() {
-  return localStorage.getItem("agt_token");
+// ── Intercepteur 401 ─────────────────────────────────────────────────────────
+let _unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(fn) {
+  _unauthorizedHandler = fn;
 }
 
-// ── Registre du callback d'expiration de session ────────────────────────────
-// Simple event hook, sans dépendance à React : évite tout couplage circulaire
-// entre ce module et les hooks qui consomment l'API.
-let _onUnauthorized = null;
-
-export function setUnauthorizedHandler(handler) {
-  _onUnauthorized = handler;
+// ── Helper interne ───────────────────────────────────────────────────────────
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 async function req(method, path, body) {
@@ -34,123 +30,121 @@ async function req(method, path, body) {
     },
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
-  const res = await fetch(BASE + path, opts);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
 
-    // 401 : token absent, invalide ou expiré → la session n'est plus valide.
-    // On notifie le handler enregistré (déconnexion propre côté App) avant
-    // de propager l'erreur, pour que l'UI ne reste jamais bloquée en boucle
-    // sur des appels qui échoueront systématiquement.
-    if (res.status === 401 && _onUnauthorized) {
-      _onUnauthorized();
-    }
+  const res = await fetch(`${BASE}${path}`, opts);
 
-    throw new Error(err.error || `HTTP ${res.status}`);
+  if (res.status === 401) {
+    if (_unauthorizedHandler) _unauthorizedHandler();
+    throw new Error("Non autorisé");
   }
-  return res.json();
+
+  let data;
+  try { data = await res.json(); } catch { data = {}; }
+
+  if (!res.ok) {
+    throw new Error(data.error || `Erreur ${res.status}`);
+  }
+
+  return data;
 }
 
-// ── Tasks ───────────────────────────────────────────────────────────────────
-export const getTasks = (params = {}) => {
-  const qs = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== null && v !== undefined && v !== "" && v !== false) qs.set(k, v);
-  });
-  const query = qs.toString();
-  return req("GET", `/tasks/${query ? "?" + query : ""}`);
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export const loginUser    = (creds) => req("POST", "/auth/login",    creds);
+export const registerUser = (data)  => req("POST", "/auth/register", data);
+
+// ── Tâches ───────────────────────────────────────────────────────────────────
+
+export const getTasks    = (params = {}) => {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ""))
+  ).toString();
+  return req("GET", `/tasks/${qs ? "?" + qs : ""}`);
 };
-export const createTask = (t) => req("POST", "/tasks/", t);
-export const updateTask = (id, t) => req("PUT", `/tasks/${id}`, t);
-export const deleteTask = (id) => req("DELETE", `/tasks/${id}`);
-export const archiveTask = (id) => req("PATCH", `/tasks/${id}/archive`);
-export const unarchiveTask = (id) => req("PATCH", `/tasks/${id}/unarchive`);
+export const createTask   = (data)        => req("POST",  "/tasks/",             data);
+export const updateTask   = (id, data)    => req("PUT",   `/tasks/${id}`,         data);
+export const deleteTask   = (id)          => req("DELETE", `/tasks/${id}`);
+export const archiveTask  = (id)          => req("PATCH",  `/tasks/${id}/archive`);
+export const unarchiveTask = (id)         => req("PATCH",  `/tasks/${id}/unarchive`);
 
-// ── Projects ────────────────────────────────────────────────────────────────
-export const getProjects = () => req("GET", "/projects/");
-export const createProject = (p) => req("POST", "/projects/", p);
-export const updateProject = (id, p) => req("PUT", `/projects/${id}`, p);
-export const deleteProject = (id) => req("DELETE", `/projects/${id}`);
-export const setProjectChef = (id, chefId) =>
-  req("PUT", `/projects/${id}/chef`, { chef_id: chefId });
+// ── Projets ──────────────────────────────────────────────────────────────────
 
-// ── Activities ──────────────────────────────────────────────────────────────
-export const getActivities = (pid) =>
-  req("GET", `/activities/${pid ? `?project_id=${pid}` : ""}`);
-export const createActivity = (a) => req("POST", "/activities/", a);
-export const updateActivity = (id, a) => req("PUT", `/activities/${id}`, a);
-export const deleteActivity = (id) => req("DELETE", `/activities/${id}`);
+export const getProjects   = ()           => req("GET",    "/projects/");
+export const createProject = (data)       => req("POST",   "/projects/",          data);
+export const updateProject = (id, data)   => req("PUT",    `/projects/${id}`,     data);
+export const deleteProject = (id)         => req("DELETE",  `/projects/${id}`);
+export const setProjectChef = (id, data)  => req("PUT",    `/projects/${id}/chef`, data);
 
-// ── Members ─────────────────────────────────────────────────────────────────
-// ── Members ─────────────────────────────────────────────────────────────────
-export const getMembers = () => req("GET", "/members/");
-export const createMember = (m) => req("POST", "/members/", m);
-export const deleteMember = (id) => req("DELETE", `/members/${id}`);
-export const getPendingMembers = () => req("GET", "/members/pending");
-export const validateMember = (id, action) =>
-  req("PUT", `/members/${id}/validate`, { action });
-export const setMemberRole = (id, role) =>
-  req("PUT", `/members/${id}/role`, { role });
+// ── Membres d'un projet (A-07) ───────────────────────────────────────────────
 
-// ── Needs ───────────────────────────────────────────────────────────────────
-export const getNeeds = () => req("GET", "/needs/");
-export const getNeedTypes = () => req("GET", "/needs/types");
-export const createNeed = (n) => req("POST", "/needs/", n);
-export const updateNeed = (id, n) => req("PUT", `/needs/${id}`, n);
-export const deleteNeed = (id) => req("DELETE", `/needs/${id}`);
+export const getProjectMembers   = (pid)          => req("GET",    `/projects/${pid}/members`);
+export const addProjectMember    = (pid, data)     => req("POST",   `/projects/${pid}/members`,        data);
+export const updateProjectMember = (pid, mid, data)=> req("PUT",    `/projects/${pid}/members/${mid}`, data);
+export const removeProjectMember = (pid, mid)      => req("DELETE",  `/projects/${pid}/members/${mid}`);
 
-// ── Notes ───────────────────────────────────────────────────────────────────
-export const getNotes = () => req("GET", "/notes/");
-export const createNote = (n) => req("POST", "/notes/", n);
-export const updateNote = (id, n) => req("PUT", `/notes/${id}`, n);
-export const deleteNote = (id) => req("DELETE", `/notes/${id}`);
+// ── Activités ────────────────────────────────────────────────────────────────
 
-// ── Performance ─────────────────────────────────────────────────────────────
-export const getPerformance = (dateFrom, dateTo) => {
-  const params = new URLSearchParams();
-  if (dateFrom) params.set("date_from", dateFrom);
-  if (dateTo) params.set("date_to", dateTo);
-  const qs = params.toString();
+export const getActivities    = (params = {}) => {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ""))
+  ).toString();
+  return req("GET", `/activities/${qs ? "?" + qs : ""}`);
+};
+export const createActivity = (data)       => req("POST",   "/activities/",        data);
+export const updateActivity = (id, data)   => req("PUT",    `/activities/${id}`,   data);
+export const deleteActivity = (id)         => req("DELETE",  `/activities/${id}`);
+
+// ── Membres ──────────────────────────────────────────────────────────────────
+
+export const getMembers       = ()        => req("GET",    "/members/");
+export const createMember     = (data)    => req("POST",   "/members/",            data);
+export const deleteMember     = (id)      => req("DELETE",  `/members/${id}`);
+export const setMemberRole    = (id, role)=> req("PUT",    `/members/${id}/role`,  { role });
+export const getPendingMembers = ()       => req("GET",    "/members/pending");
+export const validateMember   = (id, action) => req("PUT", `/members/${id}/validate`, { action });
+
+// ── Besoins ──────────────────────────────────────────────────────────────────
+
+export const getNeeds    = ()           => req("GET",    "/needs/");
+export const createNeed  = (data)       => req("POST",   "/needs/",       data);
+export const updateNeed  = (id, data)   => req("PUT",    `/needs/${id}`,  data);
+export const deleteNeed  = (id)         => req("DELETE",  `/needs/${id}`);
+
+// ── Notes ────────────────────────────────────────────────────────────────────
+
+export const getNotes    = ()           => req("GET",    "/notes/");
+export const createNote  = (data)       => req("POST",   "/notes/",       data);
+export const updateNote  = (id, data)   => req("PUT",    `/notes/${id}`,  data);
+export const deleteNote  = (id)         => req("DELETE",  `/notes/${id}`);
+
+// ── Difficultés ──────────────────────────────────────────────────────────────
+
+export const getDifficulties  = (taskId) => req("GET",    `/difficulties/?task_id=${taskId}`);
+export const createDifficulty = (data)   => req("POST",   "/difficulties/",        data);
+export const deleteDifficulty = (id)     => req("DELETE",  `/difficulties/${id}`);
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+export const getNotifications       = ()   => req("GET",   "/notifications/");
+export const markNotificationRead   = (id) => req("PATCH", `/notifications/${id}/read`);
+export const markAllNotificationsRead = ()  => req("PATCH", "/notifications/read-all");
+
+// ── Rapports & Performance ───────────────────────────────────────────────────
+
+export const getPerformance = (params = {}) => {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ""))
+  ).toString();
   return req("GET", `/performance/${qs ? "?" + qs : ""}`);
 };
 
-// ── Auth (v2 Bloc 1) ────────────────────────────────────────────────────────
-export const loginUser = (email, password) =>
-  req("POST", "/auth/login", { email, password });
-export const getMe = () => req("GET", "/auth/me");
-export const logoutUser = () => req("POST", "/auth/logout");
+// ── Ordre journalier ─────────────────────────────────────────────────────────
 
-// ── Difficultés (v2 Bloc 1) ─────────────────────────────────────────────────
-export const getDifficulties = (taskId) =>
-  req("GET", `/difficulties/?task_id=${taskId}`);
-export const createDifficulty = (d) => req("POST", "/difficulties/", d);
-export const deleteDifficulty = (id) => req("DELETE", `/difficulties/${id}`);
-
-// ── Ordre du jour (v2 Bloc 2) ───────────────────────────────────────────────
-export const getDailyOrder = (memberId, date) =>
-  req("GET", `/daily-order/?member_id=${memberId}&date=${date}`);
-export const setDailyOrderBulk = (data) =>
-  req("POST", "/daily-order/bulk", data);
-export const deleteDailyOrder = (id) => req("DELETE", `/daily-order/${id}`);
-
-// ── Rapports (v2 Bloc 2) ────────────────────────────────────────────────────
-export const getReportData = (params = {}) => {
-  const qs = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== null && v !== undefined && v !== "") qs.set(k, v);
-  });
-  return req("GET", `/reports/data/?${qs.toString()}`);
+export const getDailyOrder    = (params = {}) => {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ""))
+  ).toString();
+  return req("GET", `/daily-order/${qs ? "?" + qs : ""}`);
 };
-
-export const getProjectReport = (params = {}) => {
-  const qs = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== null && v !== undefined && v !== "") qs.set(k, v);
-  });
-  return req("GET", `/reports/project/?${qs.toString()}`);
-};
-
-// ── Notifications (A-06) ─────────────────────────────────────────────────────
-export const getNotifications = () => req("GET", "/notifications/");
-export const markNotificationRead = (id) => req("PATCH", `/notifications/${id}/read`);
-export const markAllNotificationsRead = () => req("PATCH", "/notifications/read-all");
+export const saveDailyOrder   = (data)        => req("POST",  "/daily-order/",       data);
+export const deleteDailyOrder = (id)          => req("DELETE", `/daily-order/${id}`);

@@ -1,21 +1,14 @@
 // frontend/src/components/tasks/TaskModal.jsx
 //
-// A-04 — Refonte complète :
-//   • Suppression de MemberModal : un seul formulaire, toujours le même format.
-//   • AdminModal conservé à l'identique (vue directeur, inchangée).
-//   • Pour le formulaire principal, tous les champs sont TOUJOURS affichés ;
-//     ils sont `disabled` selon `task.permission` :
-//       "full"        → tous les champs actifs (owner ou chef du projet)
-//       "status_only" → seul le champ STATUT est actif (responsable)
-//       "read_only"   → tous les champs grisés (aucun droit)
-//   • Mode création ("add") : toujours en permission complète pour l'auteur ;
-//     le champ PROJET liste tous les projets (tout membre peut créer une
-//     tâche liée à n'importe quel projet, ou sans projet).
-//   • Difficultés : signalement réservé au responsable assigné (isAssigned),
-//     lecture toujours visible.
+// A-04 — Refonte complète (permission full/status_only/read_only)
+// A-07 — Affichage des erreurs backend inline :
+//   • saveError state capturé lors du onSave (403 projet, 400 responsable, etc.)
+//   • Bannière d'erreur rouge affichée dans le modal sans le fermer
+//   • Sélecteur de projet : filtre sur les projets où l'utilisateur peut créer
+//     (user_role === 'owner' || 'manager') en mode "add"
 
 import { useState, useEffect } from "react";
-import { X, Check, AlertTriangle, Plus, Trash2, Calendar, Clock, User, Flag, Network } from "lucide-react";
+import { X, Check, AlertTriangle, Plus, Trash2, Network } from "lucide-react";
 import { STATUSES } from "../../utils/pert";
 import * as api from "../../api/client";
 
@@ -53,8 +46,16 @@ const PRIORITY_BG    = { normale: "#f1f5f9", haute: "#fffbeb", critique: "#fef2f
 // ── Wrapper modal ────────────────────────────────────────────────────────────
 function ModalShell({ children, maxWidth = 520 }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: 20, width: "100%", maxWidth, maxHeight: "92vh", overflow: "auto", boxShadow: "var(--shadow-md)", border: "1px solid var(--border)" }}>
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(15,23,42,.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000, padding: 20,
+    }}>
+      <div style={{
+        background: "var(--bg-card)", borderRadius: 20, width: "100%",
+        maxWidth, maxHeight: "92vh", overflow: "auto",
+        boxShadow: "var(--shadow-md)", border: "1px solid var(--border)",
+      }}>
         {children}
       </div>
     </div>
@@ -66,30 +67,27 @@ function AdminModal({ task, onClose }) {
   const [diffCount, setDiffCount] = useState(0);
 
   useEffect(() => {
-    api.getDifficulties(task.id)
-      .then((d) => setDiffCount(d.length))
-      .catch(() => {});
+    api.getDifficulties(task.id).then((d) => setDiffCount(d.length)).catch(() => {});
   }, [task.id]);
 
-  const statusLabel    = STATUSES.find((s) => s.value === task.status)?.label || task.status;
-  const priorityLabel  = PRIORITIES.find((p) => p.value === task.priority)?.label || "Normale";
-  const priorityColor  = PRIORITY_COLOR[task.priority] || "#64748b";
-  const priorityBg     = PRIORITY_BG[task.priority]    || "#f1f5f9";
-  const statusColor    = STATUS_COLOR[task.status]      || "#64748b";
-  const statusBg       = STATUS_BG[task.status]         || "#f1f5f9";
+  const statusLabel   = STATUSES.find((s) => s.value === task.status)?.label || task.status;
+  const priorityLabel = PRIORITIES.find((p) => p.value === task.priority)?.label || "Normale";
+  const priorityColor = PRIORITY_COLOR[task.priority] || "#64748b";
+  const priorityBg    = PRIORITY_BG[task.priority]    || "#f1f5f9";
+  const statusColor   = STATUS_COLOR[task.status]     || "#64748b";
+  const statusBg      = STATUS_BG[task.status]        || "#f1f5f9";
 
-  const slack    = task.slack    ?? null;
-  const isCrit   = slack === 0;
-  const slackBg  = isCrit ? "#fef2f2" : slack !== null && slack <= 2 ? "#fffbeb" : "#f0fdf4";
+  const slack   = task.slack ?? null;
+  const isCrit  = slack === 0;
+  const slackBg = isCrit ? "#fef2f2" : slack !== null && slack <= 2 ? "#fffbeb" : "#f0fdf4";
   const slackClr = isCrit ? "#ef4444" : slack !== null && slack <= 2 ? "#f59e0b" : "#22c55e";
-  const pertBg   = isCrit ? "#fef2f2" : "var(--bg)";
-  const pertBdr  = isCrit ? "#fecaca" : "var(--border)";
-  const pertClr  = isCrit ? "#ef4444" : "var(--text-2)";
+  const pertBg  = isCrit ? "#fef2f2" : "var(--bg)";
+  const pertBdr = isCrit ? "#fecaca" : "var(--border)";
+  const pertClr = isCrit ? "#ef4444" : "var(--text-2)";
 
   const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR") : "—";
   const deadlineColor = task.due_date && task.due_date < new Date().toISOString().slice(0, 10)
     ? "#ef4444" : "var(--text)";
-
   const initials = (task.responsible || "?")[0].toUpperCase();
 
   const Info = ({ label, value, color = "var(--text)" }) => (
@@ -160,12 +158,7 @@ function AdminModal({ task, onClose }) {
             <Network size={11} /> CHEMIN CRITIQUE (PERT)
           </div>
           <div style={{ background: pertBg, border: `1px solid ${pertBdr}`, borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-            {[
-              { label: "ES", value: task.es ?? "—" },
-              { label: "EF", value: task.ef ?? "—" },
-              { label: "LS", value: task.ls ?? "—" },
-              { label: "LF", value: task.lf ?? "—" },
-            ].map(({ label, value }) => (
+            {[{ label: "ES", value: task.es ?? "—" }, { label: "EF", value: task.ef ?? "—" }, { label: "LS", value: task.ls ?? "—" }, { label: "LF", value: task.lf ?? "—" }].map(({ label, value }) => (
               <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 4, marginRight: 16 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: pertClr, opacity: .7 }}>{label}</span>
                 <span style={{ fontSize: 18, fontWeight: 800, color: pertClr }}>{value}</span>
@@ -201,36 +194,34 @@ function AdminModal({ task, onClose }) {
   );
 }
 
-// ── Modal principal — formulaire unique piloté par permission ───────────────
-//
-// permission attendue sur `initial.permission` (fournie par le backend) :
-//   "full" | "status_only" | "read_only"
-// En création (mode "add"), il n'y a pas encore de tâche : permission "full"
-// implicite pour l'auteur.
-//
-export function TaskModal({ mode, initial, tasks, members, projects, activities, onSave, onStatusChange, onClose, isAdmin, currentUser }) {
+// ── Modal principal ──────────────────────────────────────────────────────────
 
-  // ── Cas Admin — vue directeur (inchangé) ──────────────────────────────────
+export function TaskModal({
+  mode, initial, tasks, members, projects, activities,
+  onSave, onStatusChange, onClose, isAdmin, currentUser,
+}) {
   if (isAdmin && initial) {
     return <AdminModal task={initial} onClose={onClose} />;
   }
 
-  const permission = mode === "add" ? "full" : (initial?.permission || "read_only");
+  const permission   = mode === "add" ? "full" : (initial?.permission || "read_only");
   const isFull       = permission === "full";
   const isStatusOnly = permission === "status_only";
   const isReadOnly   = permission === "read_only";
-
-  const isAssigned = currentUser && initial?.responsible === currentUser.name;
+  const isAssigned   = currentUser && initial?.responsible === currentUser.name;
 
   const blank = {
     id: "", project_id: "", activity_id: "", description: "",
     duration: 1, dependencies: [], responsible: "", status: "todo",
     priority: "normale", start_date: "", end_date: "", due_date: "",
   };
-  const [f, setF]                       = useState(initial ? { ...blank, ...initial } : blank);
-  const [difficulties, setDifficulties] = useState([]);
-  const [newDiff, setNewDiff]           = useState("");
-  const [loadingDiff, setLoadingDiff]   = useState(false);
+
+  const [f,             setF]           = useState(initial ? { ...blank, ...initial } : blank);
+  const [difficulties,  setDifficulties] = useState([]);
+  const [newDiff,       setNewDiff]      = useState("");
+  const [loadingDiff,   setLoadingDiff]  = useState(false);
+  const [saveError,     setSaveError]    = useState(null);   // A-07 : erreur backend
+  const [saving,        setSaving]       = useState(false);
 
   useEffect(() => {
     if (mode === "add" && !f.id) {
@@ -245,15 +236,37 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
     }
   }, []);
 
-  const set    = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const set    = (k, v) => { setSaveError(null); setF((p) => ({ ...p, [k]: v })); };
   const togDep = (id) => {
     const d = f.dependencies || [];
     set("dependencies", d.includes(id) ? d.filter((x) => x !== id) : [...d, id]);
   };
 
-  const filteredActivities = activities.filter((a) => !f.project_id || a.project_id === Number(f.project_id));
+  // En mode "add", filtrer les projets sur lesquels l'utilisateur peut créer
+  const creatableProjects = mode === "add"
+    ? projects.filter((p) => p.user_role === "owner" || p.user_role === "manager")
+    : projects;
+
+  const filteredActivities = activities.filter(
+    (a) => !f.project_id || a.project_id === Number(f.project_id)
+  );
   const avail = tasks.filter((t) => t.id !== f.id);
   const valid = f.id.trim() && f.description.trim();
+
+  // ── Sauvegarde avec gestion d'erreur ────────────────────────────────────────
+  const handleSave = async () => {
+    if (!valid || saving) return;
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await onSave(f);
+      // Si onSave ne lève pas d'erreur, le modal est fermé par App.jsx
+    } catch (e) {
+      setSaveError(e.message || "Une erreur est survenue.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const addDifficulty = async () => {
     if (!newDiff.trim() || !initial?.id) return;
@@ -271,7 +284,6 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
     } catch (e) { alert(e.message); }
   };
 
-  // Style + disabled communs à chaque champ non-statut
   const fieldProps = (extra = {}) => ({
     style: isFull ? inp : inpDisabled,
     disabled: !isFull,
@@ -280,7 +292,6 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
 
   const handleStatusChange = (newStatus) => {
     if (isStatusOnly) {
-      // Responsable seul : sauvegarde immédiate du statut, pas de formulaire complet
       onStatusChange(f.id, newStatus);
       set("status", newStatus);
     } else {
@@ -294,15 +305,33 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
 
   return (
     <ModalShell maxWidth={600}>
-      <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "var(--text)" }}>{modalTitle}</h3>
-        <button onClick={onClose} style={{ background: "var(--bg)", border: "1px solid var(--border)", width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)" }}>
+      {/* Header */}
+      <div style={{
+        padding: "20px 28px 16px", borderBottom: "1px solid var(--border)",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "var(--text)" }}>
+          {modalTitle}
+        </h3>
+        <button onClick={onClose} style={{
+          background: "var(--bg)", border: "1px solid var(--border)",
+          width: 32, height: 32, borderRadius: "50%", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--text-2)",
+        }}>
           <X size={15} />
         </button>
       </div>
 
+      {/* Bannière de permission */}
       {(isStatusOnly || isReadOnly) && (
-        <div style={{ margin: "16px 28px 0", padding: "8px 12px", background: isStatusOnly ? "var(--accent-bg)" : "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--text-2)", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{
+          margin: "16px 28px 0", padding: "8px 12px",
+          background: isStatusOnly ? "var(--accent-bg)" : "var(--bg)",
+          border: "1px solid var(--border)", borderRadius: 8,
+          fontSize: 12, color: "var(--text-2)",
+          display: "flex", alignItems: "center", gap: 6,
+        }}>
           {isStatusOnly
             ? <>🔓 Vous êtes responsable de cette tâche : vous pouvez modifier son <b>statut</b> ci-dessous.</>
             : <>🔒 Lecture seule — vous n'avez pas de droits d'édition sur cette tâche.</>
@@ -310,6 +339,20 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
         </div>
       )}
 
+      {/* Bannière d'erreur backend (A-07) */}
+      {saveError && (
+        <div style={{
+          margin: "12px 28px 0", padding: "10px 14px",
+          background: "#fef2f2", border: "1px solid #fecaca",
+          borderRadius: 8, fontSize: 13, color: "#dc2626",
+          display: "flex", alignItems: "flex-start", gap: 8,
+        }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>{saveError}</span>
+        </div>
+      )}
+
+      {/* Formulaire */}
       <div style={{ padding: "20px 28px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div>
@@ -324,30 +367,47 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
             <label style={lbl}>PROJET</label>
             <select {...fieldProps({ value: f.project_id, onChange: (e) => { set("project_id", e.target.value); set("activity_id", ""); } })}>
               <option value="">— Aucun —</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {/* En mode add : uniquement les projets où l'user peut créer */}
+              {(mode === "add" ? creatableProjects : projects).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
             </select>
+            {/* Indication si l'utilisateur n'est propriétaire/manager d'aucun projet */}
+            {mode === "add" && creatableProjects.length === 0 && (
+              <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                Vous devez être propriétaire ou manager d'un projet pour y créer une tâche.
+              </div>
+            )}
           </div>
           <div>
             <label style={lbl}>ACTIVITÉ</label>
             <select {...fieldProps({ value: f.activity_id, onChange: (e) => set("activity_id", e.target.value) })}>
               <option value="">— Choisir —</option>
-              {filteredActivities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {filteredActivities.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
             </select>
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label style={lbl}>DESCRIPTION</label>
-            <textarea {...fieldProps({ style: { ...(isFull ? inp : inpDisabled), height: 72, resize: "vertical" }, value: f.description, onChange: (e) => set("description", e.target.value), placeholder: "Décrivez la tâche…" })} />
+            <textarea {...fieldProps({
+              style: { ...(isFull ? inp : inpDisabled), height: 72, resize: "vertical" },
+              value: f.description,
+              onChange: (e) => set("description", e.target.value),
+              placeholder: "Décrivez la tâche…",
+            })} />
           </div>
           <div>
             <label style={lbl}>RESPONSABLE</label>
             <select {...fieldProps({ value: f.responsible, onChange: (e) => set("responsible", e.target.value) })}>
               <option value="">— Aucun —</option>
-              {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+              {members.map((m) => (
+                <option key={m.id} value={m.name}>{m.name}</option>
+              ))}
             </select>
           </div>
           <div>
             <label style={lbl}>STATUT</label>
-            {/* Seul champ actif en mode "status_only" */}
             <select
               value={f.status}
               onChange={(e) => handleStatusChange(e.target.value)}
@@ -394,7 +454,8 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
                         fontSize: 12, fontWeight: sel ? 700 : 400,
                         cursor: isFull ? "pointer" : "not-allowed",
                         opacity: isFull ? 1 : 0.65,
-                      }}>
+                      }}
+                    >
                       {t.id}
                     </button>
                   );
@@ -404,20 +465,34 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
           )}
         </div>
 
-        {/* Difficultés (mode édition uniquement) */}
+        {/* Section difficultés (mode édition uniquement) */}
         {mode === "edit" && (
           <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <AlertTriangle size={15} color="#f59e0b" />
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Difficultés signalées</span>
-              <span style={{ fontSize: 11, color: "var(--text-3)", background: "var(--bg)", padding: "1px 8px", borderRadius: 10, border: "1px solid var(--border)" }}>{difficulties.length}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+                Difficultés signalées
+              </span>
+              <span style={{ fontSize: 11, color: "var(--text-3)", background: "var(--bg)", padding: "1px 8px", borderRadius: 10, border: "1px solid var(--border)" }}>
+                {difficulties.length}
+              </span>
             </div>
 
-            {/* Signaler : réservé au responsable assigné, quel que soit son niveau de permission */}
             {isAssigned ? (
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <input style={{ ...inp, flex: 1 }} value={newDiff} onChange={(e) => setNewDiff(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addDifficulty()} placeholder="Décrire le blocage rencontré…" />
-                <button onClick={addDifficulty} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "0 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13, whiteSpace: "nowrap" }}>
+                <input
+                  style={{ ...inp, flex: 1 }}
+                  value={newDiff}
+                  onChange={(e) => setNewDiff(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addDifficulty()}
+                  placeholder="Décrire le blocage rencontré…"
+                />
+                <button onClick={addDifficulty} style={{
+                  background: "var(--accent)", color: "white",
+                  border: "none", borderRadius: 8, padding: "0 14px",
+                  cursor: "pointer", display: "flex", alignItems: "center",
+                  gap: 5, fontWeight: 700, fontSize: 13, whiteSpace: "nowrap",
+                }}>
                   <Plus size={13} /> Signaler
                 </button>
               </div>
@@ -428,12 +503,22 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
             )}
 
             {loadingDiff && <div style={{ fontSize: 12, color: "var(--text-3)" }}>Chargement…</div>}
-            {!loadingDiff && difficulties.length === 0 && <div style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic" }}>Aucune difficulté signalée</div>}
+            {!loadingDiff && difficulties.length === 0 && (
+              <div style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic" }}>
+                Aucune difficulté signalée
+              </div>
+            )}
             {difficulties.map((d) => (
-              <div key={d.id} style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 12px", marginBottom: 8, display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <div key={d.id} style={{
+                background: "#fffbeb", border: "1px solid #fde68a",
+                borderRadius: 8, padding: "10px 12px", marginBottom: 8,
+                display: "flex", gap: 10, alignItems: "flex-start",
+              }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 4 }}>{d.content}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>{d.member_name} · {new Date(d.created_at).toLocaleDateString("fr-FR")}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                    {d.member_name} · {new Date(d.created_at).toLocaleDateString("fr-FR")}
+                  </div>
                 </div>
                 {String(d.member_id) === String(currentUser?.id) && (
                   <button onClick={() => deleteDifficulty(d.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: 4 }}>
@@ -446,16 +531,30 @@ export function TaskModal({ mode, initial, tasks, members, projects, activities,
         )}
       </div>
 
+      {/* Footer */}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "0 28px 20px" }}>
-        <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text-2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+        <button onClick={onClose} style={{
+          padding: "9px 18px", borderRadius: 10,
+          border: "1px solid var(--border)", background: "var(--bg)",
+          color: "var(--text-2)", cursor: "pointer", fontSize: 13, fontWeight: 600,
+        }}>
           {isFull ? "Annuler" : "Fermer"}
         </button>
-        {/* Bouton Enregistrer : uniquement affiché en permission complète.
-            En "status_only", le select statut sauvegarde déjà immédiatement
-            (handleStatusChange → onStatusChange), donc pas de bouton nécessaire. */}
         {isFull && (
-          <button onClick={() => valid && onSave(f)} disabled={!valid} style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: valid ? "var(--accent)" : "var(--bg)", color: valid ? "white" : "var(--text-3)", cursor: valid ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-            <Check size={14} /> {mode === "add" ? "Créer" : "Enregistrer"}
+          <button
+            onClick={handleSave}
+            disabled={!valid || saving}
+            style={{
+              padding: "9px 18px", borderRadius: 10, border: "none",
+              background: valid && !saving ? "var(--accent)" : "var(--bg)",
+              color: valid && !saving ? "white" : "var(--text-3)",
+              cursor: valid && !saving ? "pointer" : "not-allowed",
+              fontSize: 13, fontWeight: 700,
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            <Check size={14} />
+            {saving ? "Enregistrement…" : mode === "add" ? "Créer" : "Enregistrer"}
           </button>
         )}
       </div>

@@ -80,6 +80,7 @@ function StatusDot({ active }) {
 export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleActive, isAdmin, currentUser }) {
   const [pending,   setPending]   = useState([]);
   const [suspended, setSuspended] = useState([]);
+  const [deleted,   setDeleted]   = useState([]);
   const [busyId,    setBusyId]    = useState(null);
   const [err,       setErr]       = useState(null);
   const [confirm,   setConfirm]   = useState(null);
@@ -98,9 +99,16 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
     catch (e) { /* silencieux */ }
   };
 
+  const loadDeleted = async () => {
+    if (!isAdmin) return;
+    try { setDeleted(await api.getDeletedMembers()); }
+    catch (e) { /* silencieux */ }
+  };
+
   useEffect(() => {
     loadPending();
     loadSuspended();
+    loadDeleted();
   }, [isAdmin]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -140,6 +148,9 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
       onConfirm:    () => withBusy(member.id, async () => {
         await onDelete(member.id);
         setSuspended((prev) => prev.filter((m) => m.id !== member.id));
+        // Ajouter dans la section supprimés avec la date courante
+        const deletedMember = { ...member, deleted_at: new Date().toISOString() };
+        setDeleted((prev) => [deletedMember, ...prev]);
       }),
     });
   };
@@ -258,6 +269,61 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
                 >
                   <X size={13} />
                 </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Comptes supprimés ─────────────────────────────────────────────── */}
+      {isAdmin && deleted.length > 0 && (
+        <div style={{
+          background: "var(--bg-card)", borderRadius: "var(--radius-lg)",
+          border: "1px solid var(--border)", overflow: "hidden",
+          boxShadow: "var(--shadow)", marginBottom: 20,
+        }}>
+          <div style={sectionHeader("var(--bg)", "var(--border)", "var(--text-3)")}>
+            COMPTES SUPPRIMÉS ({deleted.length})
+          </div>
+          {deleted.map((m) => (
+            <div key={m.id} style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 16px", borderBottom: "1px solid var(--border)",
+              opacity: 0.6,
+            }}>
+              {/* Avatar grisé */}
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: "#94a3b8",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "white", fontWeight: 800, fontSize: 16, flexShrink: 0,
+              }}>
+                {(m.name || "?")[0].toUpperCase()}
+              </div>
+
+              {/* Infos */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontWeight: 600, fontSize: 14, color: "var(--text-2)",
+                  textDecoration: "line-through",
+                }}>
+                  {m.name}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {m.email}
+                </div>
+              </div>
+
+              {/* Date de suppression */}
+              <div style={{ flexShrink: 0, textAlign: "right" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 2 }}>
+                  SUPPRIMÉ LE
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-3)" }}>
+                  {new Date(m.deleted_at).toLocaleDateString("fr-FR", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                  })}
+                </div>
               </div>
             </div>
           ))}

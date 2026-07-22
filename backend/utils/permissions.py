@@ -172,15 +172,22 @@ def validate_task_creation(conn, current_user, data):
     Valide les permissions pour la création d'une tâche.
     Retourne (ok: bool, error_msg: str | None, http_code: int | None).
 
-    Vérifications si project_id est fourni :
+    Vérifications :
+        0. project_id est obligatoire (A-08 : toute tâche doit appartenir à un projet)
         1. Le projet existe
         2. Le créateur est membre du projet
         3. Le créateur est owner ou manager
         4. Si responsible fourni : il est membre du projet
     """
     project_id = data.get("project_id")
+
+    # 0. Tâche sans projet : refusée
     if not project_id:
-        return True, None, None
+        return (
+            False,
+            "Une tâche doit être rattachée à un projet.",
+            400,
+        )
 
     # 1. Le projet existe
     project = conn.execute(

@@ -1,19 +1,9 @@
 # backend/routes/project_members.py
 #
-# A-07 — CRUD des membres d'un projet (table project_members).
-# Enregistré dans app.py avec url_prefix="/api/projects".
-#
-# Endpoints :
-#   GET    /api/projects/<id>/members          → liste (membres du projet + admin)
-#   POST   /api/projects/<id>/members          → ajouter un membre (owner uniquement)
-#   PUT    /api/projects/<id>/members/<mid>    → changer le rôle (owner uniquement)
-#   DELETE /api/projects/<id>/members/<mid>    → retirer un membre (owner uniquement)
-#
-# Contraintes :
-#   - L'owner ne peut pas modifier son propre rôle ni se retirer
-#   - Le rôle 'owner' ne peut pas être attribué via ces endpoints
-#     (il est géré par create_project et set_project_chef)
-#   - Un membre déjà présent ne peut pas être re-ajouté (409)
+# A-07 — CRUD membres d'un projet
+# A-08 — Soft delete : GET /<pid>/members inclut les membres supprimés (deleted_at)
+#         en les ordonnant en dernier pour conserver la traçabilité du projet.
+#         POST /<pid>/members rejette un membre avec deleted_at IS NOT NULL.
 
 from flask import Blueprint, request, jsonify
 from database import get_db
@@ -22,7 +12,6 @@ from utils.permissions import get_project_role, is_project_member
 
 project_members_bp = Blueprint("project_members", __name__)
 
-# ── Constantes messages ──────────────────────────────────────────────────────
 _PROJECT_NOT_FOUND = "Projet introuvable."
 _MEMBER_NOT_FOUND  = "Membre introuvable."
 _NOT_OWNER         = "Seul le propriétaire du projet peut gérer l'équipe."
@@ -33,16 +22,11 @@ _VALID_ROLES       = ("manager", "contributor")
 
 
 def _check_project(conn, pid):
-    """Vérifie que le projet existe. Retourne True/False."""
     row = conn.execute("SELECT id FROM projects WHERE id = ?", (pid,)).fetchone()
     return row is not None
 
 
 def _require_owner(conn, current_user, pid):
-    """
-    Retourne None si l'utilisateur est owner, sinon retourne la réponse d'erreur.
-    Permet le pattern : `err = _require_owner(...); if err: return err`
-    """
     role = get_project_role(conn, current_user["id"], pid)
     if role != "owner":
         return jsonify({"error": _NOT_OWNER}), 403
@@ -50,10 +34,9 @@ def _require_owner(conn, current_user, pid):
 
 
 def _fetch_member_row(conn, pid, mid):
-    """Retourne la ligne project_members enrichie avec les infos du membre."""
     return conn.execute("""
         SELECT pm.member_id, pm.role, pm.joined_at,
-               m.name, m.color, m.email
+               m.name, m.color, m.email, m.deleted_at
         FROM project_members pm
         JOIN members m ON pm.member_id = m.id
         WHERE pm.project_id = ? AND pm.member_id = ?
@@ -61,17 +44,14 @@ def _fetch_member_row(conn, pid, mid):
 
 
 # ── GET /api/projects/<id>/members ──────────────────────────────────────────
+# Retourne TOUS les membres du projet, y compris les supprimés (soft delete).
+# Les supprimés apparaissent en dernier, marqués avec deleted_at.
+# Cela permet de consulter l'historique complet de l'équipe.
 
 @project_members_bp.route("/<int:pid>/members", methods=["GET"])
 @require_auth
 def list_project_members(pid, current_user):
-    """
-    Liste les membres du projet avec leurs rôles.
-    Accessible à tous les membres du projet et aux admins.
-    Ordre : owner → managers → contributors (alphabétique dans chaque groupe).
-    """
     conn = get_db()
-
     if not _check_project(conn, pid):
         conn.close()
         return jsonify({"error": _PROJECT_NOT_FOUND}), 404
@@ -82,11 +62,12 @@ def list_project_members(pid, current_user):
 
     rows = conn.execute("""
         SELECT pm.member_id, pm.role, pm.joined_at,
-               m.name, m.color, m.email
+               m.name, m.color, m.email, m.deleted_at
         FROM project_members pm
         JOIN members m ON pm.member_id = m.id
         WHERE pm.project_id = ?
         ORDER BY
+            CASE WHEN m.deleted_at IS NOT NULL THEN 1 ELSE 0 END,
             CASE pm.role
                 WHEN 'owner'       THEN 0
                 WHEN 'manager'     THEN 1
@@ -105,14 +86,7 @@ def list_project_members(pid, current_user):
 @project_members_bp.route("/<int:pid>/members", methods=["POST"])
 @require_auth
 def add_project_member(pid, current_user):
-    """
-    Ajoute un membre au projet avec le rôle spécifié (défaut : contributor).
-    Réservé à l'owner du projet.
-
-    Body : { "member_id": int, "role": "manager" | "contributor" }
-    """
     conn = get_db()
-
     if not _check_project(conn, pid):
         conn.close()
         return jsonify({"error": _PROJECT_NOT_FOUND}), 404
@@ -132,16 +106,20 @@ def add_project_member(pid, current_user):
 
     if role not in _VALID_ROLES:
         conn.close()
-        return jsonify({
-            "error": f"Rôle invalide. Valeurs acceptées : {', '.join(_VALID_ROLES)}"
-        }), 400
+        return jsonify({"error": f"Rôle invalide. Valeurs acceptées : {', '.join(_VALID_ROLES)}"}), 400
 
     member = conn.execute(
-        "SELECT id, name, is_active, is_admin FROM members WHERE id = ?", (member_id,)
+        "SELECT id, name, is_active, is_admin, deleted_at FROM members WHERE id = ?",
+        (member_id,)
     ).fetchone()
     if not member:
         conn.close()
         return jsonify({"error": _MEMBER_NOT_FOUND}), 404
+
+    # Refuser l'ajout d'un membre supprimé (soft delete)
+    if member["deleted_at"] is not None:
+        conn.close()
+        return jsonify({"error": "Ce compte a été supprimé et ne peut plus être ajouté à un projet."}), 403
 
     if not member["is_active"]:
         conn.close()
@@ -171,14 +149,7 @@ def add_project_member(pid, current_user):
 @project_members_bp.route("/<int:pid>/members/<int:mid>", methods=["PUT"])
 @require_auth
 def update_project_member_role(pid, mid, current_user):
-    """
-    Change le rôle d'un membre du projet.
-    Réservé à l'owner. Ne peut pas modifier le rôle de l'owner lui-même.
-
-    Body : { "role": "manager" | "contributor" }
-    """
     conn = get_db()
-
     if not _check_project(conn, pid):
         conn.close()
         return jsonify({"error": _PROJECT_NOT_FOUND}), 404
@@ -188,7 +159,6 @@ def update_project_member_role(pid, mid, current_user):
         conn.close()
         return err
 
-    # L'owner ne peut pas modifier son propre rôle
     if mid == current_user["id"]:
         conn.close()
         return jsonify({"error": _CANT_SELF}), 403
@@ -198,19 +168,15 @@ def update_project_member_role(pid, mid, current_user):
 
     if role not in _VALID_ROLES:
         conn.close()
-        return jsonify({
-            "error": f"Rôle invalide. Valeurs acceptées : {', '.join(_VALID_ROLES)}"
-        }), 400
+        return jsonify({"error": f"Rôle invalide. Valeurs acceptées : {', '.join(_VALID_ROLES)}"}), 400
 
     existing = conn.execute(
         "SELECT role FROM project_members WHERE project_id = ? AND member_id = ?",
         (pid, mid)
     ).fetchone()
-
     if not existing:
         conn.close()
         return jsonify({"error": "Ce membre ne fait pas partie du projet."}), 404
-
     if existing["role"] == "owner":
         conn.close()
         return jsonify({"error": _CANT_CHANGE_OWNER}), 403
@@ -220,7 +186,6 @@ def update_project_member_role(pid, mid, current_user):
         (role, pid, mid)
     )
     conn.commit()
-
     row = _fetch_member_row(conn, pid, mid)
     conn.close()
     return jsonify(dict(row))
@@ -231,12 +196,7 @@ def update_project_member_role(pid, mid, current_user):
 @project_members_bp.route("/<int:pid>/members/<int:mid>", methods=["DELETE"])
 @require_auth
 def remove_project_member(pid, mid, current_user):
-    """
-    Retire un membre du projet.
-    Réservé à l'owner. L'owner ne peut pas se retirer lui-même.
-    """
     conn = get_db()
-
     if not _check_project(conn, pid):
         conn.close()
         return jsonify({"error": _PROJECT_NOT_FOUND}), 404
@@ -254,7 +214,6 @@ def remove_project_member(pid, mid, current_user):
         "SELECT role FROM project_members WHERE project_id = ? AND member_id = ?",
         (pid, mid)
     ).fetchone()
-
     if not existing:
         conn.close()
         return jsonify({"error": "Ce membre ne fait pas partie du projet."}), 404

@@ -102,6 +102,7 @@ export const deleteMember        = (id)         => req("DELETE",  `/members/${id
 export const setMemberRole       = (id, role)   => req("PUT",    `/members/${id}/role`,        { role });
 export const getPendingMembers   = ()           => req("GET",    "/members/pending");
 export const getSuspendedMembers = ()           => req("GET",    "/members/suspended");
+export const getDeletedMembers   = ()           => req("GET",    "/members/deleted");
 export const validateMember      = (id, action) => req("PUT",    `/members/${id}/validate`,    { action });
 export const toggleMemberActive  = (id)         => req("PUT",    `/members/${id}/toggle-active`);
 

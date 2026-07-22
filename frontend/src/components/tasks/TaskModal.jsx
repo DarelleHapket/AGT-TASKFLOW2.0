@@ -251,7 +251,7 @@ export function TaskModal({
     (a) => !f.project_id || a.project_id === Number(f.project_id)
   );
   const avail = tasks.filter((t) => t.id !== f.id);
-  const valid = f.id.trim() && f.description.trim();
+  const valid = f.id.trim() && f.description.trim() && (mode !== "add" || !!f.project_id);
 
   // ── Sauvegarde avec gestion d'erreur ────────────────────────────────────────
   const handleSave = async () => {
@@ -364,18 +364,27 @@ export function TaskModal({
             <input {...fieldProps({ type: "number", min: 1, value: f.duration, onChange: (e) => set("duration", Math.max(1, parseInt(e.target.value) || 1)) })} />
           </div>
           <div>
-            <label style={lbl}>PROJET</label>
+            <label style={lbl}>PROJET {mode === "add" && <span style={{ color: "#ef4444" }}>*</span>}</label>
             <select {...fieldProps({ value: f.project_id, onChange: (e) => { set("project_id", e.target.value); set("activity_id", ""); } })}>
-              <option value="">— Aucun —</option>
-              {/* En mode add : uniquement les projets où l'user peut créer */}
-              {(mode === "add" ? creatableProjects : projects).map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {mode === "add" ? (
+                <>
+                  <option value="" disabled>-- Sélectionner un projet (obligatoire) --</option>
+                  {creatableProjects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <option value="">-- Aucun --</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </>
+              )}
             </select>
-            {/* Indication si l'utilisateur n'est propriétaire/manager d'aucun projet */}
             {mode === "add" && creatableProjects.length === 0 && (
               <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
-                Vous devez être propriétaire ou manager d'un projet pour y créer une tâche.
+                Aucun projet disponible. Créez d'abord un projet ou demandez à en rejoindre un en tant que manager.
               </div>
             )}
           </div>

@@ -164,8 +164,18 @@ def init_db():
         ("activities", "owner_id", "ALTER TABLE activities ADD COLUMN owner_id INTEGER DEFAULT NULL REFERENCES members(id)"),
     ]
 
-    # Blocs 1-3 + 5 : appliqués avant la création des nouvelles tables
-    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b5:
+    # ── Migrations v2 Bloc 7 (A-08) — Soft delete membres ───────────────────
+    # Remplace la suppression physique pour conserver la traçabilité dans
+    # project_members et dans l'historique des tâches/activités.
+    #   deleted_at IS NULL  → membre actif ou suspendu
+    #   deleted_at NOT NULL → compte supprimé (archive, plus jamais connecté)
+
+    migrations_b7 = [
+        ("members", "deleted_at", "ALTER TABLE members ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL"),
+    ]
+
+    # Blocs 1-3 + 5 + 7 : appliqués avant la création des nouvelles tables
+    for table, column, sql in migrations_b1 + migrations_b2 + migrations_b3 + migrations_b5 + migrations_b7:
         try:
             c.execute(sql)
         except Exception:

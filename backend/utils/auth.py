@@ -1,4 +1,9 @@
 # backend/utils/auth.py
+#
+# A-08 — Soft delete : get_current_user vérifie deleted_at IS NULL.
+#         Un membre supprimé (soft) ne peut plus se connecter même si son
+#         token JWT est encore valide.
+
 import jwt
 import os
 from functools import wraps
@@ -26,7 +31,13 @@ def decode_token(token: str) -> dict:
 
 
 def get_current_user():
-    """Extrait et retourne le membre connecté depuis le token JWT."""
+    """
+    Extrait et retourne le membre connecté depuis le token JWT.
+    Rejette :
+      - token manquant / expiré / invalide
+      - membre inactif (is_active = 0)
+      - membre supprimé en soft delete (deleted_at IS NOT NULL)
+    """
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None, "Token manquant"
@@ -36,11 +47,12 @@ def get_current_user():
         member_id = payload.get("member_id")
         conn = get_db()
         row = conn.execute(
-            "SELECT * FROM members WHERE id=? AND is_active=1", (member_id,)
+            "SELECT * FROM members WHERE id = ? AND is_active = 1 AND deleted_at IS NULL",
+            (member_id,)
         ).fetchone()
         conn.close()
         if not row:
-            return None, "Membre introuvable ou inactif"
+            return None, "Membre introuvable, inactif ou supprimé"
         return dict(row), None
     except jwt.ExpiredSignatureError:
         return None, "Token expiré"
@@ -86,7 +98,6 @@ def require_role(*roles):
             if error:
                 return jsonify({"error": error}), 401
             user_role = user.get("role") or ("admin" if user.get("is_admin") else "membre")
-            # L'admin a toujours accès, quels que soient les rôles exigés
             if user_role == "admin" or user_role in roles:
                 return f(*args, current_user=user, **kwargs)
             return jsonify({"error": "Accès non autorisé pour votre rôle"}), 403

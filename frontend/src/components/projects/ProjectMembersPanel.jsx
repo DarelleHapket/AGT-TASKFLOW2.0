@@ -77,7 +77,7 @@ export function ProjectMembersPanel({
   // Membres non encore dans le projet (pour le sélecteur d'ajout)
   const memberIds = new Set((members || []).map((m) => m.member_id));
   const availableToAdd = allMembers.filter(
-    (m) => !memberIds.has(m.id) && m.is_active !== 0
+    (m) => !memberIds.has(m.id) && m.is_active !== 0 && !m.deleted_at
   );
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -167,7 +167,9 @@ export function ProjectMembersPanel({
             <div key={m.member_id} style={{
               display: "flex", alignItems: "center", gap: 10,
               padding: "8px 12px", borderRadius: 8,
-              background: "var(--bg-card)", border: "1px solid var(--border)",
+              background: m.deleted_at ? "var(--bg)" : "var(--bg-card)",
+              border: "1px solid var(--border)",
+              opacity: m.deleted_at ? 0.55 : 1,
             }}>
               {/* Avatar */}
               <div style={{
@@ -193,7 +195,17 @@ export function ProjectMembersPanel({
                 display: "flex", alignItems: "center", gap: 8,
                 flexShrink: 0, marginLeft: "auto",
               }}>
-                {isOwner && m.role !== "owner" ? (
+                {/* Membre supprimé (soft delete) — lecture seule */}
+                {m.deleted_at ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: ".05em",
+                    padding: "2px 8px", borderRadius: 5,
+                    background: "#f1f5f9", color: "#94a3b8",
+                    border: "1px solid #e2e8f0",
+                  }}>
+                    SUPPRIMÉ
+                  </span>
+                ) : isOwner && m.role !== "owner" ? (
                   <select
                     value={m.role}
                     onChange={(e) => handleRoleChange(m.member_id, e.target.value)}
@@ -212,7 +224,8 @@ export function ProjectMembersPanel({
                   <RoleBadge role={m.role} />
                 )}
 
-                {isOwner && m.role !== "owner" && (
+                {/* Bouton Retirer — uniquement sur les membres actifs */}
+                {isOwner && m.role !== "owner" && !m.deleted_at && (
                   <button
                     onClick={() => handleRemove(m.member_id, m.name)}
                     style={{

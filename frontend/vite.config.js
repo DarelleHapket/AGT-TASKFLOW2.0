@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "http://backend:5000", // port interne Docker inchangé
+        target: process.env.VITE_API_URL || "http://127.0.0.1:5000", // port interne Docker inchangé
         changeOrigin: true,
       },
     },

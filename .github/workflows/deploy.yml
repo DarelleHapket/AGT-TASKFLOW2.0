@@ -1,4 +1,4 @@
-name: Deploy AGT-Taskflow (Josué)
+name: CI/CD Pipeline - AGT-Taskflow (Josué)
 
 # Déclencher uniquement sur push vers la branche deploy/josue
 on:
@@ -7,13 +7,51 @@ on:
       - deploy/josue
 
 jobs:
+  # ==========================================
+  # 🧪 JOB 1 : CONTINUOUS INTEGRATION (CI)
+  # ==========================================
+  ci-checks:
+    name: 🧪 CI - Syntax & Build Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📋 Checkout code
+        uses: actions/checkout@v4
+
+      # --- Verification Backend Python / Flask ---
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 🔍 Check Python Syntax
+        run: |
+          cd backend
+          python -m py_compile app.py
+
+      # --- Verification Frontend React / Node ---
+      - name: ⚡ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🏗️ Test Frontend Build
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+  # ==========================================
+  # 🚀 JOB 2 : CONTINUOUS DEPLOYMENT (CD)
+  # ==========================================
   deploy:
     name: Deploy AGT-Taskflow Production
+    needs: ci-checks # ⚠️ Ne s'exécute QUE SI le job ci-checks est au vert !
     runs-on: ubuntu-latest
 
     steps:
       # Étape 1 : Récupérer le code de la CI
-      - name:  Checkout code
+      - name: 📋 Checkout code
         uses: actions/checkout@v4
 
       # Étape 2 : Configurer l'agent SSH avec ta clé privée GitHub Secret

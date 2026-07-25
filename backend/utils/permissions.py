@@ -66,12 +66,16 @@ def is_task_visible(task, current_user, member_project_ids):
         task               — dict de la tâche
         current_user       — dict du membre connecté
         member_project_ids — set de project_id dont l'utilisateur est membre
-                             (pré-calculé une seule fois par requête)
+                             (conservé pour compat. de signature ; plus utilisé
+                             ci-dessous depuis l'ouverture de la visibilité, A-09)
 
     Règles :
         Admin              → voit toutes les tâches
         Tâche sans projet  → visible si owner_id == user.id OU responsible == user.name
-        Tâche avec projet  → visible si project_id ∈ member_project_ids
+        Tâche avec projet  → visible par TOUS les membres actifs (A-09).
+                             Le niveau d'édition réel (full/status_only/read_only)
+                             reste déterminé par get_task_permission_level : un
+                             non-membre du projet reçoit automatiquement "read_only".
     """
     if current_user.get("is_admin"):
         return True
@@ -79,12 +83,13 @@ def is_task_visible(task, current_user, member_project_ids):
     pid = task.get("project_id")
 
     if pid is None:
-        # Tâche personnelle / sans projet
+        # Tâche personnelle
         is_owner = task.get("owner_id") == current_user["id"]
         is_resp  = _name_match(task.get("responsible"), current_user.get("name"))
         return is_owner or is_resp
 
-    return pid in member_project_ids
+    # Tâche rattachée à un projet : visible par tout membre actif de l'application.
+    return True
 
 
 # ── Permissions sur les tâches ───────────────────────────────────────────────

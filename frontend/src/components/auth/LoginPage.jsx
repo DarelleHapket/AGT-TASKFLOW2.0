@@ -174,7 +174,7 @@ export function LoginPage({ onLogin }) {
           </h1>
 
           <p style={{ fontSize: 16, color: SLATE, lineHeight: 1.7, maxWidth: 380, margin: 0 }}>
-            Outil de pilotage interne d'AG Technologies — Tâches, Gantt, PERT et performances en temps réel.
+            Outil de pilotage interne d'AG Technologies. Tâches, Gantt, PERT et performances en temps réel.
           </p>
 
           {/* Stats */}

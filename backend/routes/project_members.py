@@ -56,10 +56,6 @@ def list_project_members(pid, current_user):
         conn.close()
         return jsonify({"error": _PROJECT_NOT_FOUND}), 404
 
-    if not current_user.get("is_admin") and not is_project_member(conn, current_user["id"], pid):
-        conn.close()
-        return jsonify({"error": "Accès réservé aux membres de ce projet."}), 403
-
     rows = conn.execute("""
         SELECT pm.member_id, pm.role, pm.joined_at,
                m.name, m.color, m.email, m.deleted_at

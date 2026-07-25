@@ -118,7 +118,6 @@ function ProjectCard({
   allMembers,
 }) {
   const isOwner      = project.user_role === "owner";
-  const isMember     = !!project.user_role;
   const memberCount  = project.member_count ?? 0;
 
   if (editing) {
@@ -177,25 +176,24 @@ function ProjectCard({
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-          {/* Bouton Équipe (visible pour tous les membres du projet) */}
-          {isMember && (
-            <button
-              onClick={onTogglePanel}
-              title="Équipe du projet"
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 10px", borderRadius: 8, cursor: "pointer",
-                border: `1px solid ${panelOpen ? "var(--accent)" : "var(--border)"}`,
-                background: panelOpen ? "var(--accent-bg)" : "transparent",
-                color: panelOpen ? "var(--accent)" : "var(--text-2)",
-                fontSize: 12, fontWeight: 600,
-              }}
-            >
-              <Users size={13} />
-              <span style={{ display: "none" }} className="label">Équipe</span>
-              {panelOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-          )}
+          {/* Bouton Équipe — consultation ouverte à tous (A-09) :
+              lecture seule pour qui n'est pas owner, gérée par ProjectMembersPanel. */}
+          <button
+            onClick={onTogglePanel}
+            title="Équipe du projet"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "5px 10px", borderRadius: 8, cursor: "pointer",
+              border: `1px solid ${panelOpen ? "var(--accent)" : "var(--border)"}`,
+              background: panelOpen ? "var(--accent-bg)" : "transparent",
+              color: panelOpen ? "var(--accent)" : "var(--text-2)",
+              fontSize: 12, fontWeight: 600,
+            }}
+          >
+            <Users size={13} />
+            <span style={{ display: "none" }} className="label">Équipe</span>
+            {panelOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
 
           {/* Boutons édition / suppression (owner uniquement) */}
           {isOwner && (

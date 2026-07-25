@@ -1,0 +1,66 @@
+name: Deploy AGT-Taskflow (Josué)
+
+# Déclencher uniquement sur push vers la branche deploy/josue
+on:
+  push:
+    branches:
+      - deploy/josue
+
+jobs:
+  deploy:
+    name: Deploy AGT-Taskflow Production
+    runs-on: ubuntu-latest
+
+    steps:
+      # Étape 1 : Récupérer le code de la CI
+      - name:  Checkout code
+        uses: actions/checkout@v4
+
+      # Étape 2 : Configurer l'agent SSH avec ta clé privée GitHub Secret
+      - name: 🔑 Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_PRIVATE_KEY_JOSUE }}
+
+      # Étape 3 : Ajouter le serveur VPS aux known_hosts pour éviter la validation interactive
+      - name: 🔒 Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST_JOSUE }} >> ~/.ssh/known_hosts
+
+      # Étape 4 : Script de déploiement à distance sur le VPS
+      - name: 🚀 Deploy to VPS
+        run: |
+          ssh ${{ secrets.VPS_USER_JOSUE }}@${{ secrets.VPS_HOST_JOSUE }} << 'EOF'
+            set -e  # Interrompre immédiatement si une commande échoue
+            
+            echo "📂 Navigation vers le dossier du projet..."
+            cd ${{ secrets.VPS_APP_PATH_JOSUE }}
+            
+            echo "🧹 Nettoyage des modifications locales (s'il y en a)..."
+            git reset --hard
+            
+            echo "⬇️ Pull des dernières modifications depuis deploy/josue..."
+            git checkout deploy/josue
+            git pull origin deploy/josue
+            
+            echo "🔨 Construction des images Docker (backend & frontend)..."
+            docker compose build --no-cache
+            
+            echo "📦 Redémarrage des conteneurs en arrière-plan..."
+            docker compose up -d
+            
+            echo "🧹 Nettoyage des anciennes images Docker inutilisées..."
+            docker image prune -f
+            
+            echo "✅ Déploiement terminé avec succès sur le VPS !"
+          EOF
+
+      # Étape 5 : Notification en cas de succès
+      - name: ✅ Deployment Success
+        if: success()
+        run: echo "Deployment successful for branch deploy/josue at $(date)"
+
+      # Étape 6 : Notification en cas d'échec
+      - name: ❌ Deployment Failed
+        if: failure()
+        run: echo "Deployment FAILED at $(date) - Check the logs above"

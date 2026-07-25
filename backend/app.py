@@ -24,7 +24,7 @@ app.register_blueprint(tasks_bp,          url_prefix="/api/tasks")
 app.register_blueprint(projects_bp,       url_prefix="/api/projects")
 app.register_blueprint(activities_bp,     url_prefix="/api/activities")
 app.register_blueprint(members_bp,        url_prefix="/api/members")
-app.register_blueprint(needs_bp,          url_prefix="/api/needs")
+app.register_blueprint(needs_bp,          url_prefix="/needs")
 app.register_blueprint(notes_bp,          url_prefix="/api/notes")
 app.register_blueprint(performance_bp,    url_prefix="/api/performance")
 

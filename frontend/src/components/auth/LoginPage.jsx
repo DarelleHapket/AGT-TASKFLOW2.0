@@ -304,13 +304,13 @@ export function LoginPage({ onLogin }) {
                 color: iconColor("email"), transition: "color 0.2s",
               }} />
               <input
-                type="email"
+                type="email" autoComplete="off"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onFocus={() => setFocused("email")}
                 onBlur={() => setFocused(null)}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                placeholder="gabriel@ag-technologies.tech"
+                placeholder="votre@email.com"
                 style={inputStyle("email")}
               />
             </div>
@@ -392,7 +392,7 @@ export function LoginPage({ onLogin }) {
               onClick={switchMode}
               style={{ color: ACCENT, fontWeight: 700, cursor: "pointer" }}
             >
-              {mode === "login" ? "Demander un compte" : "Se connecter"}
+              {mode === "login" ? "Créer un compte" : "Se connecter"}
             </span>
           </p>
 

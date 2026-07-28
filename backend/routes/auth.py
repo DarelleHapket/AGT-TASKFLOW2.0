@@ -90,7 +90,7 @@ def register():
 
     conn = get_db()
     exists = conn.execute(
-        "SELECT 1 FROM members WHERE LOWER(email)=? OR LOWER(name)=?",
+        "SELECT 1 FROM members WHERE (LOWER(email)=? OR LOWER(name)=?) AND deleted_at IS NULL",
         (email, name.lower())
     ).fetchone()
     if exists:

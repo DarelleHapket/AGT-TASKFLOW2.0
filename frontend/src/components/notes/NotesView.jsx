@@ -1,18 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, X, Check, FileText } from "lucide-react";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 
+const DRAFT_KEY = "agt_notes_draft";
 const inp = { width: "100%", padding: "8px 12px", borderRadius: 8, border: "1.5px solid var(--border)", fontSize: 13, outline: "none", background: "var(--bg-input)", color: "var(--text)", fontFamily: "inherit", boxSizing: "border-box" };
 const lbl = { fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 4, display: "block", letterSpacing: ".08em" };
 
 function NoteForm({ initial, projects, activities, tasks, onSave, onCancel }) {
-  const [f, setF] = useState({
-    title: initial?.title || "",
-    content: initial?.content || "",
-    project_id: initial?.project_id ? String(initial.project_id) : "",
-    activity_id: initial?.activity_id ? String(initial.activity_id) : "",
-    task_id: initial?.task_id || "",
+  const defaultF = { title: initial?.title || "", content: initial?.content || "", project_id: initial?.project_id ? String(initial.project_id) : "", activity_id: initial?.activity_id ? String(initial.activity_id) : "", task_id: initial?.task_id || "" };
+
+  const [f, setF] = useState(() => {
+    if (initial) return defaultF;
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || defaultF; } catch { return defaultF; }
   });
+
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (!initial) localStorage.setItem(DRAFT_KEY, JSON.stringify(f));
+  }, [f, initial]);
+
+  const handleSave = (d) => {
+    if (!initial) localStorage.removeItem(DRAFT_KEY);
+    onSave(d);
+  };
+
+  const handleCancel = () => {
+    if (!initial) localStorage.removeItem(DRAFT_KEY);
+    onCancel();
+  };
+
   const filteredActs = activities.filter((a) => !f.project_id || String(a.project_id) === f.project_id);
   const filteredTasks = tasks.filter((t) => !f.project_id || String(t.project_id) === f.project_id);
 
@@ -50,8 +67,8 @@ function NoteForm({ initial, projects, activities, tasks, onSave, onCancel }) {
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button onClick={onCancel} style={{ border: "1px solid var(--border)", background: "white", borderRadius: 8, padding: "7px 14px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center", gap: 5 }}><X size={13} /> Annuler</button>
-        <button onClick={() => f.title.trim() && onSave({ ...f, project_id: f.project_id || null, activity_id: f.activity_id || null, task_id: f.task_id || null })}
+        <button onClick={handleCancel} style={{ border: "1px solid var(--border)", background: "white", borderRadius: 8, padding: "7px 14px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center", gap: 5 }}><X size={13} /> Annuler</button>
+        <button onClick={() => f.title.trim() && handleSave({ ...f, project_id: f.project_id || null, activity_id: f.activity_id || null, task_id: f.task_id || null })}
           style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "7px 16px", cursor: "pointer", color: "white", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
           <Check size={13} /> Enregistrer
         </button>
@@ -61,17 +78,13 @@ function NoteForm({ initial, projects, activities, tasks, onSave, onCancel }) {
 }
 
 export function NotesView({ notes, projects, activities, tasks, user, onAdd, onUpdate, onDelete }) {
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(() => { try { return !!localStorage.getItem(DRAFT_KEY); } catch { return false; } });
   const [editing, setEditing] = useState(null);
   const [filterPid, setFilterPid] = useState("all");
+  const [confirm, setConfirm] = useState(null);
 
-  const visible = filterPid === "all" ? notes
-    : filterPid === "general" ? notes.filter((n) => !n.project_id)
-    : notes.filter((n) => String(n.project_id) === filterPid);
-
+  const visible = filterPid === "all" ? notes : filterPid === "general" ? notes.filter((n) => !n.project_id) : notes.filter((n) => String(n.project_id) === filterPid);
   const fmt = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-
-  // Une note m'appartient si je suis l'auteur (ou si elle n'a pas d'auteur — ancienne note)
   const isMine = (n) => n.member_id == null || String(n.member_id) === String(user?.id);
 
   return (
@@ -123,21 +136,20 @@ export function NotesView({ notes, projects, activities, tasks, user, onAdd, onU
                   <span style={{ marginLeft: "auto" }}>🕐 {fmt(n.updated_at)}</span>
                 </div>
               </div>
-              {/* Actions : uniquement sur MES notes */}
               {isMine(n) ? (
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   <button onClick={() => setEditing(n)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
-                  <button onClick={() => { if (window.confirm("Supprimer cette note ?")) onDelete(n.id); }} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>
+                  <button onClick={() => setConfirm({ title: "Supprimer la note", message: `"${n.title}" sera supprimée définitivement.`, confirmLabel: "Supprimer", danger: true, onConfirm: () => onDelete(n.id) })}
+                    style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", flexShrink: 0, fontSize: 10, color: "var(--text-3)", fontStyle: "italic", padding: "0 6px" }}>
-                  lecture seule
-                </div>
+                <div style={{ display: "flex", alignItems: "center", flexShrink: 0, fontSize: 10, color: "var(--text-3)", fontStyle: "italic", padding: "0 6px" }}>lecture seule</div>
               )}
             </div>
           )
         )}
       </div>
+      <ConfirmDialog data={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }

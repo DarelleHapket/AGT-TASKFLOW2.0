@@ -251,7 +251,7 @@ export function TaskModal({
     (a) => !f.project_id || a.project_id === Number(f.project_id)
   );
   const avail = tasks.filter((t) => t.id !== f.id);
-  const valid = f.id.trim() && f.description.trim() && (mode !== "add" || !!f.project_id);
+  const valid = f.id.trim() && f.description.trim() && (mode !== "add" || (!!f.project_id && !!f.activity_id));
 
   // ── Sauvegarde avec gestion d'erreur ────────────────────────────────────────
   const handleSave = async () => {
@@ -391,11 +391,16 @@ export function TaskModal({
           <div>
             <label style={lbl}>ACTIVITÉ</label>
             <select {...fieldProps({ value: f.activity_id, onChange: (e) => set("activity_id", e.target.value) })}>
-              <option value="">— Choisir —</option>
+              <option value="">— Sélectionnez une activité —</option>
               {filteredActivities.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
+            {mode === "add" && f.project_id && filteredActivities.length === 0 && (
+              <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                ⚠ Aucune activité pour ce projet. Créez-en une dans l'onglet Activités avant de créer une tâche.
+              </div>
+            )}
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label style={lbl}>DESCRIPTION</label>

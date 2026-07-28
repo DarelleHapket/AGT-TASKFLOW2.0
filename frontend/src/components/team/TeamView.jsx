@@ -81,6 +81,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
   const [pending,   setPending]   = useState([]);
   const [suspended, setSuspended] = useState([]);
   const [deleted,   setDeleted]   = useState([]);
+  const [showAllDeleted, setShowAllDeleted] = useState(false);
   const [busyId,    setBusyId]    = useState(null);
   const [err,       setErr]       = useState(null);
   const [confirm,   setConfirm]   = useState(null);
@@ -285,7 +286,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
           <div style={sectionHeader("var(--bg)", "var(--border)", "var(--text-3)")}>
             COMPTES SUPPRIMÉS ({deleted.length})
           </div>
-          {deleted.map((m) => (
+          {(showAllDeleted ? deleted : deleted.slice(0, 3)).map((m) => (
             <div key={m.id} style={{
               display: "flex", alignItems: "center", gap: 12,
               padding: "12px 16px", borderBottom: "1px solid var(--border)",
@@ -327,6 +328,11 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
               </div>
             </div>
           ))}
+        {deleted.length >= 3 && (
+            <button onClick={() => setShowAllDeleted((v) => !v)} style={{ width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", fontWeight: 600, borderTop: "1px solid var(--border)", textAlign: "left" }}>
+              {showAllDeleted ? `▲ Réduire` : `▾ Voir les ${deleted.length - 3} autres comptes supprimés`}
+            </button>
+          )}
         </div>
       )}
 

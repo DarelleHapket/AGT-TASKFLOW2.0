@@ -82,3 +82,22 @@ def mark_all_read(current_user):
     conn.commit()
     conn.close()
     return jsonify({"updated": True})
+
+@notifications_bp.route("/<int:nid>", methods=["DELETE"])
+@require_auth
+def delete_notification(current_user, nid):
+    conn = get_db()
+    conn.execute("DELETE FROM notifications WHERE id=? AND recipient_id=?", (nid, current_user["id"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"deleted": nid})
+
+
+@notifications_bp.route("/", methods=["DELETE"])
+@require_auth
+def delete_all_notifications(current_user):
+    conn = get_db()
+    conn.execute("DELETE FROM notifications WHERE recipient_id=?", (current_user["id"],))
+    conn.commit()
+    conn.close()
+    return jsonify({"deleted": "all"})

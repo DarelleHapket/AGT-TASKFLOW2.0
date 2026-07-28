@@ -131,6 +131,8 @@ export const deleteDifficulty = (id)     => req("DELETE",  `/difficulties/${id}`
 export const getNotifications       = ()   => req("GET",   "/notifications/");
 export const markNotificationRead   = (id) => req("PATCH", `/notifications/${id}/read`);
 export const markAllNotificationsRead = ()  => req("PATCH", "/notifications/read-all");
+export const deleteNotification    = (id) => req("DELETE", `/notifications/${id}`);
+export const deleteAllNotifications = ()  => req("DELETE", "/notifications/");
 
 // ── Rapports & Performance ───────────────────────────────────────────────────
 

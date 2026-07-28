@@ -48,7 +48,7 @@ const FILTERS = [
   { key: "register_request",   label: "👤 Demandes"     },
 ];
 
-export function NotificationsPanel({ notifications, onClose, onMarkRead, onMarkAllRead, onNotifClick }) {
+export function NotificationsPanel({ notifications, onClose, onMarkRead, onMarkAllRead, onDeleteNotif, onDeleteAll, onNotifClick }) {
   const [filter, setFilter] = useState("all");
 
   // Fermeture sur Escape
@@ -242,17 +242,20 @@ export function NotificationsPanel({ notifications, onClose, onMarkRead, onMarkA
                           }}>
                             {n.title}
                           </span>
-                          {isNew && (
-                            <span style={{
-                              background: bg, border: `1px solid ${border}`,
-                              borderRadius: 4, padding: "1px 7px",
-                              fontSize: 9, fontWeight: 800,
-                              color: color, flexShrink: 0,
-                              textTransform: "uppercase", letterSpacing: "0.05em",
-                            }}>
-                              Nouveau
-                            </span>
-                          )}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                            {isNew && (
+                              <span style={{
+                                background: bg, border: `1px solid ${border}`,
+                                borderRadius: 4, padding: "1px 7px",
+                                fontSize: 9, fontWeight: 800,
+                                color: color, flexShrink: 0,
+                                textTransform: "uppercase", letterSpacing: "0.05em",
+                              }}>
+                                Nouveau
+                              </span>
+                            )}
+                            <button onClick={(e) => { e.stopPropagation(); onDeleteNotif && onDeleteNotif(n.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 2, fontSize: 12, lineHeight: 1 }} title="Supprimer">🗑</button>
+                          </div>
                         </div>
 
                         {/* Corps */}

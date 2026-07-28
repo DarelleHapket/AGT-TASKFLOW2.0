@@ -222,6 +222,8 @@ export function TaskModal({
   const [loadingDiff,   setLoadingDiff]  = useState(false);
   const [saveError,     setSaveError]    = useState(null);   // A-07 : erreur backend
   const [saving,        setSaving]       = useState(false);
+  // B-02 : multi-sélection responsables (mode add uniquement)
+  const [responsibles,  setResponsibles] = useState([]);
 
   useEffect(() => {
     if (mode === "add" && !f.id) {
@@ -259,8 +261,18 @@ export function TaskModal({
     setSaveError(null);
     setSaving(true);
     try {
-      await onSave(f);
-      // Si onSave ne lève pas d'erreur, le modal est fermé par App.jsx
+      // B-02 : si plusieurs responsables sélectionnés en mode add,
+      // créer une tâche par membre avec un ID distinct
+      if (mode === "add" && responsibles.length > 1) {
+        for (let i = 0; i < responsibles.length; i++) {
+          const suffix = i === 0 ? "" : `-${String.fromCharCode(97 + i)}`; // T001, T001-b, T001-c…
+          await onSave({ ...f, responsible: responsibles[i], id: `${f.id}${suffix}` });
+        }
+      } else {
+        const singleResponsible = mode === "add" && responsibles.length === 1
+          ? responsibles[0] : f.responsible;
+        await onSave({ ...f, responsible: singleResponsible });
+      }
     } catch (e) {
       setSaveError(e.message || "Une erreur est survenue.");
     } finally {
@@ -391,16 +403,11 @@ export function TaskModal({
           <div>
             <label style={lbl}>ACTIVITÉ</label>
             <select {...fieldProps({ value: f.activity_id, onChange: (e) => set("activity_id", e.target.value) })}>
-              <option value="">— Sélectionnez une activité —</option>
+              <option value="">— Choisir —</option>
               {filteredActivities.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
-            {mode === "add" && f.project_id && filteredActivities.length === 0 && (
-              <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
-                ⚠ Aucune activité pour ce projet. Créez-en une dans l'onglet Activités avant de créer une tâche.
-              </div>
-            )}
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label style={lbl}>DESCRIPTION</label>
@@ -413,12 +420,63 @@ export function TaskModal({
           </div>
           <div>
             <label style={lbl}>RESPONSABLE</label>
-            <select {...fieldProps({ value: f.responsible, onChange: (e) => set("responsible", e.target.value) })}>
-              <option value="">— Aucun —</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.name}>{m.name}</option>
-              ))}
-            </select>
+            {mode === "add" ? (
+              // B-02 : multi-sélection en mode création
+              <div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setResponsibles(members.map((m) => m.name))}
+                    style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6,
+                      border: "1px solid var(--accent)", background: "var(--accent-bg)",
+                      color: "var(--accent)", cursor: "pointer", fontWeight: 600 }}>
+                    Tous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResponsibles([])}
+                    style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6,
+                      border: "1px solid var(--border)", background: "transparent",
+                      color: "var(--text-3)", cursor: "pointer" }}>
+                    Aucun
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {members.map((m) => {
+                    const selected = responsibles.includes(m.name);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setResponsibles((prev) =>
+                          selected ? prev.filter((n) => n !== m.name) : [...prev, m.name]
+                        )}
+                        style={{
+                          padding: "4px 12px", borderRadius: 20, fontSize: 12,
+                          border: `1.5px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                          background: selected ? "var(--accent)" : "transparent",
+                          color: selected ? "white" : "var(--text-2)",
+                          cursor: "pointer", fontWeight: selected ? 700 : 400,
+                        }}>
+                        {m.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {responsibles.length > 1 && (
+                  <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 6 }}>
+                    {responsibles.length} tâches seront créées ({responsibles.join(", ")})
+                  </div>
+                )}
+              </div>
+            ) : (
+              <select {...fieldProps({ value: f.responsible, onChange: (e) => set("responsible", e.target.value) })}>
+                <option value="">— Aucun —</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label style={lbl}>STATUT</label>

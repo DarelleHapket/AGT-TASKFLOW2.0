@@ -18,6 +18,7 @@ import { NotesView } from "./components/notes/NotesView";
 import { PerformanceView } from "./components/performance/PerformanceView";
 import { DailyOrderView } from "./components/daily/DailyOrderView";
 import { ReportsView } from "./components/reports/ReportsView";
+import { NotificationsPanel } from "./components/notifications/NotificationsPanel";
 
 const TABS = [
   { id: "tasks",       label: "Tâches",       Icon: LayoutList   },
@@ -45,6 +46,7 @@ export default function App() {
   });
   const [diffCounts, setDiffCounts] = useState({});
   const [showBell, setShowBell]     = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [showProfile, setShowProfile] = useState(false);
 
   const {
@@ -61,6 +63,12 @@ export default function App() {
     refreshUser();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Charger notifications ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isLogged) return;
+    api.getNotifications().then(setNotifications).catch(() => {});
+  }, [isLogged, tab]);
 
   // ── Charger compteurs difficultés ────────────────────────────────────────
   useEffect(() => {
@@ -80,7 +88,7 @@ export default function App() {
     loadCounts();
   }, [tasks, isAdmin]);
 
-  const unseenTotal = isAdmin ? totalUnseen(diffCounts) : 0;
+  const unseenTotal = notifications.filter((n) => !n.read_at).length;
 
   // ── Auth guard ───────────────────────────────────────────────────────────
   if (!isLogged) return <LoginPage onLogin={login} />;
@@ -170,6 +178,10 @@ export default function App() {
   };
 
   const onSetChef = async (id, chefId) => { const p = await api.setProjectChef(id, chefId); setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
+  const onGetProjectMembers    = (pid)        => api.getProjectMembers(pid);
+  const onAddProjectMember    = (pid, d)     => api.addProjectMember(pid, d);
+  const onUpdateProjectMember = (pid, mid, d) => api.updateProjectMember(pid, mid, d);
+  const onRemoveProjectMember = (pid, mid)   => api.removeProjectMember(pid, mid);
   const onAddProject    = async (d) => { const p = await api.createProject(d);    setProjects((prev) => [...prev, p]); };
   const onUpdateProject = async (id, d) => { const p = await api.updateProject(id, d); setProjects((prev) => prev.map((x) => x.id === id ? p : x)); };
   const onDeleteProject = async (id) => { await api.deleteProject(id); setProjects((prev) => prev.filter((p) => p.id !== id)); };
@@ -179,6 +191,7 @@ export default function App() {
   const onDeleteActivity = async (id) => { await api.deleteActivity(id); setActivities((prev) => prev.filter((a) => a.id !== id)); };
 
   const onAddMember    = async (d) => { const m = await api.createMember(d);    setMembers((prev) => [...prev, m]); };
+  const onSetMemberRole = async (id, role) => { const m = await api.setMemberRole(id, role); setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x)); };
   const onDeleteMember = async (id) => { await api.deleteMember(id); setMembers((prev) => prev.filter((m) => m.id !== id)); };
   const onToggleMemberActive = async (member) => { const m = await api.toggleMemberActive(member.id); setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x)); return m; };
 
@@ -224,7 +237,7 @@ export default function App() {
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
 
           {/* Cloche */}
-          {isAdmin && (
+          {isLogged && (
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowBell((v) => !v)} style={{
                 background: unseenTotal > 0 ? "#fff7ed" : "var(--bg)",
@@ -241,35 +254,15 @@ export default function App() {
                 )}
               </button>
               {showBell && (
-                <div style={{
-                  position: "absolute", right: 0, top: "calc(100% + 8px)",
-                  background: "var(--bg-card)", border: "1px solid var(--border)",
-                  borderRadius: 12, boxShadow: "var(--shadow-md)",
-                  minWidth: 280, maxWidth: 340, zIndex: 200, overflow: "hidden",
-                }}>
-                  <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-                    Signalements non lus
-                  </div>
-                  {Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).length === 0 ? (
-                    <div style={{ padding: "20px 16px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>Aucun signalement non lu ✓</div>
-                  ) : (
-                    Object.entries(diffCounts).filter(([tid, count]) => hasUnseen(tid, count)).map(([tid, count]) => {
-                      const task = tasks.find((t) => t.id === tid);
-                      return (
-                        <div key={tid} onClick={() => { setModal({ mode: "edit", task }); setShowBell(false); setTab("tasks"); }}
-                          style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{tid}</div>
-                            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{task?.description?.slice(0, 40)}…</div>
-                          </div>
-                          <span style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, color: "#ea580c" }}>
-                            {count} ⚠️
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                <NotificationsPanel
+                  notifications={notifications}
+                  onClose={() => setShowBell(false)}
+                  onMarkRead={async (id) => { await api.markNotificationRead(id); setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read_at: new Date().toISOString() } : n)); }}
+                  onMarkAllRead={async () => { await api.markAllNotificationsRead(); setNotifications((prev) => prev.map((n) => ({ ...n, read_at: new Date().toISOString() }))); }}
+                  onDeleteNotif={async (id) => { await api.deleteNotification(id); setNotifications((prev) => prev.filter((n) => n.id !== id)); }}
+                  onDeleteAll={async () => { await api.deleteAllNotifications(); setNotifications([]); }}
+                  onNotifClick={(n) => { if (n.type === "register_request") setTab("team"); else setTab("tasks"); setShowBell(false); }}
+                />
               )}
             </div>
           )}
@@ -325,13 +318,13 @@ export default function App() {
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} currentUser={user} />}
+        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} currentUser={user} onGetProjectMembers={onGetProjectMembers} onAddProjectMember={onAddProjectMember} onUpdateProjectMember={onUpdateProjectMember} onRemoveProjectMember={onRemoveProjectMember} />}
         {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
         {tab === "reports"     && <ReportsView members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} isAdmin={isAdmin} />}
+        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
       </div>
 
       {modal && (

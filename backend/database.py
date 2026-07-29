@@ -350,5 +350,129 @@ def init_db():
         WHERE a.owner_id IS NOT NULL
     """)
 
+
+    # ── RBAC complet (Module 1, B-xx) — rôles multiples + permissions ───────
+    # Deux niveaux : rôles (hérités à l'assignation) + permissions directes
+    # (ABAC). Permission effective = tout ce qui est dans member_permissions
+    # avec granted=1, peu importe la source (role ou direct).
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            description TEXT DEFAULT \'\'
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            module TEXT NOT NULL,
+            description TEXT DEFAULT \'\'
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            role_id INTEGER NOT NULL,
+            permission_id INTEGER NOT NULL,
+            PRIMARY KEY (role_id, permission_id),
+            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS member_roles (
+            member_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            assigned_by INTEGER DEFAULT NULL,
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (member_id, role_id),
+            FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS member_permissions (
+            member_id INTEGER NOT NULL,
+            permission_id INTEGER NOT NULL,
+            granted BOOLEAN NOT NULL DEFAULT 1,
+            source TEXT DEFAULT \'role\',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (member_id, permission_id),
+            FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+        )
+    """)
+
+    ROLES = [
+        ("superadmin", "Acces total a la plateforme"),
+        ("admin", "Consultation (lecture seule)"),
+        ("chef_projet", "Gestion de ses projets"),
+        ("membre", "Execution de ses taches"),
+    ]
+    for code, desc in ROLES:
+        c.execute("INSERT OR IGNORE INTO roles (code, description) VALUES (?, ?)", (code, desc))
+
+    PERMISSIONS = [
+        ("membres.read", "membres", "Voir la liste des membres"),
+        ("membres.write", "membres", "Modifier un membre"),
+        ("membres.validate", "membres", "Valider/rejeter une demande de compte"),
+        ("membres.suspend", "membres", "Suspendre/reactiver un compte"),
+        ("membres.delete", "membres", "Supprimer un compte"),
+        ("roles.manage", "rbac", "Gerer les roles"),
+        ("permissions.manage", "rbac", "Gerer les permissions directes"),
+        ("projets.read", "projets", "Voir les projets"),
+        ("projets.write", "projets", "Creer/modifier un projet"),
+        ("dashboard.read", "dashboard", "Consulter le tableau de bord"),
+    ]
+    for code, module, desc in PERMISSIONS:
+        c.execute("INSERT OR IGNORE INTO permissions (code, module, description) VALUES (?, ?, ?)", (code, module, desc))
+
+    ROLE_PERMS = {
+        "superadmin": [p[0] for p in PERMISSIONS],
+        "admin": ["membres.read", "projets.read", "dashboard.read"],
+        "chef_projet": ["membres.read", "projets.read", "projets.write", "dashboard.read"],
+        "membre": ["dashboard.read"],
+    }
+    for role_code, perm_codes in ROLE_PERMS.items():
+        role_row = c.execute("SELECT id FROM roles WHERE code=?", (role_code,)).fetchone()
+        for perm_code in perm_codes:
+            perm_row = c.execute("SELECT id FROM permissions WHERE code=?", (perm_code,)).fetchone()
+            if role_row and perm_row:
+                c.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                    (role_row["id"], perm_row["id"])
+                )
+
+    all_members = c.execute("SELECT id, name, role FROM members WHERE deleted_at IS NULL").fetchall()
+    for m in all_members:
+        legacy_role = "superadmin" if m["name"].lower() == "gabriel" else (m["role"] or "membre")
+        role_row = c.execute("SELECT id FROM roles WHERE code=?", (legacy_role,)).fetchone()
+        if not role_row:
+            continue
+        already = c.execute(
+            "SELECT 1 FROM member_roles WHERE member_id=? AND role_id=?",
+            (m["id"], role_row["id"])
+        ).fetchone()
+        if already:
+            continue
+        c.execute(
+            "INSERT INTO member_roles (member_id, role_id) VALUES (?, ?)",
+            (m["id"], role_row["id"])
+        )
+        perms = c.execute(
+            "SELECT permission_id FROM role_permissions WHERE role_id=?", (role_row["id"],)
+        ).fetchall()
+        for p in perms:
+            c.execute(
+                """INSERT OR IGNORE INTO member_permissions (member_id, permission_id, granted, source)
+                   VALUES (?, ?, 1, \'role\')""",
+                (m["id"], p["permission_id"])
+            )
+
     conn.commit()
     conn.close()

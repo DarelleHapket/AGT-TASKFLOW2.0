@@ -103,3 +103,23 @@ def require_role(*roles):
             return jsonify({"error": "Accès non autorisé pour votre rôle"}), 403
         return decorated
     return wrapper
+
+
+def require_permission(code):
+    """
+    Décorateur — restreint l'accès aux membres possédant la permission donnée
+    (rôle ou directe, peu importe). Le superadmin passe toujours.
+    Ex: @require_permission("membres.validate")
+    """
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user, error = get_current_user()
+            if error:
+                return jsonify({"error": error}), 401
+            from utils.rbac import has_permission, get_member_roles
+            if "superadmin" in get_member_roles(user["id"]) or has_permission(user["id"], code):
+                return f(*args, current_user=user, **kwargs)
+            return jsonify({"error": "Permission refusée"}), 403
+        return decorated
+    return wrapper

@@ -2,6 +2,7 @@
 from flask import Flask
 from flask_cors import CORS
 from database import init_db
+from routes.rbac import rbac_bp
 from routes.tasks import tasks_bp
 from routes.projects import projects_bp
 from routes.project_members import project_members_bp
@@ -41,6 +42,7 @@ app.register_blueprint(notifications_bp,  url_prefix="/api/notifications")
 # project_members est enregistré sous le même préfixe que projects.
 # Les routes /<id>/members ne conflictuent pas avec /<id> et /<id>/chef.
 app.register_blueprint(project_members_bp, url_prefix="/api/projects")
+app.register_blueprint(rbac_bp, url_prefix="/api/rbac")
 
 if __name__ == "__main__":
     init_db()

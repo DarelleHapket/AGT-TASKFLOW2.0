@@ -9,7 +9,7 @@
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from database import get_db
-from utils.auth import require_admin, require_auth
+from utils.auth import require_admin, require_superadmin, require_auth
 
 members_bp = Blueprint("members", __name__)
 
@@ -94,7 +94,7 @@ def create_member():
 
 
 @members_bp.route("/<int:mid>/validate", methods=["PUT"])
-@require_admin
+@require_superadmin
 def validate_member(current_user, mid):
     data   = request.get_json() or {}
     action = (data.get("action") or "").strip().lower()

@@ -77,7 +77,7 @@ function StatusDot({ active }) {
 
 // ── Composant principal ──────────────────────────────────────────────────────
 
-export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleActive, isAdmin, currentUser }) {
+export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleActive, isAdmin, isSuperadmin, currentUser }) {
   const [pending,   setPending]   = useState([]);
   const [suspended, setSuspended] = useState([]);
   const [deleted,   setDeleted]   = useState([]);
@@ -89,19 +89,19 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
   // ── Chargement initial (admin) ────────────────────────────────────────────
 
   const loadPending = async () => {
-    if (!isAdmin) return;
+    if (!(isAdmin || isSuperadmin)) return;
     try { setPending(await api.getPendingMembers()); }
     catch (e) { setErr(e.message); }
   };
 
   const loadSuspended = async () => {
-    if (!isAdmin) return;
+    if (!(isAdmin || isSuperadmin)) return;
     try { setSuspended(await api.getSuspendedMembers()); }
     catch (e) { /* silencieux */ }
   };
 
   const loadDeleted = async () => {
-    if (!isAdmin) return;
+    if (!(isAdmin || isSuperadmin)) return;
     try { setDeleted(await api.getDeletedMembers()); }
     catch (e) { /* silencieux */ }
   };
@@ -110,7 +110,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
     loadPending();
     loadSuspended();
     loadDeleted();
-  }, [isAdmin]);
+  }, [isAdmin, isSuperadmin]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -159,9 +159,10 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
   // ── Helper : est-ce qu'on peut agir sur ce membre ? ──────────────────────
 
   const canActOn = (m) =>
-    isAdmin &&
+    isSuperadmin &&
     !m.is_admin &&
     m.role !== "admin" &&
+    m.role !== "superadmin" &&
     m.id !== currentUser?.id;
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
       )}
 
       {/* ── Demandes en attente ───────────────────────────────────────────── */}
-      {isAdmin && pending.length > 0 && (
+      {(isAdmin || isSuperadmin) && pending.length > 0 && (
         <div style={{
           background: "var(--bg-card)", borderRadius: "var(--radius-lg)",
           border: "1px solid #fed7aa", overflow: "hidden",
@@ -206,35 +207,41 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
                   {p.email}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                <button
-                  onClick={() => decide(p.id, "approve")}
-                  disabled={busyId === p.id}
-                  style={actionBtn("approve")}
-                >
-                  <Check size={13} /> Valider
-                </button>
-                <button
-                  onClick={() => setConfirm({
-                    title:        "Rejeter la demande",
-                    message:      `La demande de ${p.name} sera rejetée. La personne ne pourra pas se connecter.`,
-                    confirmLabel: "Rejeter",
-                    danger:       true,
-                    onConfirm:    () => decide(p.id, "reject"),
-                  })}
-                  disabled={busyId === p.id}
-                  style={actionBtn("danger")}
-                >
-                  <X size={13} />
-                </button>
-              </div>
+              {isSuperadmin ? (
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    onClick={() => decide(p.id, "approve")}
+                    disabled={busyId === p.id}
+                    style={actionBtn("approve")}
+                  >
+                    <Check size={13} /> Valider
+                  </button>
+                  <button
+                    onClick={() => setConfirm({
+                      title:        "Rejeter la demande",
+                      message:      `La demande de ${p.name} sera rejetée. La personne ne pourra pas se connecter.`,
+                      confirmLabel: "Rejeter",
+                      danger:       true,
+                      onConfirm:    () => decide(p.id, "reject"),
+                    })}
+                    disabled={busyId === p.id}
+                    style={actionBtn("danger")}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>
+                  Validation réservée au Superadmin
+                </span>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {/* ── Comptes suspendus ─────────────────────────────────────────────── */}
-      {isAdmin && suspended.length > 0 && (
+      {(isAdmin || isSuperadmin) && suspended.length > 0 && (
         <div style={{
           background: "var(--bg-card)", borderRadius: "var(--radius-lg)",
           border: "1px solid #fde68a", overflow: "hidden",
@@ -277,7 +284,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
       )}
 
       {/* ── Comptes supprimés ─────────────────────────────────────────────── */}
-      {isAdmin && deleted.length > 0 && (
+      {(isAdmin || isSuperadmin) && deleted.length > 0 && (
         <div style={{
           background: "var(--bg-card)", borderRadius: "var(--radius-lg)",
           border: "1px solid var(--border)", overflow: "hidden",
@@ -343,17 +350,17 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
         boxShadow: "var(--shadow)",
       }}>
         <div style={sectionHeader("var(--bg-hover)", "var(--border)", "var(--text-3)")}>
-          MEMBRES ({members.length})
+          MEMBRES ({members.filter((m) => m.is_active !== 0).length})
         </div>
 
-        {members.length === 0 && (
+        {members.filter((m) => m.is_active !== 0).length === 0 && (
           <div style={{ textAlign: "center", padding: 40, color: "var(--text-3)" }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
             <div>Aucun membre actif pour l'instant.</div>
           </div>
         )}
 
-        {members.map((m) => {
+        {members.filter((m) => m.is_active !== 0).map((m) => {
           const isAdminMember = m.is_admin || m.role === "admin";
           const busy          = busyId === m.id;
           const canAct        = canActOn(m);
@@ -378,7 +385,7 @@ export function TeamView({ members, onAdd, onDelete, onSetMemberRole, onToggleAc
               {/* Actions — groupe fixe à droite */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 {/* Rôle global */}
-                {isAdmin && canAct ? (
+                {(isAdmin || isSuperadmin) && canAct ? (
                   <select
                     value={m.role === "chef_projet" ? "chef_projet" : "membre"}
                     onChange={(e) => changeRole(m.id, e.target.value)}

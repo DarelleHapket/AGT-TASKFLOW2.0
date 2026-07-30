@@ -41,8 +41,14 @@ def get_member_roles(member_id):
     return [r["code"] for r in rows]
 
 
+PRINCIPAL_ROLES = {"admin", "chef_projet", "membre"}
+
+
 def assign_role(member_id, role_code, assigned_by=None):
-    """Attribue un rôle : copie ses permissions par défaut (source='role')."""
+    """Attribue un rôle : copie ses permissions par défaut (source='role').
+    Si le rôle est un rôle "principal" (admin/chef_projet/membre), synchronise
+    aussi la colonne legacy members.role pour que TeamView/Dashboard reflètent
+    le changement immédiatement."""
     conn = get_db()
     role = conn.execute("SELECT id FROM roles WHERE code=?", (role_code,)).fetchone()
     if not role:
@@ -62,12 +68,20 @@ def assign_role(member_id, role_code, assigned_by=None):
                ON CONFLICT(member_id, permission_id) DO UPDATE SET granted=1""",
             (member_id, p["permission_id"])
         )
+    if role_code in PRINCIPAL_ROLES:
+        is_admin_flag = 1 if role_code == "admin" else 0
+        conn.execute(
+            "UPDATE members SET role=?, is_admin=? WHERE id=?",
+            (role_code, is_admin_flag, member_id)
+        )
     conn.commit()
     conn.close()
 
 
 def revoke_role(member_id, role_code):
-    """Retire un rôle. Les permissions déjà copiées restent (découplées, D-05 CDC)."""
+    """Retire un rôle. Les permissions déjà copiées restent (découplées, D-05 CDC).
+    Si le rôle retiré est celui reflété dans la colonne legacy members.role,
+    on retombe sur 'membre' par défaut."""
     conn = get_db()
     role = conn.execute("SELECT id FROM roles WHERE code=?", (role_code,)).fetchone()
     if role:
@@ -75,6 +89,14 @@ def revoke_role(member_id, role_code):
             "DELETE FROM member_roles WHERE member_id=? AND role_id=?",
             (member_id, role["id"])
         )
+        if role_code in PRINCIPAL_ROLES:
+            current = conn.execute(
+                "SELECT role FROM members WHERE id=?", (member_id,)
+            ).fetchone()
+            if current and current["role"] == role_code:
+                conn.execute(
+                    "UPDATE members SET role='membre' WHERE id=?", (member_id,)
+                )
         conn.commit()
     conn.close()
 

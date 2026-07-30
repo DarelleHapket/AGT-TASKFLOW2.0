@@ -30,7 +30,7 @@ def require_chef_only(f):
         if error:
             return jsonify({"error": error}), 401
         role = user.get("role") or ("admin" if user.get("is_admin") else "membre")
-        if role != "chef_projet":
+        if role not in ("chef_projet", "superadmin"):
             return jsonify({"error": "Réservé au chef de projet"}), 403
         return f(*args, current_user=user, **kwargs)
     return decorated

@@ -153,3 +153,52 @@ export const getDailyOrder    = (params = {}) => {
 };
 export const saveDailyOrder   = (data)        => req("POST",  "/daily-order/",       data);
 export const deleteDailyOrder = (id)          => req("DELETE", `/daily-order/${id}`);
+// ── RBAC (Module 1) ─────────────────────────────────────────────
+export const getRoles           = ()                 => req("GET",    "/rbac/roles");
+export const getAllPermissions  = ()                 => req("GET",    "/rbac/permissions");
+export const getMemberRoles     = (memberId)         => req("GET",    `/rbac/members/${memberId}/roles`);
+export const assignMemberRole   = (memberId, role)   => req("POST",   `/rbac/members/${memberId}/roles`, { role });
+export const revokeMemberRole   = (memberId, role)   => req("DELETE", `/rbac/members/${memberId}/roles/${role}`);
+export const setMemberPermission = (memberId, code, granted) =>
+  req("PUT", `/rbac/members/${memberId}/permissions/${code}`, { granted });
+
+// ── Admin — export/import base de données ────────────────────────────────────
+export async function exportDatabase() {
+  const token = getToken();
+  const res = await fetch(BASE + "/admin/export-db", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : "taskflow_export.db";
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+  return filename;
+}
+
+export async function importDatabase(file) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(BASE + "/admin/import-db", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+export const listBackups = () => req("GET", "/admin/backups");

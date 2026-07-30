@@ -1,0 +1,1 @@
+| B-02 | 29/07/2026 | B | Bugs B01/B02/B04 corrigés + Module 1 RBAC complet (rôles multiples + permissions ABAC découplées) | Superadmin seedé, multi-rôles, permission effective = rôle ∪ direct, découplage à l'assignation. Sidebar réorganisée logique métier. Protocole PROMPT_B.md mis à jour (PI-1 à PI-11). Décisions D-05 à D-12. | docs/ia/reports/session_B-02.md |

@@ -16,6 +16,7 @@ from routes.difficulties import difficulties_bp
 from routes.daily_order import daily_order_bp
 from routes.reports import reports_bp
 from routes.notifications import notifications_bp
+from routes.admin import admin_bp
 
 app = Flask(__name__)
 CORS(app)
@@ -43,6 +44,7 @@ app.register_blueprint(notifications_bp,  url_prefix="/api/notifications")
 # Les routes /<id>/members ne conflictuent pas avec /<id> et /<id>/chef.
 app.register_blueprint(project_members_bp, url_prefix="/api/projects")
 app.register_blueprint(rbac_bp, url_prefix="/api/rbac")
+app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
 if __name__ == "__main__":
     init_db()

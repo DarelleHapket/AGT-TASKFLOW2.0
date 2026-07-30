@@ -112,12 +112,12 @@ function ProjectForm({ initial, onSave, onCancel }) {
 
 function ProjectCard({
   project, editing, onEdit, onDelete, onStartEdit, onCancelEdit,
-  isChef, currentUser,
+  isChef, isSuperadmin, currentUser,
   panelOpen, onTogglePanel,
   onGetMembers, onAddMember, onUpdateMember, onRemoveMember,
   allMembers,
 }) {
-  const isOwner      = project.user_role === "owner";
+  const isOwner      = project.user_role === "owner" || isSuperadmin;
   const memberCount  = project.member_count ?? 0;
 
   if (editing) {
@@ -241,7 +241,7 @@ function ProjectCard({
 // ── Vue principale ───────────────────────────────────────────────────────────
 
 export function ProjectsView({
-  projects, members, isAdmin, isChef, currentUser,
+  projects, members, isAdmin, isChef, isSuperadmin, currentUser,
   onAdd, onUpdate, onDelete, onSetChef,
   onGetProjectMembers, onAddProjectMember,
   onUpdateProjectMember, onRemoveProjectMember,
@@ -281,7 +281,7 @@ export function ProjectsView({
           </span>
         </div>
 
-        {isChef && (
+        {(isChef || isSuperadmin) && (
           <button
             onClick={() => { setAdding(true); setEditing(null); }}
             style={{
@@ -304,7 +304,7 @@ export function ProjectsView({
         boxShadow: "var(--shadow)",
       }}>
         {/* Formulaire de création */}
-        {adding && isChef && (
+        {adding && (isChef || isSuperadmin) && (
           <ProjectForm
             onSave={async (d) => { await onAdd(d); setAdding(false); }}
             onCancel={() => setAdding(false)}
@@ -334,6 +334,7 @@ export function ProjectsView({
             onStartEdit={(proj) => { setEditing(proj.id); setAdding(false); }}
             onCancelEdit={() => setEditing(null)}
             isChef={isChef}
+            isSuperadmin={isSuperadmin}
             currentUser={currentUser}
             panelOpen={openPanel === p.id}
             onTogglePanel={() => togglePanel(p.id)}

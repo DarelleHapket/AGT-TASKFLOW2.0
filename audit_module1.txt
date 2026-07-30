@@ -1,3 +1,5 @@
+// FILE: backend/database.py
+-----------------------------------------------
 # backend/database.py
 #
 # A-07 — Bloc 6 : table project_members
@@ -350,191 +352,280 @@ def init_db():
         WHERE a.owner_id IS NOT NULL
     """)
 
-
-    # ── RBAC complet (Module 1, B-xx) — rôles multiples + permissions ───────
-    # Deux niveaux : rôles (hérités à l'assignation) + permissions directes
-    # (ABAC). Permission effective = tout ce qui est dans member_permissions
-    # avec granted=1, peu importe la source (role ou direct).
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS roles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT NOT NULL UNIQUE,
-            description TEXT DEFAULT \'\'
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT NOT NULL UNIQUE,
-            module TEXT NOT NULL,
-            description TEXT DEFAULT \'\'
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS role_permissions (
-            role_id INTEGER NOT NULL,
-            permission_id INTEGER NOT NULL,
-            PRIMARY KEY (role_id, permission_id),
-            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
-            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS member_roles (
-            member_id INTEGER NOT NULL,
-            role_id INTEGER NOT NULL,
-            assigned_by INTEGER DEFAULT NULL,
-            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (member_id, role_id),
-            FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
-            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS member_permissions (
-            member_id INTEGER NOT NULL,
-            permission_id INTEGER NOT NULL,
-            granted BOOLEAN NOT NULL DEFAULT 1,
-            source TEXT DEFAULT \'role\',
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (member_id, permission_id),
-            FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
-            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
-        )
-    """)
-
-    ROLES = [
-        ("superadmin", "Acces total a la plateforme"),
-        ("admin", "Consultation (lecture seule)"),
-        ("chef_projet", "Gestion de ses projets"),
-        ("membre", "Execution de ses taches"),
-    ]
-    for code, desc in ROLES:
-        c.execute("INSERT OR IGNORE INTO roles (code, description) VALUES (?, ?)", (code, desc))
-
-    PERMISSIONS = [
-        ("membres.read", "membres", "Voir la liste des membres"),
-        ("membres.write", "membres", "Modifier un membre"),
-        ("membres.validate", "membres", "Valider/rejeter une demande de compte"),
-        ("membres.suspend", "membres", "Suspendre/reactiver un compte"),
-        ("membres.delete", "membres", "Supprimer un compte"),
-        ("roles.manage", "rbac", "Gerer les roles"),
-        ("permissions.manage", "rbac", "Gerer les permissions directes"),
-        ("projets.read", "projets", "Voir les projets"),
-        ("projets.write", "projets", "Creer/modifier un projet"),
-        ("dashboard.read", "dashboard", "Consulter le tableau de bord"),
-    ]
-    for code, module, desc in PERMISSIONS:
-        c.execute("INSERT OR IGNORE INTO permissions (code, module, description) VALUES (?, ?, ?)", (code, module, desc))
-
-    ROLE_PERMS = {
-        "superadmin": [p[0] for p in PERMISSIONS],
-        "admin": ["membres.read", "projets.read", "dashboard.read"],
-        "chef_projet": ["membres.read", "projets.read", "projets.write", "dashboard.read"],
-        "membre": ["dashboard.read"],
-    }
-    for role_code, perm_codes in ROLE_PERMS.items():
-        role_row = c.execute("SELECT id FROM roles WHERE code=?", (role_code,)).fetchone()
-        for perm_code in perm_codes:
-            perm_row = c.execute("SELECT id FROM permissions WHERE code=?", (perm_code,)).fetchone()
-            if role_row and perm_row:
-                c.execute(
-                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
-                    (role_row["id"], perm_row["id"])
-                )
-
-    all_members = c.execute("SELECT id, name, role FROM members WHERE deleted_at IS NULL").fetchall()
-    for m in all_members:
-        legacy_role = "superadmin" if m["name"].lower() == "gabriel" else (m["role"] or "membre")
-        role_row = c.execute("SELECT id FROM roles WHERE code=?", (legacy_role,)).fetchone()
-        if not role_row:
-            continue
-        already = c.execute(
-            "SELECT 1 FROM member_roles WHERE member_id=? AND role_id=?",
-            (m["id"], role_row["id"])
-        ).fetchone()
-        if already:
-            continue
-        c.execute(
-            "INSERT INTO member_roles (member_id, role_id) VALUES (?, ?)",
-            (m["id"], role_row["id"])
-        )
-        perms = c.execute(
-            "SELECT permission_id FROM role_permissions WHERE role_id=?", (role_row["id"],)
-        ).fetchall()
-        for p in perms:
-            c.execute(
-                """INSERT OR IGNORE INTO member_permissions (member_id, permission_id, granted, source)
-                   VALUES (?, ?, 1, \'role\')""",
-                (m["id"], p["permission_id"])
-            )
-
-
-    # -- EXT-RBAC-B03 -- Extension idempotente : permissions supplémentaires
-    # (database.export/import, members.manage, operations.manage) + rattrapage
-    # pour les membres déjà existants. Voir docstring de patch_database.py.
-    _ext_roles = ["superadmin", "admin", "chef_projet", "membre"]
-    for _role_code in _ext_roles:
-        c.execute(
-            "INSERT OR IGNORE INTO roles (code, description) VALUES (?, ?)",
-            (_role_code, _role_code)
-        )
-
-    _ext_permissions = [
-        # (code, module, description, [role_codes qui l'obtiennent par défaut])
-        ("database.export", "admin", "Exporter la base de donnees", ["superadmin"]),
-        ("database.import", "admin", "Importer une base de donnees", ["superadmin"]),
-        ("members.manage",  "rbac",  "Gerer les membres et leurs statuts", ["superadmin", "admin"]),
-        ("operations.manage","ops",  "Gerer activites, besoins, performances", ["superadmin", "admin", "chef_projet"]),
-    ]
-
-    for _code, _module, _desc, _role_codes in _ext_permissions:
-        c.execute(
-            "INSERT OR IGNORE INTO permissions (code, module, description) VALUES (?, ?, ?)",
-            (_code, _module, _desc)
-        )
-        _perm_row = c.execute("SELECT id FROM permissions WHERE code=?", (_code,)).fetchone()
-        if not _perm_row:
-            continue
-        for _role_code in _role_codes:
-            _role_row = c.execute("SELECT id FROM roles WHERE code=?", (_role_code,)).fetchone()
-            if not _role_row:
-                continue
-            c.execute(
-                "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
-                (_role_row["id"], _perm_row["id"])
-            )
-
-    # Rattrapage : pour chaque membre déjà existant, s'assurer que son rôle
-    # legacy (members.role) est bien reflété dans member_roles, puis que
-    # toutes les permissions de ce rôle (y compris celles ajoutées ci-dessus)
-    # sont copiées dans member_permissions.
-    _all_members = c.execute("SELECT id, role, is_admin FROM members").fetchall()
-    for _m in _all_members:
-        _legacy_role = _m["role"] or ("admin" if _m["is_admin"] else "membre")
-        _role_row = c.execute("SELECT id FROM roles WHERE code=?", (_legacy_role,)).fetchone()
-        if not _role_row:
-            continue
-        c.execute(
-            "INSERT OR IGNORE INTO member_roles (member_id, role_id) VALUES (?, ?)",
-            (_m["id"], _role_row["id"])
-        )
-        _role_perms = c.execute(
-            "SELECT permission_id FROM role_permissions WHERE role_id=?", (_role_row["id"],)
-        ).fetchall()
-        for _rp in _role_perms:
-            c.execute(
-                """INSERT INTO member_permissions (member_id, permission_id, granted, source)
-                   VALUES (?, ?, 1, 'role')
-                   ON CONFLICT(member_id, permission_id) DO UPDATE SET granted=1
-                   WHERE member_permissions.source='role'""",
-                (_m["id"], _rp["permission_id"])
-            )
-
     conn.commit()
     conn.close()
+
+// END OF FILE: backend/database.py
+
+// FILE: backend/utils/auth.py
+-----------------------------------------------
+# backend/utils/auth.py
+#
+# A-08 — Soft delete : get_current_user vérifie deleted_at IS NULL.
+#         Un membre supprimé (soft) ne peut plus se connecter même si son
+#         token JWT est encore valide.
+
+import jwt
+import os
+from functools import wraps
+from flask import request, jsonify
+from database import get_db
+
+SECRET_KEY = os.environ.get("JWT_SECRET", "agt-secret-dev-2026")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 heures
+
+
+def encode_token(payload: dict) -> str:
+    """Génère un JWT signé."""
+    import datetime
+    payload = payload.copy()
+    payload["exp"] = datetime.datetime.utcnow() + datetime.timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> dict:
+    """Décode et vérifie un JWT. Lève une exception si invalide."""
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+
+def get_current_user():
+    """
+    Extrait et retourne le membre connecté depuis le token JWT.
+    Rejette :
+      - token manquant / expiré / invalide
+      - membre inactif (is_active = 0)
+      - membre supprimé en soft delete (deleted_at IS NOT NULL)
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None, "Token manquant"
+    token = auth_header.split(" ", 1)[1]
+    try:
+        payload = decode_token(token)
+        member_id = payload.get("member_id")
+        conn = get_db()
+        row = conn.execute(
+            "SELECT * FROM members WHERE id = ? AND is_active = 1 AND deleted_at IS NULL",
+            (member_id,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None, "Membre introuvable, inactif ou supprimé"
+        return dict(row), None
+    except jwt.ExpiredSignatureError:
+        return None, "Token expiré"
+    except jwt.InvalidTokenError:
+        return None, "Token invalide"
+
+
+def require_auth(f):
+    """Décorateur — protège un endpoint, injecte current_user."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user, error = get_current_user()
+        if error:
+            return jsonify({"error": error}), 401
+        return f(*args, current_user=user, **kwargs)
+    return decorated
+
+
+def require_admin(f):
+    """Décorateur — réservé à Gabriel (is_admin=True)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user, error = get_current_user()
+        if error:
+            return jsonify({"error": error}), 401
+        if not user.get("is_admin"):
+            return jsonify({"error": "Accès réservé à l'administrateur"}), 403
+        return f(*args, current_user=user, **kwargs)
+    return decorated
+
+
+def require_role(*roles):
+    """
+    Décorateur — restreint l'accès aux rôles fournis.
+    Ex: @require_role("admin", "chef_projet")
+    L'admin (role='admin' ou is_admin=1) passe toujours.
+    Injecte current_user dans la vue.
+    """
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user, error = get_current_user()
+            if error:
+                return jsonify({"error": error}), 401
+            user_role = user.get("role") or ("admin" if user.get("is_admin") else "membre")
+            if user_role == "admin" or user_role in roles:
+                return f(*args, current_user=user, **kwargs)
+            return jsonify({"error": "Accès non autorisé pour votre rôle"}), 403
+        return decorated
+    return wrapper
+
+// END OF FILE: backend/utils/auth.py
+
+// FILE: backend/routes/auth.py
+-----------------------------------------------
+# backend/routes/auth.py
+import hashlib
+from flask import Blueprint, request, jsonify
+from database import get_db
+from utils.auth import encode_token, decode_token, require_auth
+
+auth_bp = Blueprint("auth", __name__)
+
+
+def hash_password(password: str) -> str:
+    """Hash SHA-256 simple — suffisant pour usage interne."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    return hash_password(password) == hashed
+
+
+@auth_bp.route("/login", methods=["POST"])
+def login():
+    """
+    POST /api/auth/login
+    Body: { "email": "...", "password": "..." }
+    Retourne: { "access_token": "...", "user": { id, name, email, is_admin } }
+    """
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "Email et mot de passe requis"}), 400
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM members WHERE LOWER(email)=?", (email,)
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "Identifiants invalides"}), 401
+
+    member = dict(row)
+
+    if not member.get("is_active", 1):
+        status = member.get("status")
+        if status == "pending":
+            return jsonify({"error": "Compte en attente de validation par l'administrateur"}), 403
+        if status == "rejected":
+            return jsonify({"error": "Demande de compte refusée. Contactez votre Lead Technique"}), 403
+        return jsonify({"error": "Compte désactivé. Contactez votre Lead Technique"}), 403
+
+    if not verify_password(password, member.get("password_hash", "")):
+        return jsonify({"error": "Identifiants invalides"}), 401
+
+    token = encode_token({
+        "member_id": member["id"],
+        "name": member["name"],
+        "is_admin": bool(member.get("is_admin", 0)),
+        "role": member.get("role") or ("admin" if member.get("is_admin") else "membre")
+    })
+
+    return jsonify({
+        "access_token": token,
+        "user": {
+            "id": member["id"],
+            "name": member["name"],
+            "email": member["email"],
+            "is_admin": bool(member.get("is_admin", 0)),
+            "role": member.get("role") or ("admin" if member.get("is_admin") else "membre")
+        }
+    })
+
+
+@auth_bp.route("/register", methods=["POST"])
+def register():
+    """
+    POST /api/auth/register  (public — BF-02)
+    Body: { "name": "...", "email": "...", "password": "..." }
+    Crée une demande de compte en attente de validation admin.
+    """
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not name or not email or not password:
+        return jsonify({"error": "Nom, email et mot de passe requis"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Le mot de passe doit faire au moins 6 caractères"}), 400
+
+    conn = get_db()
+    exists = conn.execute(
+        "SELECT 1 FROM members WHERE (LOWER(email)=? OR LOWER(name)=?) AND deleted_at IS NULL",
+        (email, name.lower())
+    ).fetchone()
+    if exists:
+        conn.close()
+        return jsonify({"error": "Un compte avec ce nom ou cet email existe déjà"}), 409
+
+    try:
+        conn.execute(
+            """INSERT INTO members (name, email, password_hash, is_admin, is_active, status, role)
+               VALUES (?, ?, ?, 0, 0, 'pending', 'membre')""",
+            (name, email, hash_password(password))
+        )
+        conn.commit()
+
+        # A-06 — Notification aux admins actifs
+        from utils.notif import notify as _notify
+        new_member = conn.execute(
+            "SELECT id FROM members WHERE LOWER(email)=?", (email,)
+        ).fetchone()
+        admins = conn.execute(
+            "SELECT id FROM members WHERE is_admin=1 AND is_active=1"
+        ).fetchall()
+        if new_member:
+            for admin in admins:
+                _notify(
+                    conn,
+                    recipient_id=admin["id"],
+                    sender_id=new_member["id"],
+                    type_="register_request",
+                    title=f"Demande de compte : {name}",
+                    body=f"{name} ({email}) a soumis une demande de création de compte.",
+                )
+            conn.commit()
+
+        conn.close()
+        return jsonify({"message": "Demande envoyée. En attente de validation par l'administrateur."}), 201
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 409
+
+
+@auth_bp.route("/me", methods=["GET"])
+@require_auth
+def me(current_user):
+    """
+    GET /api/auth/me
+    Retourne le profil du membre connecté.
+    """
+    return jsonify({
+        "id": current_user["id"],
+        "name": current_user["name"],
+        "email": current_user["email"],
+        "is_admin": bool(current_user.get("is_admin", 0)),
+        "role": current_user.get("role") or ("admin" if current_user.get("is_admin") else "membre")
+    })
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@require_auth
+def logout(current_user):
+    """
+    POST /api/auth/logout
+    Côté client le token est supprimé — pas de blacklist nécessaire ici.
+    """
+    return jsonify({"message": f"Au revoir {current_user['name']} !"})
+// END OF FILE: backend/routes/auth.py
+

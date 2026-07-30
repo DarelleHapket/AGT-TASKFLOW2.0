@@ -1,8 +1,9 @@
 // frontend/src/App.jsx
 import { useState, useEffect } from "react";
-import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList } from "lucide-react";
+import { LayoutList, GanttChart, Network, FolderOpen, Tag, Users, Zap, Target, FileText, BarChart2, LogOut, Bell, ClipboardList , Shield } from "lucide-react";
 import { useData } from "./hooks/useData";
 import { useAuth } from "./hooks/useAuth";
+import { RBACView } from "./components/rbac/RBACView";
 import { useSeenDifficulties } from "./hooks/useSeenDifficulties";
 import * as api from "./api/client";
 import { LoginPage } from "./components/auth/LoginPage";
@@ -19,7 +20,19 @@ import { PerformanceView } from "./components/performance/PerformanceView";
 import { DailyOrderView } from "./components/daily/DailyOrderView";
 import { ReportsView } from "./components/reports/ReportsView";
 import { NotificationsPanel } from "./components/notifications/NotificationsPanel";
+import { Sidebar } from "./components/layout/Sidebar";
+import { DashboardView } from "./components/dashboard/DashboardView";
 
+const TAB_TITLES = {
+  dashboard: "Tableau de bord", tasks: "Tâches", gantt: "Gantt", pert: "PERT",
+  daily: "Ma journée", projects: "Projets", activities: "Activités",
+  needs: "Besoins", notes: "Notes", performance: "Performances",
+  reports: "Rapports", team: "Membres", rbac: "Rôles & permissions",
+};
+
+// TABS n'est plus utilisé pour le rendu de la navigation (remplacée par
+// Sidebar, pilotée par SIDEBAR_SECTIONS dans components/layout/Sidebar.jsx).
+// Conservé ici uniquement si d'autres écrans y font encore référence.
 const TABS = [
   { id: "tasks",       label: "Tâches",       Icon: LayoutList   },
   { id: "gantt",       label: "Gantt",         Icon: GanttChart   },
@@ -29,13 +42,14 @@ const TABS = [
   { id: "needs",       label: "Besoins",       Icon: Target       },
   { id: "performance", label: "Performances",  Icon: BarChart2    },
   { id: "reports",     label: "Rapports",      Icon: FileText     },
+  { id: "rbac",        label: "Rôles",         Icon: Shield       },
   { id: "team",        label: "Équipe",        Icon: Users        },
 ];
 
 export default function App() {
-  const { token, user, isAdmin, isChef, isLogged, login, logout, refreshUser } = useAuth();
+  const { token, user, isAdmin, isChef, isSuperadmin, isLogged, login, logout, refreshUser, hasPermission } = useAuth();
   const { markAsSeen, hasUnseen, totalUnseen }            = useSeenDifficulties();
-  const [tab, setTab]       = useState("tasks");
+  const [tab, setTab]       = useState("dashboard");
   const [modal, setModal]   = useState(null);
   const [filters, setFilters] = useState({
     project: "all", member: "all", status: "all",
@@ -48,6 +62,7 @@ export default function App() {
   const [showBell, setShowBell]     = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showProfile, setShowProfile] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState([]);
 
   const {
     tasks, setTasks, projects, setProjects,
@@ -68,6 +83,12 @@ export default function App() {
   useEffect(() => {
     if (!isLogged) return;
     api.getNotifications().then(setNotifications).catch(() => {});
+  }, [isLogged, tab]);
+
+  // ── Charger demandes de compte en attente (si permission) ────────────────
+  useEffect(() => {
+    if (!isLogged) return;
+    api.getPendingMembers().then(setPendingRequests).catch(() => setPendingRequests([]));
   }, [isLogged, tab]);
 
   // ── Charger compteurs difficultés ────────────────────────────────────────
@@ -192,6 +213,14 @@ export default function App() {
 
   const onAddMember    = async (d) => { const m = await api.createMember(d);    setMembers((prev) => [...prev, m]); };
   const onSetMemberRole = async (id, role) => { const m = await api.setMemberRole(id, role); setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x)); };
+  const onValidateRequest = async (id, action) => {
+    await api.validateMember(id, action);
+    setPendingRequests((prev) => prev.filter((r) => r.id !== id));
+    if (action === "approve") {
+      const updated = await api.getMembers();
+      setMembers(updated);
+    }
+  };
   const onDeleteMember = async (id) => { await api.deleteMember(id); setMembers((prev) => prev.filter((m) => m.id !== id)); };
   const onToggleMemberActive = async (member) => { const m = await api.toggleMemberActive(member.id); setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x)); return m; };
 
@@ -204,29 +233,21 @@ export default function App() {
   const onDeleteNote = async (id) => { await api.deleteNote(id); setNotes((prev) => prev.filter((n) => n.id !== id)); };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex" }}>
+      <Sidebar activeTab={tab} onTabChange={setTab} hasPermission={hasPermission} />
 
-      {/* Header */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
+      {/* Topbar */}
       <div style={{
         background: "var(--bg-card)", borderBottom: "1px solid var(--border)",
-        padding: "0 20px", display: "flex", alignItems: "center",
-        justifyContent: "space-between", height: 52,
+        padding: "0 24px", display: "flex", alignItems: "center",
+        justifyContent: "space-between", height: 60,
         position: "sticky", top: 0, zIndex: 100,
       }}>
-        <nav style={{ display: "flex", gap: 2, overflowX: "auto" }}>
-          {TABS.map(({ id, label, Icon }) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12,
-              fontWeight: tab === id ? 700 : 400,
-              background: tab === id ? "var(--accent-bg)" : "transparent",
-              color: tab === id ? "var(--accent)" : "var(--text-2)",
-              cursor: "pointer", whiteSpace: "nowrap",
-            }}>
-              <Icon size={13} /> {label}
-            </button>
-          ))}
-        </nav>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+          {TAB_TITLES[tab] || ""}
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
@@ -313,18 +334,38 @@ export default function App() {
       </div>
 
       {/* Contenu */}
-      <div style={{ padding: 20, maxWidth: 1440, margin: "0 auto" }}>
+      <div style={{ padding: 24, maxWidth: 1440, margin: "0 auto", width: "100%" }}>
+        {tab === "dashboard" && (
+          <DashboardView
+            user={user}
+            hasPermission={hasPermission}
+            isSuperadmin={isSuperadmin}
+            members={members}
+            projects={projects}
+            tasks={tasks}
+            pendingRequests={pendingRequests}
+            onValidateRequest={onValidateRequest}
+            onGoToTeam={() => setTab("team")}
+            onGoToRoles={() => setTab("rbac")}
+            onGetProjectMembers={onGetProjectMembers}
+            onAddProjectMember={onAddProjectMember}
+            onUpdateProjectMember={onUpdateProjectMember}
+            onRemoveProjectMember={onRemoveProjectMember}
+          />
+        )}
         {tab === "tasks"       && <TasksView tasks={filtered} projects={projects} activities={activities} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} onAdd={() => setModal({ mode: "add" })} onEdit={(t) => setModal({ mode: "edit", task: t })} onDelete={onDeleteTask} onArchive={onArchiveTask} onUnarchive={onUnarchiveTask} isAdmin={isAdmin} />}
         {tab === "gantt"       && <GanttView tasks={filtered} projects={projects} members={members} pert={pert} filters={filters} setFilters={setFilters} memberColor={memberColor} />}
         {tab === "pert"        && <PERTView tasks={filtered} projects={projects} pert={pert} filters={filters} setFilters={setFilters} members={members} />}
         {tab === "daily"       && <DailyOrderView tasks={tasks} members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} currentUser={user} onGetProjectMembers={onGetProjectMembers} onAddProjectMember={onAddProjectMember} onUpdateProjectMember={onUpdateProjectMember} onRemoveProjectMember={onRemoveProjectMember} />}
+        {tab === "projects"    && <ProjectsView projects={projects} members={members} onAdd={onAddProject} onUpdate={onUpdateProject} onDelete={onDeleteProject} onSetChef={onSetChef} isAdmin={isAdmin} isChef={isChef} isSuperadmin={isSuperadmin} currentUser={user} onGetProjectMembers={onGetProjectMembers} onAddProjectMember={onAddProjectMember} onUpdateProjectMember={onUpdateProjectMember} onRemoveProjectMember={onRemoveProjectMember} />}
         {tab === "activities"  && <ActivitiesView activities={activities} projects={projects} onAdd={onAddActivity} onUpdate={onUpdateActivity} onDelete={onDeleteActivity} isAdmin={isAdmin} />}
         {tab === "needs"       && <NeedsView needs={needs} projects={projects} activities={activities} onAdd={onAddNeed} onUpdate={onUpdateNeed} onDelete={onDeleteNeed} />}
         {tab === "notes"       && <NotesView notes={notes} projects={projects} activities={activities} tasks={tasks} onAdd={onAddNote} onUpdate={onUpdateNote} onDelete={onDeleteNote} />}
         {tab === "performance" && <PerformanceView members={members} />}
         {tab === "reports"     && <ReportsView members={members} user={user} isAdmin={isAdmin} />}
-        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} isAdmin={isAdmin} />}
+        {tab === "team"        && <TeamView members={members} onAdd={onAddMember} onDelete={onDeleteMember} onSetMemberRole={onSetMemberRole} onToggleActive={onToggleMemberActive} isAdmin={isAdmin} isSuperadmin={isSuperadmin} currentUser={user} />}
+        {tab === "rbac"        && isSuperadmin && <RBACView members={members} />}
+      </div>
       </div>
 
       {modal && (

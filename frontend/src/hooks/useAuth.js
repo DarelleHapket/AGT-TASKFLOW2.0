@@ -1,8 +1,6 @@
 import { useState, useCallback } from "react";
-
 const TOKEN_KEY = "agt_token";
 const USER_KEY = "agt_user";
-
 function loadFromStorage() {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -12,26 +10,18 @@ function loadFromStorage() {
     return { token: null, user: null };
   }
 }
-
 export function useAuth() {
   const [auth, setAuth] = useState(loadFromStorage);
-
   const login = useCallback((token, user) => {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     setAuth({ token, user });
   }, []);
-
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setAuth({ token: null, user: null });
   }, []);
-
-  // B01 — Rafraîchit le profil depuis /api/auth/me sans forcer la reconnexion.
-  // Appelé au montage de l'app (App.jsx) : si l'admin a changé le rôle de
-  // l'utilisateur depuis sa dernière connexion, le nouveau rôle est appliqué
-  // immédiatement sans redemander le mot de passe.
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) return;
@@ -40,7 +30,7 @@ export function useAuth() {
         `${import.meta.env.VITE_API_URL || "http://localhost:4001"}/api/auth/me`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      if (!res.ok) return; // token expiré → App.jsx gère le 401
+      if (!res.ok) return;
       const user = await res.json();
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       setAuth({ token, user });
@@ -48,13 +38,19 @@ export function useAuth() {
       // réseau indisponible → on garde l'état actuel, pas de crash
     }
   }, []);
-
   const role = auth.user?.role ?? (auth.user?.is_admin ? "admin" : "membre");
-
+  const permissions = auth.user?.permissions ?? [];
+  const hasPermission = useCallback(
+    (code) => role === "superadmin" || permissions.includes(code),
+    [role, permissions]
+  );
   return {
     token: auth.token,
     user: auth.user,
     role,
+    permissions,
+    hasPermission,
+    isSuperadmin: role === "superadmin",
     isAdmin: role === "admin",
     isChef: role === "chef_projet",
     isMembre: role === "membre",

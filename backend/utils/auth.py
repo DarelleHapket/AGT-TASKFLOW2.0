@@ -53,7 +53,15 @@ def get_current_user():
         conn.close()
         if not row:
             return None, "Membre introuvable, inactif ou supprimé"
-        return dict(row), None
+        member = dict(row)
+        # Rôle effectif : superadmin (multi-rôles RBAC) prioritaire sur la
+        # colonne legacy members.role, pour éviter toute désynchronisation
+        # entre RBACView (member_roles) et le reste de l'app.
+        from utils.rbac import get_member_roles
+        roles = get_member_roles(member["id"])
+        if "superadmin" in roles:
+            member["role"] = "superadmin"
+        return member, None
     except jwt.ExpiredSignatureError:
         return None, "Token expiré"
     except jwt.InvalidTokenError:
@@ -72,7 +80,7 @@ def require_auth(f):
 
 
 def require_admin(f):
-    """Décorateur — réservé à Gabriel (is_admin=True)."""
+    """Décorateur — réservé aux comptes admin (is_admin=True, superadmin inclus)."""
     @wraps(f)
     def decorated(*args, **kwargs):
         user, error = get_current_user()
@@ -80,6 +88,20 @@ def require_admin(f):
             return jsonify({"error": error}), 401
         if not user.get("is_admin"):
             return jsonify({"error": "Accès réservé à l'administrateur"}), 403
+        return f(*args, current_user=user, **kwargs)
+    return decorated
+
+
+def require_superadmin(f):
+    """Décorateur — réservé strictement au superadmin (ex: validation finale
+    des demandes de compte). Un Admin simple n'a que la consultation."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user, error = get_current_user()
+        if error:
+            return jsonify({"error": error}), 401
+        if user.get("role") != "superadmin":
+            return jsonify({"error": "Accès réservé au Superadmin"}), 403
         return f(*args, current_user=user, **kwargs)
     return decorated
 

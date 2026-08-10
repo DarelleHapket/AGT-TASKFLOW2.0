@@ -51,14 +51,15 @@ démarrage** pour savoir lequel utiliser. L'API Django reste fixe sur 8000.
 
 | Email | Mot de passe | Rôle | Sert à tester |
 |---|---|---|---|
-| `SuperAdmin@agt.com` | `AGT2026!` | Superadmin | Identifiants de démarrage réels (§6 du [guide fonctionnel](./GUIDE_FONCTIONNEL.md)) |
-| `darelle@agt.test` | `Test@2026` | Superadmin | Accès total, `/rbac`, gestion des rôles |
-| `admin.test@agt.test` | `Test@2026` | Admin | RH, Finances, Matériel, sans les écrans réservés Superadmin |
-| `josue@agt.test` | `Test@2026` | Membre + Chef de projet | Ce qu'un utilisateur normal voit (Finances/RH/Matériel masqués) |
+| `SuperAdmin@agt.com` | `AGT2026!` | Superadmin | Identifiants de démarrage réels (§6 du [guide fonctionnel](./GUIDE_FONCTIONNEL.md)) — seul compte actif restant |
 
-Ces comptes n'existent que sur ta base locale (`db.sqlite3`) — recréés à la main pendant les
-tests, pas seedés automatiquement. Seul `SuperAdmin@agt.com` correspond au comportement réel
-de démarrage (BF-01, voir le guide fonctionnel).
+Les anciens comptes de test (`darelle@agt.test`, `admin.test@agt.test`,
+`superadmin@ag-technologies.tech`) ont été supprimés (soft-delete) à ta demande.
+`josue@agt.test` est aussi soft-supprimé. Pour retester les différences de rôle
+(Admin/Chef de projet/Membre), le plus simple est de passer par le vrai parcours de
+l'appli : `/login` → « Créer un compte » → valider la demande depuis `/membres` avec
+`SuperAdmin@agt.com`, puis attribuer le rôle voulu — plutôt que je recrée des comptes en
+dur qu'il faudra encore nettoyer ensuite.
 
 Pour tester un endpoint dans Swagger : se connecter d'abord sur
 `/login` dans l'appli (vérifie que le compte fonctionne), puis dans Swagger

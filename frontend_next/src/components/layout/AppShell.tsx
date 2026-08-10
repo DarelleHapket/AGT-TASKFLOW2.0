@@ -59,14 +59,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     api.getNotifications().then(setNotifications).catch(() => {});
   }, [isLogged]);
 
-  // D-11 (team-tool) : mot de passe temporaire après migration/création admin
-  // -> changement forcé avant d'accéder au reste de l'app.
-  useEffect(() => {
-    if (isLogged && user?.doit_changer_mdp && pathname !== "/mon-compte") {
-      router.replace("/mon-compte");
-    }
-  }, [isLogged, user, pathname, router]);
-
   if (!isLogged || !user) return null;
 
   const critCount = tasks.filter((t) => t.critical).length;
@@ -178,6 +170,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Contenu */}
         <div style={{ padding: 24, maxWidth: 1440, margin: "0 auto", width: "100%" }}>
+          {user.doit_changer_mdp && pathname !== "/mon-compte" && (
+            // D-11 (team-tool) assoupli : mot de passe temporaire (recrutement,
+            // migration, superadmin par défaut) -> rappel permanent plutôt
+            // qu'un blocage total de la navigation, pour laisser le choix du
+            // moment tout en gardant le rappel visible tant que ce n'est pas fait.
+            <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, fontSize: 12, color: "#ea580c", display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={14} /> Vous utilisez un mot de passe temporaire — pensez à le changer.
+              </span>
+              <button onClick={() => router.push("/mon-compte")} style={{ background: "none", border: "1px solid #fed7aa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#ea580c", fontWeight: 700, fontSize: 11 }}>
+                Changer maintenant
+              </button>
+            </div>
+          )}
           {children}
         </div>
       </div>

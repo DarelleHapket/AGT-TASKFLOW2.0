@@ -7,14 +7,61 @@
 // la migration). Styles inline alignés sur le reste de l'app.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, UserRound, Wallet, Pencil } from "lucide-react";
+import { jsPDF } from "jspdf";
+import { KeyRound, UserRound, Wallet, Pencil, FileDown, CalendarDays, Receipt } from "lucide-react";
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
-import type { Competence, Employe, Profil } from "@/lib/types";
+import type { Competence, Conge, Contrat, Employe, NoteFrais, Profil, Remuneration, StatutDemande } from "@/lib/types";
 
 const PERIODICITE_LABEL: Record<string, string> = { mensuelle: "mois", hebdomadaire: "semaine", journaliere: "jour" };
 const AVATAR_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#8b5cf6", "#f97316", "#06b6d4", "#84cc16", "#ef4444", "#3b82f6"];
+const STATUT_DEMANDE_LABEL: Record<StatutDemande, { label: string; color: string }> = {
+  en_attente: { label: "En attente", color: "#f59e0b" },
+  validee: { label: "Validée", color: "#22c55e" },
+  refusee: { label: "Refusée", color: "#ef4444" },
+};
+
+function StatutPill({ statut }: { statut: StatutDemande }) {
+  const s = STATUT_DEMANDE_LABEL[statut];
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: s.color + "18", color: s.color, border: `1px solid ${s.color}33`, whiteSpace: "nowrap" }}>
+      {s.label}
+    </span>
+  );
+}
+
+// Fiche de paie — PDF généré côté client, jamais stocké côté serveur (même
+// pattern que le bilan financier, BF-29 / Document d'Analyse §11).
+function genererFichePaie(nomEmploye: string, contrat: Contrat, remuneration: Remuneration) {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const margin = 40;
+  let y = margin;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(40, 40, 90);
+  doc.text("Fiche de paie — AGT Technologies", margin, y); y += 24;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90, 90, 90);
+  doc.text(`Émise le ${new Date().toLocaleDateString("fr-FR")}`, margin, y); y += 24;
+  doc.setDrawColor(200); doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y); y += 24;
+
+  const rows: [string, string][] = [
+    ["Employé", nomEmploye],
+    ["Type de contrat", contrat.type_contrat_nom],
+    ["Début du contrat", new Date(contrat.date_debut).toLocaleDateString("fr-FR")],
+    ["Rémunération", `${remuneration.montant} / ${PERIODICITE_LABEL[remuneration.periodicite] || remuneration.periodicite}`],
+    ["En vigueur depuis", new Date(remuneration.cree_le).toLocaleDateString("fr-FR")],
+  ];
+  rows.forEach(([label, valeur]) => {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20, 20, 20);
+    doc.text(label, margin, y);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+    doc.text(valeur, margin + 150, y);
+    y += 22;
+  });
+  y += 14;
+  doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+  doc.text("Document généré depuis l'espace salarié — à valider par le service RH avant tout usage officiel.", margin, y);
+  doc.save(`fiche_de_paie_${nomEmploye.replace(/\s+/g, "_")}.pdf`);
+}
 
 export default function MonComptePage() {
   const { user, isLogged, refreshUser } = useAuth();
@@ -30,6 +77,16 @@ export default function MonComptePage() {
   const [competences, setCompetences] = useState<Competence[]>([]);
   const [employe, setEmploye] = useState<Employe | null>(null);
   const [profilLoading, setProfilLoading] = useState(true);
+
+  const [conges, setConges] = useState<Conge[]>([]);
+  const [congeForm, setCongeForm] = useState({ date_debut: "", date_fin: "", motif: "" });
+  const [congeMsg, setCongeMsg] = useState<string | null>(null);
+  const [savingConge, setSavingConge] = useState(false);
+
+  const [notesFrais, setNotesFrais] = useState<NoteFrais[]>([]);
+  const [fraisForm, setFraisForm] = useState({ montant: "", motif: "", date_depense: "" });
+  const [fraisMsg, setFraisMsg] = useState<string | null>(null);
+  const [savingFrais, setSavingFrais] = useState(false);
 
   const [editingInfos, setEditingInfos] = useState(false);
   const [nom, setNom] = useState("");
@@ -51,11 +108,57 @@ export default function MonComptePage() {
     api.getMonProfil()
       .then((p) => {
         setProfil(p);
-        if (p.est_employe) api.getMonSalaire().then(setEmploye).catch(() => setEmploye(null));
+        if (p.est_employe) {
+          api.getMonSalaire().then(setEmploye).catch(() => setEmploye(null));
+          rechargerConges(); rechargerFrais();
+        }
       })
       .catch(() => setProfil(null))
       .finally(() => setProfilLoading(false));
   }, [isLogged]);
+
+  function rechargerConges() { api.getConges().then(setConges).catch(() => setConges([])); }
+  function rechargerFrais() { api.getNotesFrais().then(setNotesFrais).catch(() => setNotesFrais([])); }
+
+  async function poserConge() {
+    setCongeMsg(null);
+    if (!congeForm.date_debut || !congeForm.date_fin) { setCongeMsg("Dates de début et de fin requises."); return; }
+    setSavingConge(true);
+    try {
+      await api.createConge(congeForm);
+      setCongeForm({ date_debut: "", date_fin: "", motif: "" });
+      rechargerConges();
+    } catch (e) {
+      setCongeMsg(api.errorMessage(e, "Impossible de poser ce congé"));
+    } finally {
+      setSavingConge(false);
+    }
+  }
+
+  async function annulerConge(id: number) {
+    await api.annulerConge(id).catch(() => {});
+    rechargerConges();
+  }
+
+  async function declarerFrais() {
+    setFraisMsg(null);
+    if (!fraisForm.montant || !fraisForm.motif.trim() || !fraisForm.date_depense) { setFraisMsg("Montant, motif et date requis."); return; }
+    setSavingFrais(true);
+    try {
+      await api.createNoteFrais(fraisForm);
+      setFraisForm({ montant: "", motif: "", date_depense: "" });
+      rechargerFrais();
+    } catch (e) {
+      setFraisMsg(api.errorMessage(e, "Impossible de déclarer cette note de frais"));
+    } finally {
+      setSavingFrais(false);
+    }
+  }
+
+  async function annulerFrais(id: number) {
+    await api.annulerNoteFrais(id).catch(() => {});
+    rechargerFrais();
+  }
 
   useEffect(() => {
     if (user) { setNom(user.name); setCouleur(user.color); }
@@ -176,21 +279,154 @@ export default function MonComptePage() {
                 </div>
               </div>
               {profil.est_employe && (
-                <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <Wallet size={14} color="var(--text-3)" />
-                  {employe && contratActuel && remunerationActuelle ? (
-                    <span style={{ fontSize: 13, color: "var(--text)" }}>
-                      <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
-                      <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
+                <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Wallet size={14} color="var(--text-3)" />
+                      {employe && contratActuel && remunerationActuelle ? (
+                        <span style={{ fontSize: 13, color: "var(--text)" }}>
+                          <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
+                          <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
+                      )}
+                    </div>
+                    {employe && contratActuel && remunerationActuelle && (
+                      <button onClick={() => genererFichePaie(user.name, contratActuel, remunerationActuelle)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, color: "var(--text-2)", fontWeight: 600 }}>
+                        <FileDown size={13} /> Fiche de paie
+                      </button>
+                    )}
+                  </div>
+
+                  {employe && employe.contrats.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>HISTORIQUE DE CARRIÈRE</span>
+                      <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 8 }}>
+                        {employe.contrats.map((c) => (
+                          <div key={c.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                            <div style={{ fontWeight: 600, color: "var(--text)" }}>
+                              {c.type_contrat_nom}
+                              <span style={{ fontWeight: 400, color: "var(--text-3)" }}> — {new Date(c.date_debut).toLocaleDateString("fr-FR")}
+                                {c.date_fin ? ` → ${new Date(c.date_fin).toLocaleDateString("fr-FR")}` : " (en cours)"}
+                              </span>
+                            </div>
+                            {c.remunerations.map((r) => (
+                              <div key={r.id} style={{ marginTop: 2, color: "var(--text-3)" }}>
+                                {r.montant} / {PERIODICITE_LABEL[r.periodicite] || r.periodicite} — depuis le {new Date(r.cree_le).toLocaleDateString("fr-FR")}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
             </>
           )}
         </div>
+
+        {profil?.est_employe && (
+          <div style={{ marginTop: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", padding: 20 }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 800, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
+              <CalendarDays size={16} /> Mes congés
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: conges.length ? 16 : 8 }}>
+              {conges.map((c) => (
+                <div key={c.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: "var(--text)" }}>
+                      {new Date(c.date_debut).toLocaleDateString("fr-FR")} → {new Date(c.date_fin).toLocaleDateString("fr-FR")}
+                    </div>
+                    {c.motif && <div style={{ color: "var(--text-3)", marginTop: 2 }}>{c.motif}</div>}
+                    {c.statut !== "en_attente" && c.commentaire_validation && (
+                      <div style={{ color: "var(--text-3)", marginTop: 2, fontStyle: "italic" }}>« {c.commentaire_validation} »</div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <StatutPill statut={c.statut} />
+                    {c.statut === "en_attente" && (
+                      <button onClick={() => annulerConge(c.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 11 }}>Annuler</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {conges.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune demande de congé.</p>}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={lbl}>DÉBUT</label>
+                <input style={inp} type="date" value={congeForm.date_debut} onChange={(e) => setCongeForm({ ...congeForm, date_debut: e.target.value })} />
+              </div>
+              <div>
+                <label style={lbl}>FIN</label>
+                <input style={inp} type="date" value={congeForm.date_fin} onChange={(e) => setCongeForm({ ...congeForm, date_fin: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>MOTIF (optionnel)</label>
+              <input style={inp} value={congeForm.motif} onChange={(e) => setCongeForm({ ...congeForm, motif: e.target.value })} />
+            </div>
+            {congeMsg && <div style={{ marginBottom: 10, fontSize: 12, color: "#ef4444" }}>{congeMsg}</div>}
+            <button onClick={poserConge} disabled={savingConge} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", cursor: savingConge ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 12, opacity: savingConge ? 0.7 : 1 }}>
+              {savingConge ? "Envoi…" : "Poser un congé"}
+            </button>
+          </div>
+        )}
+
+        {profil?.est_employe && (
+          <div style={{ marginTop: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", padding: 20 }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 800, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
+              <Receipt size={16} /> Mes notes de frais
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: notesFrais.length ? 16 : 8 }}>
+              {notesFrais.map((n) => (
+                <div key={n.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: "var(--text)" }}>
+                      {n.montant} — {n.motif}
+                    </div>
+                    <div style={{ color: "var(--text-3)", marginTop: 2 }}>{new Date(n.date_depense).toLocaleDateString("fr-FR")}</div>
+                    {n.statut !== "en_attente" && n.commentaire_validation && (
+                      <div style={{ color: "var(--text-3)", marginTop: 2, fontStyle: "italic" }}>« {n.commentaire_validation} »</div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <StatutPill statut={n.statut} />
+                    {n.statut === "en_attente" && (
+                      <button onClick={() => annulerFrais(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 11 }}>Annuler</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {notesFrais.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune note de frais.</p>}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={lbl}>MONTANT</label>
+                <input style={inp} type="number" min={0} step="0.01" value={fraisForm.montant} onChange={(e) => setFraisForm({ ...fraisForm, montant: e.target.value })} />
+              </div>
+              <div>
+                <label style={lbl}>DATE DE LA DÉPENSE</label>
+                <input style={inp} type="date" value={fraisForm.date_depense} onChange={(e) => setFraisForm({ ...fraisForm, date_depense: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>MOTIF</label>
+              <input style={inp} value={fraisForm.motif} onChange={(e) => setFraisForm({ ...fraisForm, motif: e.target.value })} />
+            </div>
+            {fraisMsg && <div style={{ marginBottom: 10, fontSize: 12, color: "#ef4444" }}>{fraisMsg}</div>}
+            <button onClick={declarerFrais} disabled={savingFrais} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", cursor: savingFrais ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 12, opacity: savingFrais ? 0.7 : 1 }}>
+              {savingFrais ? "Envoi…" : "Déclarer une note de frais"}
+            </button>
+          </div>
+        )}
 
         {user.doit_changer_mdp && (
           <div style={{ marginTop: 16, padding: "10px 14px", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, fontSize: 12, color: "#ea580c" }}>

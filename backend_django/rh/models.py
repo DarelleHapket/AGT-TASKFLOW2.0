@@ -195,3 +195,48 @@ class Signalement(models.Model):
 
     class Meta:
         ordering = ["-cree_le"]
+
+
+class StatutDemande(models.TextChoices):
+    EN_ATTENTE = "en_attente", "En attente"
+    VALIDEE = "validee", "Validée"
+    REFUSEE = "refusee", "Refusée"
+
+
+class Conge(models.Model):
+    """Espace salarié : un employé pose un congé, un gestionnaire RH
+    (Admin/Superadmin, permission rh.conges.gerer) le valide ou le refuse.
+    Ajouté hors cahier des charges initial, à la demande explicite du
+    donneur d'ordre (CDC à mettre à jour a posteriori)."""
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name="conges")
+    date_debut = models.DateField()
+    date_fin = models.DateField()
+    motif = models.CharField(max_length=255, blank=True)
+    statut = models.CharField(max_length=20, choices=StatutDemande.choices, default=StatutDemande.EN_ATTENTE)
+    commentaire_validation = models.CharField(max_length=255, blank=True)
+    traite_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-cree_le"]
+
+
+class NoteFrais(models.Model):
+    """Espace salarié : un employé déclare une note de frais, un
+    gestionnaire RH (permission rh.notes_frais.gerer) la valide ou la
+    refuse. Même statut que Conge — ajouté hors CDC initial."""
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name="notes_frais")
+    montant = models.DecimalField(max_digits=12, decimal_places=2)
+    motif = models.CharField(max_length=255)
+    date_depense = models.DateField()
+    statut = models.CharField(max_length=20, choices=StatutDemande.choices, default=StatutDemande.EN_ATTENTE)
+    commentaire_validation = models.CharField(max_length=255, blank=True)
+    traite_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-cree_le"]

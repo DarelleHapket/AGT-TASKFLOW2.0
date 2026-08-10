@@ -21,6 +21,7 @@ La v1.0 appelait le système « RBAC » seul, plaçait `Projet` dans le diagramm
 3. **Relation directe Utilisateur ↔ Permission ajoutée** au diagramme de classes : c'est elle qui matérialise l'IBAC.
 4. **L'enum `RoleGlobal` est supprimé.** `Role` est déjà une classe/table dans le diagramme — un enum à côté ferait doublon avec une entité qui existe réellement en base.
 5. **`Admin` retiré des acteurs du cas d'utilisation.** Admin est un rôle attribué par le Superadmin via la gestion des rôles, pas un acteur du système au sens UML. Les vrais acteurs sont le **Superadmin** (crée les utilisateurs, attribue les rôles) et l'**Utilisateur** (accède aux ressources selon ses permissions effectives, quel que soit le rôle qu'il porte).
+6. **Correction comportementale du retrait de rôle (2026-08-10, bug rapporté en test).** BF-05 dit « permissions copiées à l'attribution du rôle, puis modifiables indépendamment » ; l'implémentation initiale (`revoke_role`) prenait ça au pied de la lettre et ne retirait **jamais** les permissions copiées, même quand le rôle qui les avait données était lui-même retiré — un utilisateur passé d'Admin à Membre gardait par exemple `membres.delete`. Comportement corrigé : retirer un rôle retire désormais les permissions que **ce rôle précis** avait copiées (`source='role'`), sauf si (a) un autre rôle encore actif chez l'utilisateur les accorde aussi, ou (b) elles ont été accordées/retirées **directement** (`source='direct'`, IBAC) — ce second cas reste, lui, inchangé et toujours prioritaire, conformément à BF-05. Le diagramme de séquence retrait-de-rôle (section 5) et la spécification `Document_Conception_Module1_RBAC-IBAC_v1.1.md` sont mis à jour en conséquence.
 
 La cohérence entre le diagramme de classes et le diagramme d'états/transitions est rétablie en conséquence (section 5).
 
@@ -201,6 +202,28 @@ flowchart TD
 ```
 
 > **Cas particulier `chef_projet` observé dans l'implémentation actuelle (`RBAC.md`) :** ce rôle sert de verrou de création de projet, retiré automatiquement quand l'utilisateur ne possède plus aucun projet (`_demote_if_orphan`). C'est un exemple concret d'attribution/retrait de rôle piloté par une règle métier plutôt que par une action manuelle du Superadmin — le diagramme d'activité ci-dessus s'applique aussi à ce cas automatique, avec « Superadmin » remplacé par « règle métier automatique ».
+
+### 5.3 Retrait d'un rôle — comportement corrigé (2026-08-10)
+
+```mermaid
+flowchart TD
+    A[Superadmin retire le rôle X à un utilisateur] --> B[Rôle X supprimé de AttributionRole]
+    B --> C{Pour chaque permission par défaut de X...}
+    C --> D{Un autre rôle encore actif chez l'utilisateur accorde-t-il aussi cette permission ?}
+    D -- Oui --> E[Rien à faire -- toujours accordée via cet autre rôle]
+    D -- Non --> F{Cette permission a-t-elle une source='direct' -- accordée/retirée explicitement, IBAC ?}
+    F -- Oui --> G[Rien à faire -- le direct prime toujours, BF-05]
+    F -- Non --> H[Ligne PermissionEffective source=role supprimée]
+```
+
+Avant cette correction, l'étape D/F/H n'existait pas : la ligne `PermissionEffective` créée à
+l'attribution du rôle survivait indéfiniment à son retrait, tant qu'aucun retrait direct
+explicite ne l'effaçait — lu littéralement, BF-05 (« permissions copiées puis modifiables
+indépendamment ») ne distinguait pas « copie orpheline après retrait du rôle source » de «
+permission volontairement rendue indépendante ». Un compte passé d'Admin à Membre gardait par
+exemple `membres.delete`. La distinction (D) et (F) ci-dessus restaure l'intention réelle de
+BF-05 : seule une permission **explicitement** détachée de son rôle d'origine (accordée ou
+retirée en direct) doit survivre au retrait de ce rôle.
 
 ---
 

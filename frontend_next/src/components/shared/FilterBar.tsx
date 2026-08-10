@@ -111,9 +111,9 @@ function FilterDropdown({ label, options, value, onChange }: {
   );
 }
 
-export function FilterBar({ filters, setFilters, projects, members, showStatus = true }: {
+export function FilterBar({ filters, setFilters, projects, members, showStatus = true, compact = false }: {
   filters: TaskFilters; setFilters: (updater: (f: TaskFilters) => TaskFilters) => void;
-  projects: Projet[]; members: Utilisateur[]; showStatus?: boolean;
+  projects: Projet[]; members: Utilisateur[]; showStatus?: boolean; compact?: boolean;
 }) {
   const set = <K extends keyof TaskFilters>(k: K, v: TaskFilters[K]) => setFilters((f) => ({ ...f, [k]: v }));
   const [search, setSearch] = useState(filters.search || "");
@@ -157,6 +157,7 @@ export function FilterBar({ filters, setFilters, projects, members, showStatus =
         )}
       </div>
 
+      {!compact && (
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", padding: "10px 16px", alignItems: "center" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
           <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
@@ -211,6 +212,7 @@ export function FilterBar({ filters, setFilters, projects, members, showStatus =
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }

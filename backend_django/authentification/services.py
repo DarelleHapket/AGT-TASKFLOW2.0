@@ -24,11 +24,28 @@ def assign_role(user, role_code, assigned_by=None):
 
 
 def revoke_role(user, role_code):
-    """Retire un rôle. Les permissions déjà copiées restent (découplées, BF-05) —
-    seul un retrait direct explicite les enlève."""
+    """Retire un rôle et les permissions que CE rôle avait copiées (source='role'),
+    sauf si un autre rôle encore actif chez l'utilisateur les accorde aussi, ou
+    si elles ont été accordées/retirées directement (source='direct', IBAC,
+    toujours prioritaire — BF-05). Révision du 2026-08-10 à la demande du
+    donneur d'ordre : l'ancien comportement laissait les permissions de rôle
+    orphelines après un changement de rôle (ex: Admin -> Membre gardait
+    membres.write)."""
     role = Role.objects.filter(code=role_code).first()
-    if role:
-        AttributionRole.objects.filter(user=user, role=role).delete()
+    if not role:
+        return
+    AttributionRole.objects.filter(user=user, role=role).delete()
+
+    remaining_role_codes = user.attributionrole_set.values_list("role__code", flat=True)
+    remaining_perm_ids = set(
+        Permission.objects.filter(roles__code__in=remaining_role_codes).values_list("id", flat=True)
+    )
+    for perm in role.permissions.all():
+        if perm.id in remaining_perm_ids:
+            continue  # encore accordée via un autre rôle actif de l'utilisateur
+        PermissionEffective.objects.filter(
+            user=user, permission=perm, source=PermissionEffective.SOURCE_ROLE
+        ).delete()
 
 
 def grant_permission(user, perm_code):

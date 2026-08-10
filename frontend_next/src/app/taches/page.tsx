@@ -104,8 +104,6 @@ function TachesPageInner() {
     load();
   }
   async function onDelete(id: string) { await api.deleteTache(id); load(); }
-  async function onArchive(id: string) { await api.archiveTache(id); load(); }
-  async function onUnarchive(id: string) { await api.unarchiveTache(id); load(); }
 
   return (
     <AppShell>
@@ -118,7 +116,7 @@ function TachesPageInner() {
           filters={filters} setFilters={setFilters}
           onAdd={() => setModal({ mode: "add" })}
           onEdit={(t) => setModal({ mode: "edit", task: t })}
-          onDelete={onDelete} onArchive={onArchive} onUnarchive={onUnarchive}
+          onDelete={onDelete}
           onStatusChange={onStatusChange} isAdmin={isAdmin}
         />
       )}

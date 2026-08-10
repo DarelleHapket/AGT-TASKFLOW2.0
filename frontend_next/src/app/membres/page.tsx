@@ -7,12 +7,14 @@ import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { TeamView } from "@/components/team/TeamView";
 import { useAuth } from "@/lib/auth";
-import type { Utilisateur } from "@/lib/types";
+import type { Permission, Role, Utilisateur } from "@/lib/types";
 
 export default function MembresPage() {
   const { user, isLogged, isAdmin, isSuperadmin, hasPermission } = useAuth();
   const router = useRouter();
   const [membres, setMembres] = useState<Utilisateur[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -26,15 +28,23 @@ export default function MembresPage() {
       .then(setMembres)
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger les membres")))
       .finally(() => setLoading(false));
+    // Catalogue rôles/permissions : réservé au Superadmin (RBAC), inutile
+    // pour les autres rôles qui ne peuvent de toute façon rien basculer.
+    if (isSuperadmin) {
+      api.getRoles().then(setRoles).catch(() => setRoles([]));
+      api.getPermissions().then(setPermissions).catch(() => setPermissions([]));
+    }
   }
-  useEffect(load, []);
+  useEffect(load, [isSuperadmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function setMemberRole(id: number, role: "membre" | "chef_projet" | "admin") {
-    const membre = membres.find((m) => m.id === id);
-    const roleActuel = membre?.roles.find((r) => r === "chef_projet" || r === "admin");
-    if (roleActuel && roleActuel !== role) await api.revokeRole(id, roleActuel);
-    if (role !== "membre") await api.assignRole(id, role);
+  async function toggleRole(id: number, roleCode: string, currentlyHas: boolean) {
+    if (currentlyHas) await api.revokeRole(id, roleCode);
+    else await api.assignRole(id, roleCode);
     load();
+  }
+
+  async function togglePermission(id: number, permCode: string, currentlyGranted: boolean) {
+    await api.setMemberPermission(id, permCode, !currentlyGranted);
   }
 
   async function toggleActive(m: Utilisateur) {
@@ -61,8 +71,11 @@ export default function MembresPage() {
       ) : (
         <TeamView
           members={membres}
+          roles={roles}
+          permissions={permissions}
           onDelete={deleteMembre}
-          onSetMemberRole={setMemberRole}
+          onToggleRole={toggleRole}
+          onTogglePermission={togglePermission}
           onToggleActive={toggleActive}
           onValidate={validate}
           isAdmin={isAdmin}

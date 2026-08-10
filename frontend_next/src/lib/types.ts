@@ -324,6 +324,18 @@ export interface Contrat {
 
 export interface Employe { id: number; profil: number; nom: string; date_embauche: string; contrats: Contrat[] }
 
+export type StatutDemande = "en_attente" | "validee" | "refusee";
+
+export interface Conge {
+  id: number; employe: number; employe_nom: string; date_debut: string; date_fin: string;
+  motif: string; statut: StatutDemande; commentaire_validation: string; cree_le: string;
+}
+
+export interface NoteFrais {
+  id: number; employe: number; employe_nom: string; montant: string; motif: string; date_depense: string;
+  statut: StatutDemande; commentaire_validation: string; cree_le: string;
+}
+
 export type StatutDisponibilite = "disponible" | "indisponible";
 
 export interface Disponibilite {

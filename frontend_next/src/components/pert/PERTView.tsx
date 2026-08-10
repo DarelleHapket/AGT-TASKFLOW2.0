@@ -4,10 +4,108 @@
 // SVG fait main). t.dependencies -> t.dependances ; t.project_id -> t.projet ;
 // project.name -> projet.nom.
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Download, Trash2 } from "lucide-react";
 import { FilterBar, type TaskFilters } from "@/components/shared/FilterBar";
-import { computePERT, type PertResult } from "@/lib/pert";
-import type { Projet, Tache, Utilisateur } from "@/lib/types";
+import { computePERT, STATUSES, type PertResult } from "@/lib/pert";
+import type { Projet, StatutTache, Tache, Utilisateur } from "@/lib/types";
+
+const statusSelectStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 700, padding: "3px 6px", borderRadius: 6,
+  border: "1px solid var(--border)", background: "var(--bg-input)", color: "var(--text)", cursor: "pointer", fontFamily: "inherit",
+};
+
+// Table éditable + stats — même structure que team-tool (frontend/src/app/pert/page.tsx) :
+// # | Nom | Prédécesseurs | Durée | Statut | Tâches liées | Supprimer, avec
+// "Durée du projet" / "Tâches critiques" en tête et un export JSON. Le
+// catalogue de statuts personnalisables de team-tool (PertStatut, "Gérer les
+// statuts") n'a pas d'équivalent ici : AGT n'a qu'un seul statut par tâche
+// (todo/in_progress/done/blocked, partagé avec la page Tâches), pas de
+// catalogue par projet — la colonne Statut réutilise donc STATUSES.
+function PERTTable({ tasks, pert, onStatusChange, onDelete }: {
+  tasks: Tache[]; pert: PertResult;
+  onStatusChange?: (id: string, statut: StatutTache) => void;
+  onDelete?: (id: string) => void;
+}) {
+  const dureeProjet = pert.end;
+  const tachesCritiques = tasks.filter((t) => pert.slack[t.id] === 0).length;
+
+  function exporterJSON() {
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "pert.json"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 20, padding: "6px 14px", fontSize: 12, color: "var(--text-2)" }}>
+          Durée du projet : <b style={{ color: "var(--text)" }}>{dureeProjet}</b>
+        </span>
+        <span style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 20, padding: "6px 14px", fontSize: 12, color: "var(--text-2)" }}>
+          Tâches critiques : <b style={{ color: "#ef4444" }}>{tachesCritiques}</b>
+        </span>
+        <button onClick={exporterJSON} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, color: "var(--text-2)", fontWeight: 600 }}>
+          <Download size={13} /> Exporter JSON
+        </button>
+      </div>
+
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "auto", boxShadow: "var(--shadow)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: "var(--bg-hover)" }}>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>#</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>NOM DE LA TÂCHE</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>PRÉDÉCESSEURS</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>DURÉE</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>STATUT</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>MARGE</th>
+              <th style={{ padding: "8px 12px" }} />
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map((t) => {
+              const isCrit = pert.slack[t.id] === 0;
+              const canFullEdit = t.permission === "full";
+              return (
+                <tr key={t.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "8px 12px", fontWeight: 700, color: isCrit ? "#ef4444" : "var(--text)" }}>{t.id}</td>
+                  <td style={{ padding: "8px 12px", color: "var(--text)" }}>{t.description}</td>
+                  <td style={{ padding: "8px 12px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{t.dependances?.join(", ") || "—"}</td>
+                  <td style={{ padding: "8px 12px", color: "var(--text-2)" }}>{t.duree}</td>
+                  <td style={{ padding: "8px 12px" }}>
+                    {onStatusChange ? (
+                      <select value={t.statut} onChange={(e) => onStatusChange(t.id, e.target.value as StatutTache)} style={statusSelectStyle}>
+                        {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    ) : (
+                      STATUSES.find((s) => s.value === t.statut)?.label || t.statut
+                    )}
+                  </td>
+                  <td style={{ padding: "8px 12px", fontWeight: 600, color: isCrit ? "#ef4444" : (t.slack ?? 0) <= 2 ? "#f59e0b" : "#22c55e" }}>
+                    {t.slack ?? "—"}
+                  </td>
+                  <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                    {onDelete && canFullEdit && (
+                      <button onClick={() => { if (window.confirm("Supprimer cette tâche ?")) onDelete(t.id); }} title="Supprimer"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}>
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {tasks.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: "var(--text-3)" }}>Aucune tâche.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 const NW = 120, NH = 100, HG = 180, VG = 140;
 
@@ -160,10 +258,12 @@ function filterTasksByDate(tasks: Tache[], date: string) {
   });
 }
 
-export function PERTView({ tasks, projects, pert, filters, setFilters, members }: {
+export function PERTView({ tasks, projects, pert, filters, setFilters, members, onStatusChange, onDelete }: {
   tasks: Tache[]; projects: Projet[]; pert: PertResult;
   filters: TaskFilters; setFilters: (updater: (f: TaskFilters) => TaskFilters) => void;
   members: Utilisateur[];
+  onStatusChange?: (id: string, statut: StatutTache) => void;
+  onDelete?: (id: string) => void;
 }) {
   const [pf, setPf] = useState("all");
   const [weekOffset, setWeekOffset] = useState(0);
@@ -191,6 +291,11 @@ export function PERTView({ tasks, projects, pert, filters, setFilters, members }
       {filters && setFilters && (
         <FilterBar filters={filters} setFilters={setFilters} projects={projects} members={members || []} showStatus={false} />
       )}
+
+      <PERTTable tasks={tasks} pert={pert} onStatusChange={onStatusChange} onDelete={onDelete} />
+
+      <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Réseau PERT</h3>
+      <p style={{ margin: "0 0 12px", fontSize: 11, color: "var(--text-3)" }}>chemin critique · nœud : début · durée · fin (haut), marge (bas)</p>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
         {allProjects.map((pid) => {

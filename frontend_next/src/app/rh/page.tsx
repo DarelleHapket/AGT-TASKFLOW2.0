@@ -9,15 +9,31 @@ import { Plus } from "lucide-react";
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
-import type { Competence, Equipe, Poste, TypeContrat, Utilisateur } from "@/lib/types";
+import type { Competence, Conge, Equipe, NoteFrais, Poste, StatutDemande, TypeContrat, Utilisateur } from "@/lib/types";
 
 const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, background: "var(--bg-card)", color: "var(--text)" };
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden" };
 const sectionHead: React.CSSProperties = { padding: "10px 14px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em" };
 
+const STATUT_DEMANDE_LABEL: Record<StatutDemande, { label: string; color: string }> = {
+  en_attente: { label: "En attente", color: "#f59e0b" },
+  validee: { label: "Validée", color: "#22c55e" },
+  refusee: { label: "Refusée", color: "#ef4444" },
+};
+
+function StatutPill({ statut }: { statut: StatutDemande }) {
+  const s = STATUT_DEMANDE_LABEL[statut];
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: s.color + "18", color: s.color, border: `1px solid ${s.color}33`, whiteSpace: "nowrap" }}>
+      {s.label}
+    </span>
+  );
+}
+
 const TABS = [
   { id: "referentiel", label: "Référentiel" },
   { id: "employes", label: "Employés" },
+  { id: "demandes", label: "Congés & notes de frais" },
 ];
 
 export default function RhPage() {
@@ -34,6 +50,12 @@ export default function RhPage() {
 
   const canWrite = hasPermission("rh.write");
   const canGererEmployes = hasPermission("rh.employes.gerer");
+  const canGererConges = hasPermission("rh.conges.gerer");
+  const canGererFrais = hasPermission("rh.notes_frais.gerer");
+
+  const [conges, setConges] = useState<Conge[]>([]);
+  const [notesFrais, setNotesFrais] = useState<NoteFrais[]>([]);
+  const [commentaires, setCommentaires] = useState<Record<string, string>>({});
 
   useEffect(() => { if (!isLogged) router.replace("/login"); }, [isLogged, router]);
 
@@ -43,8 +65,20 @@ export default function RhPage() {
       .then(([c, p, e, t, m]) => { setCompetences(c); setPostes(p); setEquipes(e); setTypesContrat(t); setMembres(m.filter((x) => x.statut === "ACTIF")); })
       .catch((err) => setError(api.errorMessage(err, "Impossible de charger le référentiel RH")))
       .finally(() => setLoading(false));
+    if (canGererConges) api.getConges().then(setConges).catch(() => setConges([]));
+    if (canGererFrais) api.getNotesFrais().then(setNotesFrais).catch(() => setNotesFrais([]));
   }
-  useEffect(load, []);
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function traiterConge(id: number, statut: StatutDemande) {
+    await api.traiterConge(id, statut, commentaires[`c${id}`] || "").catch(() => {});
+    api.getConges().then(setConges).catch(() => {});
+  }
+
+  async function traiterNoteFrais(id: number, statut: StatutDemande) {
+    await api.traiterNoteFrais(id, statut, commentaires[`n${id}`] || "").catch(() => {});
+    api.getNotesFrais().then(setNotesFrais).catch(() => {});
+  }
 
   const [newComp, setNewComp] = useState("");
   const [newPoste, setNewPoste] = useState("");
@@ -97,7 +131,7 @@ export default function RhPage() {
       {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.id !== "demandes" || canGererConges || canGererFrais).map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
             border: `1px solid ${tab === t.id ? "var(--accent)" : "var(--border)"}`,
@@ -167,7 +201,7 @@ export default function RhPage() {
             )}
           </div>
         </div>
-      ) : (
+      ) : tab === "employes" ? (
         <div style={{ maxWidth: 620 }}>
           {canGererEmployes && (
             <div style={{ marginBottom: 16 }}>
@@ -207,6 +241,66 @@ export default function RhPage() {
           <p style={{ fontSize: 12, color: "var(--text-3)" }}>
             Consultez le salaire d&apos;un employé depuis sa fiche membre, ou le vôtre depuis le menu profil.
           </p>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+          {canGererConges && (
+            <div style={card}>
+              <div style={sectionHead}>CONGÉS ({conges.length})</div>
+              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                {conges.map((c) => (
+                  <div key={c.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "var(--text)" }}>{c.employe_nom}</div>
+                        <div style={{ marginTop: 2 }}>{new Date(c.date_debut).toLocaleDateString("fr-FR")} → {new Date(c.date_fin).toLocaleDateString("fr-FR")}</div>
+                        {c.motif && <div style={{ color: "var(--text-3)", marginTop: 2 }}>{c.motif}</div>}
+                      </div>
+                      <StatutPill statut={c.statut} />
+                    </div>
+                    {c.statut === "en_attente" && (
+                      <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                        <input style={{ ...inp, flex: 1, fontSize: 11 }} placeholder="Commentaire (optionnel)"
+                          value={commentaires[`c${c.id}`] || ""} onChange={(e) => setCommentaires({ ...commentaires, [`c${c.id}`]: e.target.value })} />
+                        <button onClick={() => traiterConge(c.id, "validee")} style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "0 10px", cursor: "pointer", color: "#16a34a", fontSize: 11, fontWeight: 700 }}>Valider</button>
+                        <button onClick={() => traiterConge(c.id, "refusee")} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "0 10px", cursor: "pointer", color: "#ef4444", fontSize: 11, fontWeight: 700 }}>Refuser</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {conges.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune demande.</p>}
+              </div>
+            </div>
+          )}
+
+          {canGererFrais && (
+            <div style={card}>
+              <div style={sectionHead}>NOTES DE FRAIS ({notesFrais.length})</div>
+              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                {notesFrais.map((n) => (
+                  <div key={n.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "var(--text)" }}>{n.employe_nom}</div>
+                        <div style={{ marginTop: 2 }}>{n.montant} — {n.motif}</div>
+                        <div style={{ color: "var(--text-3)", marginTop: 2 }}>{new Date(n.date_depense).toLocaleDateString("fr-FR")}</div>
+                      </div>
+                      <StatutPill statut={n.statut} />
+                    </div>
+                    {n.statut === "en_attente" && (
+                      <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                        <input style={{ ...inp, flex: 1, fontSize: 11 }} placeholder="Commentaire (optionnel)"
+                          value={commentaires[`n${n.id}`] || ""} onChange={(e) => setCommentaires({ ...commentaires, [`n${n.id}`]: e.target.value })} />
+                        <button onClick={() => traiterNoteFrais(n.id, "validee")} style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "0 10px", cursor: "pointer", color: "#16a34a", fontSize: 11, fontWeight: 700 }}>Valider</button>
+                        <button onClick={() => traiterNoteFrais(n.id, "refusee")} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "0 10px", cursor: "pointer", color: "#ef4444", fontSize: 11, fontWeight: 700 }}>Refuser</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {notesFrais.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune note de frais.</p>}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </AppShell>

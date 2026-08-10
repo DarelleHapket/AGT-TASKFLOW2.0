@@ -8,12 +8,13 @@ import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { RBACView } from "@/components/rbac/RBACView";
 import { useAuth } from "@/lib/auth";
-import type { Role, Utilisateur } from "@/lib/types";
+import type { Permission, Role, Utilisateur } from "@/lib/types";
 
 export default function RbacPage() {
   const { isLogged, isSuperadmin } = useAuth();
   const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [membres, setMembres] = useState<Utilisateur[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,8 +30,8 @@ export default function RbacPage() {
   function load(silent = false) {
     if (!isSuperadmin) return;
     if (!silent) setLoading(true);
-    Promise.all([api.getRoles(), api.getMembres()])
-      .then(([r, m]) => { setRoles(r); setMembres(m.filter((x) => x.statut === "ACTIF")); })
+    Promise.all([api.getRoles(), api.getPermissions(), api.getMembres()])
+      .then(([r, p, m]) => { setRoles(r); setPermissions(p); setMembres(m.filter((x) => x.statut === "ACTIF")); })
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger le RBAC")))
       .finally(() => { if (!silent) setLoading(false); });
   }
@@ -44,7 +45,7 @@ export default function RbacPage() {
       {loading ? (
         <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p>
       ) : (
-        <RBACView members={membres} roles={roles} onReload={() => load(true)} />
+        <RBACView members={membres} roles={roles} permissions={permissions} onReload={() => load(true)} />
       )}
     </AppShell>
   );

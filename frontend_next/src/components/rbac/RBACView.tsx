@@ -9,23 +9,138 @@
 // Membres), adapté au modèle IBAC plus riche d'AGT (un retrait direct prime
 // toujours sur un rôle qui accorderait la même permission).
 import { Fragment, useState } from "react";
+import { Plus, X } from "lucide-react";
 import * as api from "@/lib/api";
-import type { PermissionDetail, Role, Utilisateur } from "@/lib/types";
+import type { Permission, PermissionDetail, Role, Utilisateur } from "@/lib/types";
 
-const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
+const rbacCard: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)" };
+const rbacInp: React.CSSProperties = { padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, background: "var(--bg-card)", color: "var(--text)" };
+
+// Catalogue Rôles + Permissions — ajouté pour permettre de créer de nouvelles
+// permissions/rôles (même logique que team-tool, frontend/src/app/rbac/page.tsx),
+// en plus de la gestion par membre déjà en place ci-dessous. Cliquer un badge
+// de permission sur un rôle bascule le PATCH permission_ids de CE rôle (les
+// permissions par défaut, copiées à l'attribution — BF-05), indépendant des
+// retraits/ajouts directs par membre (IBAC, table du bas).
+function RoleCatalog({ roles, permissions, onReload }: { roles: Role[]; permissions: Permission[]; onReload: () => void }) {
+  const [newRole, setNewRole] = useState("");
+  const [newPerm, setNewPerm] = useState({ verbe: "", ressource: "" });
+  const [error, setError] = useState<string | null>(null);
+
+  async function creerRole() {
+    if (!newRole.trim()) return;
+    setError(null);
+    try { await api.createRole({ code: newRole.trim() }); setNewRole(""); onReload(); }
+    catch (e) { setError(api.errorMessage(e, "Création impossible")); }
+  }
+
+  async function supprimerRole(r: Role) {
+    if (r.code === "superadmin") return;
+    await api.deleteRole(r.id).catch((e) => setError(api.errorMessage(e, "Suppression impossible")));
+    onReload();
+  }
+
+  async function basculerPermRole(r: Role, permId: number) {
+    const ids = r.permissions.map((p) => p.id);
+    const suivants = ids.includes(permId) ? ids.filter((x) => x !== permId) : [...ids, permId];
+    await api.setRolePermissions(r.id, suivants).catch((e) => setError(api.errorMessage(e, "Mise à jour impossible")));
+    onReload();
+  }
+
+  async function creerPermission() {
+    const verbe = newPerm.verbe.trim().toLowerCase();
+    const ressource = newPerm.ressource.trim().toLowerCase();
+    if (!verbe || !ressource) return;
+    setError(null);
+    // Style team-tool : "verbe:ressource" (ex: gerer:conges) — module = ressource,
+    // utilisé uniquement pour le regroupement d'affichage (MODULE_LABELS).
+    try { await api.createPermission({ code: `${verbe}:${ressource}`, module: ressource }); setNewPerm({ verbe: "", ressource: "" }); onReload(); }
+    catch (e) { setError(api.errorMessage(e, "Création impossible")); }
+  }
+
+  async function supprimerPermission(p: Permission) {
+    await api.deletePermission(p.id).catch((e) => setError(api.errorMessage(e, "Suppression impossible")));
+    onReload();
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {error && <p style={{ marginBottom: 10, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+        <div>
+          <h3 style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", margin: "0 0 8px" }}>Rôles (catalogue)</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {roles.map((r) => (
+              <div key={r.id} style={{ ...rbacCard, padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <b style={{ fontSize: 13, color: "var(--text)" }}>{ROLE_LABELS[r.code] || r.code}</b>
+                  {r.code !== "superadmin" && (
+                    <button onClick={() => supprimerRole(r)} title="Supprimer ce rôle" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><X size={14} /></button>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {permissions.map((p) => {
+                    const active = r.permissions.some((x) => x.id === p.id);
+                    return (
+                      <button key={p.id} onClick={() => basculerPermRole(r, p.id)} title={p.description}
+                        style={{
+                          fontSize: 11, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
+                          border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                          background: active ? "var(--accent)" : "transparent",
+                          color: active ? "white" : "var(--text-3)", fontWeight: active ? 700 : 400,
+                        }}>
+                        {p.code}
+                      </button>
+                    );
+                  })}
+                  {permissions.length === 0 && <span style={{ fontSize: 11, color: "var(--text-3)" }}>Aucune permission dans le catalogue.</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...rbacCard, padding: 12, marginTop: 10, display: "flex", gap: 6 }}>
+            <input style={{ ...rbacInp, flex: 1 }} placeholder="Nom du rôle (ex: comptable)" value={newRole} onChange={(e) => setNewRole(e.target.value)} onKeyDown={(e) => e.key === "Enter" && creerRole()} />
+            <button onClick={creerRole} disabled={!newRole.trim()} style={{ ...rbacInp, background: "var(--accent)", color: "white", border: "none", cursor: "pointer" }}><Plus size={13} /></button>
+          </div>
+        </div>
+
+        <div>
+          <h3 style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", margin: "0 0 8px" }}>Permissions (catalogue)</h3>
+          <div style={{ ...rbacCard, padding: 12 }}>
+            {permissions.map((p) => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
+                <span style={{ color: "var(--text)" }}>{p.code} <span style={{ color: "var(--text-3)" }}>({p.module})</span></span>
+                <button onClick={() => supprimerPermission(p)} title="Supprimer cette permission" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><X size={13} /></button>
+              </div>
+            ))}
+            {permissions.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune permission.</p>}
+            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <input style={{ ...rbacInp, flex: 1 }} placeholder="Verbe (ex: gerer)" value={newPerm.verbe} onChange={(e) => setNewPerm({ ...newPerm, verbe: e.target.value })} />
+              <input style={{ ...rbacInp, flex: 1 }} placeholder="Ressource (ex: conges)" value={newPerm.ressource} onChange={(e) => setNewPerm({ ...newPerm, ressource: e.target.value })} />
+              <button onClick={creerPermission} disabled={!newPerm.verbe.trim() || !newPerm.ressource.trim()} style={{ ...rbacInp, background: "var(--accent)", color: "white", border: "none", cursor: "pointer" }}><Plus size={13} /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   superadmin: { bg: "var(--accent-bg)", color: "var(--accent)" },
   admin: { bg: "#f3e8ff", color: "#9333ea" },
   chef_projet: { bg: "#fff7ed", color: "#f59e0b" },
   membre: { bg: "var(--bg-hover)", color: "var(--text-2)" },
 };
 
-const ROLE_LABELS: Record<string, string> = {
+export const ROLE_LABELS: Record<string, string> = {
   superadmin: "Superadmin", admin: "Admin", chef_projet: "Chef de projet", membre: "Membre",
 };
 
-const MODULE_LABELS: Record<string, string> = {
+export const MODULE_LABELS: Record<string, string> = {
   membres: "Membres", rbac: "Rôles & permissions", projets: "Projets",
   dashboard: "Tableau de bord", admin: "Administration", ops: "Opérations",
+  rh: "RH & Profils", finances: "Finances", materiel: "Matériel", pilotage: "Pilotage (PERT/tâches)",
 };
 
 type Bucket = "role" | "direct" | "none";
@@ -48,8 +163,8 @@ function chipStyle(bucket: Bucket): React.CSSProperties {
   return { fontSize: 11, padding: "4px 10px", borderRadius: 20, border: `1.5px solid ${color}`, background: color, color: "white", cursor: "pointer" };
 }
 
-export function RBACView({ members, roles, onReload }: {
-  members: Utilisateur[]; roles: Role[]; onReload: () => void;
+export function RBACView({ members, roles, permissions, onReload }: {
+  members: Utilisateur[]; roles: Role[]; permissions: Permission[]; onReload: () => void;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [detail, setDetail] = useState<Record<number, PermissionDetail[]>>({});
@@ -99,6 +214,8 @@ export function RBACView({ members, roles, onReload }: {
         <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Rôles &amp; permissions</h2>
         <span style={{ fontSize: 12, color: "var(--text-3)" }}>Gestion des rôles multiples et des permissions directes, réservée au Superadmin</span>
       </div>
+
+      <RoleCatalog roles={roles} permissions={permissions} onReload={onReload} />
 
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>

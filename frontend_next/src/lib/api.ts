@@ -5,12 +5,12 @@
 // setUnauthorizedHandler est appelé explicitement au montage de AuthProvider
 // (src/lib/auth.tsx) — voir le commentaire là-bas.
 import type {
-  Activite, Besoin, Bilan, Candidat, Competence, Disponibilite, EcartPrevision, Employe, Equipe,
+  Activite, Besoin, Bilan, Candidat, Competence, Conge, Disponibilite, EcartPrevision, Employe, Equipe,
   Formation, InscriptionFormation, LoginResponse, Materiel, MembreProjet, MouvementFinancier,
-  MouvementMateriel, NiveauFinancier, Note,
+  MouvementMateriel, NiveauFinancier, Note, NoteFrais,
   Notification, OffreEmploi, OrdreJournalier, Periodicite, Permission, PermissionDetail, PerformanceEntry,
   PilotageBranch, PilotageTache, Poste, Prevision, Profil, Projet, RapportData, RapportProjet,
-  Role, Sauvegarde, Signalement, StatutCandidature, StatutDisponibilite, StatutInscriptionFormation,
+  Role, Sauvegarde, Signalement, StatutCandidature, StatutDemande, StatutDisponibilite, StatutInscriptionFormation,
   Stock, Tache, TachesResponse, TypeContrat, TypeMateriel, TypeMouvementFinancier, SensMouvement,
   SensMouvementMateriel, Utilisateur,
 } from "./types";
@@ -86,7 +86,14 @@ export const toggleActive = (id: number) => req<Utilisateur>(`PUT`, `/membres/${
 export const deleteMembre = (id: number) => req<{ deleted: number }>("DELETE", `/membres/${id}`);
 export const getDeletedMembres = () => req<Utilisateur[]>("GET", "/membres/deleted");
 export const getRoles = () => req<Role[]>("GET", "/roles");
+export const createRole = (data: { code: string; description?: string }) => req<Role>("POST", "/roles", data);
+export const deleteRole = (id: number) => req<void>("DELETE", `/roles/${id}`);
+export const setRolePermissions = (id: number, permission_ids: number[]) =>
+  req<Role>("PATCH", `/roles/${id}`, { permission_ids });
 export const getPermissions = () => req<Permission[]>("GET", "/permissions");
+export const createPermission = (data: { code: string; module: string; description?: string }) =>
+  req<Permission>("POST", "/permissions", data);
+export const deletePermission = (id: number) => req<void>("DELETE", `/permissions/${id}`);
 export const assignRole = (id: number, role: string) => req<Utilisateur>("POST", `/rbac/membres/${id}/roles`, { role });
 export const revokeRole = (id: number, role: string) => req<Utilisateur>("DELETE", `/rbac/membres/${id}/roles/${role}`);
 export const setMemberPermission = (id: number, permCode: string, granted: boolean) =>
@@ -262,6 +269,21 @@ export const updateInscriptionFormationStatut = (id: number, statut: StatutInscr
 export const getSignalements = () => req<Signalement[]>("GET", "/rh/signalements");
 export const createSignalement = (description: string) => req<Signalement>("POST", "/rh/signalements", { description });
 export const traiterSignalement = (id: number) => req<Signalement>("PATCH", `/rh/signalements/${id}`, { statut: "traite" });
+
+// Espace salarié — congés & notes de frais (hors CDC initial, ajouté le 2026-08-10).
+export const getConges = () => req<Conge[]>("GET", "/rh/conges");
+export const createConge = (data: { date_debut: string; date_fin: string; motif?: string }) =>
+  req<Conge>("POST", "/rh/conges", data);
+export const traiterConge = (id: number, statut: StatutDemande, commentaire_validation?: string) =>
+  req<Conge>("PATCH", `/rh/conges/${id}`, { statut, commentaire_validation });
+export const annulerConge = (id: number) => req<void>("DELETE", `/rh/conges/${id}`);
+
+export const getNotesFrais = () => req<NoteFrais[]>("GET", "/rh/notes-frais");
+export const createNoteFrais = (data: { montant: string; motif: string; date_depense: string }) =>
+  req<NoteFrais>("POST", "/rh/notes-frais", data);
+export const traiterNoteFrais = (id: number, statut: StatutDemande, commentaire_validation?: string) =>
+  req<NoteFrais>("PATCH", `/rh/notes-frais/${id}`, { statut, commentaire_validation });
+export const annulerNoteFrais = (id: number) => req<void>("DELETE", `/rh/notes-frais/${id}`);
 
 // ── Module 4 — Finances ────────────────────────────────────────────────────
 export const getTypesMouvement = () => req<TypeMouvementFinancier[]>("GET", "/finances/types-mouvement");

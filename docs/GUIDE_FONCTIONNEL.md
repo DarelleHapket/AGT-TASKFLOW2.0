@@ -137,10 +137,109 @@ BF-14) :
 
 ## 6. Identifiants de démarrage
 
-Le superadmin unique auto-créé au premier démarrage utilise désormais par défaut :
-`SuperAdmin@agt.com` / `AGT2026!` (configurable via les variables d'environnement
-`SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` pour un vrai déploiement — ne jamais garder ces
-valeurs par défaut en production, même si le changement de mot de passe est de toute façon
-forcé à la première connexion). Aucun autre compte n'est créé automatiquement : tout membre
-supplémentaire vient soit d'une inscription (`/login`, formulaire « créer un compte »,
-validée ensuite par Admin/Superadmin), soit d'un recrutement retenu (§2).
+Le superadmin unique auto-créé au premier démarrage utilise l'email/mot de passe définis par
+les variables d'environnement `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` dans `.env.django` —
+voir [`GUIDE_PROJET.md`](./GUIDE_PROJET.md) §2 pour la valeur actuelle vérifiée (ne jamais
+garder les valeurs par défaut en production, même si le changement de mot de passe est de
+toute façon forcé à la première connexion). Aucun autre compte n'est créé automatiquement :
+tout membre supplémentaire vient soit d'une inscription (`/login`, formulaire « créer un
+compte », validée ensuite par Admin/Superadmin), soit d'un recrutement retenu (§2).
+
+---
+
+## 7. Congés et notes de frais — espace salarié (hors CDC)
+
+Ajouté le 2026-08-10 à la demande explicite du donneur d'ordre, en dehors du périmètre
+initial du cahier des charges (à mettre à jour formellement). Même logique RBAC que le reste
+du module RH : réservé à Admin/Superadmin pour la validation, ouvert à tout employé pour ses
+propres demandes.
+
+**Poser une demande** — `/mon-compte`, sections « Mes congés » / « Mes notes de frais »
+(visibles seulement si tu es rattaché à un `Employe`, cf. §1) :
+- **Congé** : date de début, date de fin, motif optionnel.
+- **Note de frais** : montant, motif, date de la dépense.
+- La demande part au statut **« En attente »**. Tu peux l'**annuler** tant qu'elle est en
+  attente (bouton « Annuler » sur ta propre carte) — une fois validée ou refusée, elle reste
+  dans l'historique, non modifiable.
+
+**Valider / refuser** — `/rh`, onglet « Congés & notes de frais » (visible seulement avec la
+permission `rh.conges.gerer` / `rh.notes_frais.gerer`, Admin/Superadmin) : liste de toutes les
+demandes, boutons Valider/Refuser avec un commentaire optionnel. La personne reçoit une
+notification quand sa demande est traitée.
+
+**Ce qui n'existe pas** : pas de solde de congés (jours restants, calcul automatique), pas de
+justificatif joint à une note de frais (photo/PDF) — la déclaration est purement textuelle
+pour l'instant. À construire si le besoin se confirme.
+
+---
+
+## 8. Fiche de paie et historique de carrière
+
+Sur `/mon-compte`, à côté du salaire actuel (§1) : bouton **« Fiche de paie »** qui génère un
+PDF côté client (même principe que le bilan financier — rien n'est stocké côté serveur, le
+PDF est recréé à chaque téléchargement à partir des données actuelles). En dessous, **«
+Historique de carrière »** liste tous les contrats et rémunérations passés de l'employé (pas
+seulement le contrat en cours) — cette donnée existait déjà en base (`BNF-07`, historique
+jamais effacé) mais n'était affichée nulle part avant.
+
+---
+
+## 9. Rôles & permissions — catalogue (`/rbac`)
+
+En plus du tableau par membre (bascule des rôles/permissions individuelles, voir §10), la
+page `/rbac` permet de gérer le **catalogue** lui-même :
+- **Rôles** : créer un nouveau rôle, le supprimer (sauf `superadmin`), cliquer un badge de
+  permission sur un rôle pour l'ajouter/retirer de ses permissions **par défaut** — ce sont
+  celles copiées automatiquement à toute personne à qui ce rôle est attribué ensuite (BF-05).
+- **Permissions** : créer une nouvelle permission via deux champs **Verbe** + **Ressource**
+  (ex. `gerer` + `conges` → code `gerer:conges`), la supprimer. Ce style verbe:ressource
+  s'applique aux **nouvelles** permissions créées depuis ce formulaire ; les permissions
+  historiques du système (`rh.write`, `membres.validate`, etc., style `ressource.verbe`) n'ont
+  pas été renommées — coexistence des deux styles, aucun impact fonctionnel.
+
+**Important — changer le rôle de quelqu'un met à jour ses permissions.** Retirer un rôle
+retire aussi les permissions que *ce rôle précis* avait données (sauf si un autre rôle actif
+de la personne les accorde encore, ou si elles ont été accordées/retirées **directement** —
+ça reste indépendant). Corrigé le 2026-08-10 : avant, les permissions de rôle restaient
+accrochées indéfiniment après un changement de rôle.
+
+---
+
+## 10. Membres — permissions cochables par carte (`/membres`)
+
+Chaque carte de membre actif (sauf Superadmin, qui a un accès total non modifiable) affiche,
+visible uniquement par le Superadmin :
+- **Rôles** : badges cliquables pour ajouter/retirer un rôle à la personne (le rôle Admin est
+  unique — grisé si déjà attribué à quelqu'un d'autre).
+- **Permissions directes** : badges cliquables, regroupés par module (RH, Finances, Matériel,
+  Pilotage…) pour la lisibilité, pour accorder/retirer une permission indépendamment du rôle
+  (IBAC).
+
+---
+
+## 11. Tâches — mode Tableau et allègement de la liste
+
+Sur `/taches`, un toggle **Liste / Tableau** en haut de page :
+- **Liste** (inchangé) : groupement Projet → Activité.
+- **Tableau** (nouveau) : colonnes par membre (kanban), avec compteur « X fait(s) · X
+  bloqué(s) » par colonne.
+
+Chaque ligne de tâche a été allégée pour ressembler à team-tool : titre, assigné, statut,
+bouton ouvrir. Les badges ID/critique/difficultés et le détail ES/EF/marge ont été retirés de
+la liste (ils restent visibles dans le détail de la tâche et sur `/pert`/`/gantt`). Le bouton
+Supprimer reste présent, réservé au créateur de la tâche ou à l'owner/manager du projet.
+
+---
+
+## 12. PERT / Gantt — un seul lien de menu, un toggle
+
+Le lien de menu « PERT / Gantt » (`/gantt`) ouvre maintenant un toggle en haut de page pour
+basculer entre les deux vues, au lieu de ne montrer que le Gantt :
+- **Gantt** : timeline en coupons (inchangé).
+- **PERT** : table éditable (# / Nom / Prédécesseurs / Durée / Statut / Marge / Supprimer) +
+  pastilles « Durée du projet »/« Tâches critiques » + export JSON, au-dessus du diagramme
+  réseau (chemin critique, ES/EF/LS/LF par tâche).
+
+Contrairement à team-tool, il n'y a pas de catalogue de statuts PERT personnalisable par
+projet (« Gérer les statuts ») — AGT n'a qu'un seul statut par tâche, partagé avec la page
+Tâches (à faire/en cours/terminée/bloquée).

@@ -9,7 +9,7 @@ import { PERTView } from "@/components/pert/PERTView";
 import type { TaskFilters } from "@/components/shared/FilterBar";
 import { pertFromTasks } from "@/lib/pert";
 import { useAuth } from "@/lib/auth";
-import type { Projet, Tache, Utilisateur } from "@/lib/types";
+import type { Projet, StatutTache, Tache, Utilisateur } from "@/lib/types";
 
 const DEFAULT_FILTERS: TaskFilters = {
   project: "all", member: "all", status: "all", priority: "all", period: "all",
@@ -31,7 +31,7 @@ export default function PertPage() {
     if (!isLogged) router.replace("/login");
   }, [isLogged, router]);
 
-  useEffect(() => {
+  function load() {
     Promise.all([api.getTaches(), api.getProjets(), api.getMembres()])
       .then(([t, p, m]) => {
         setTaches(t.tasks.filter((x) => !x.est_archivee));
@@ -39,7 +39,18 @@ export default function PertPage() {
         setProjets(p); setMembres(m);
       })
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger le PERT")));
-  }, []);
+  }
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function onStatusChange(id: string, statut: StatutTache) {
+    await api.patchTache(id, { statut });
+    load();
+  }
+
+  async function onDelete(id: string) {
+    await api.deleteTache(id);
+    load();
+  }
 
   const pert = pertFromTasks(taches);
   pert.cycles = cycles;
@@ -47,7 +58,7 @@ export default function PertPage() {
   return (
     <AppShell>
       {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
-      <PERTView tasks={taches} projects={projets} members={membres} pert={pert} filters={filters} setFilters={setFilters} />
+      <PERTView tasks={taches} projects={projets} members={membres} pert={pert} filters={filters} setFilters={setFilters} onStatusChange={onStatusChange} onDelete={onDelete} />
     </AppShell>
   );
 }

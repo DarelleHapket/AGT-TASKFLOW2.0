@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
 from .models import (
-    Candidat, Competence, Contrat, Disponibilite, Employe, Equipe, Formation,
-    InscriptionFormation, OffreEmploi, Poste, Profil, Remuneration,
+    Candidat, Competence, Conge, Contrat, Disponibilite, Employe, Equipe, Formation,
+    InscriptionFormation, NoteFrais, OffreEmploi, Poste, Profil, Remuneration,
     Responsabilite, Signalement, TypeContrat,
 )
 
@@ -136,3 +136,27 @@ class SignalementSerializer(serializers.ModelSerializer):
 
     def get_auteur_nom(self, obj):
         return obj.auteur.display_name()
+
+
+class CongeSerializer(serializers.ModelSerializer):
+    employe_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conge
+        fields = ["id", "employe", "employe_nom", "date_debut", "date_fin", "motif", "statut", "commentaire_validation", "cree_le"]
+        read_only_fields = ["employe", "cree_le"]
+
+    def get_employe_nom(self, obj):
+        return obj.employe.profil.utilisateur.display_name()
+
+
+class NoteFraisSerializer(serializers.ModelSerializer):
+    employe_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NoteFrais
+        fields = ["id", "employe", "employe_nom", "montant", "motif", "date_depense", "statut", "commentaire_validation", "cree_le"]
+        read_only_fields = ["employe", "cree_le"]
+
+    def get_employe_nom(self, obj):
+        return obj.employe.profil.utilisateur.display_name()

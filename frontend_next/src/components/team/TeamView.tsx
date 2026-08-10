@@ -9,9 +9,10 @@ import { useEffect, useState } from "react";
 import { Check, X, Clock, AlertTriangle, BadgeCheck, Wallet, Pencil } from "lucide-react";
 import * as api from "@/lib/api";
 import { ConfirmDialog, type ConfirmData } from "@/components/ui/ConfirmDialog";
-import type { Competence, Employe, Poste, Profil, Utilisateur } from "@/lib/types";
+import { MODULE_LABELS, ROLE_COLORS, ROLE_LABELS } from "@/components/rbac/RBACView";
+import type { Competence, Employe, Permission, PermissionDetail, Poste, Profil, Role, Utilisateur } from "@/lib/types";
 
-const ROLE_LABEL: Record<string, string> = { superadmin: "Superadmin", admin: "Admin", chef_projet: "Chef de projet", membre: "Membre" };
+const ROLE_LABEL = ROLE_LABELS;
 const PERIODICITE_LABEL: Record<string, string> = { mensuelle: "mois", hebdomadaire: "semaine", journaliere: "jour" };
 
 function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { membre: Utilisateur; canSeeSalaire: boolean; canEditFiche: boolean; onClose: () => void }) {
@@ -178,6 +179,8 @@ function sectionHeader(bg: string, border: string, color: string): React.CSSProp
   return { padding: "12px 16px", background: bg, borderBottom: `1px solid ${border}`, fontSize: 10, fontWeight: 700, color, letterSpacing: ".1em", display: "flex", alignItems: "center", gap: 6 };
 }
 
+const cardStyle: React.CSSProperties = { background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" };
+
 function Avatar({ member, size = 40 }: { member: { name: string; color?: string }; size?: number }) {
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", background: member.color || "#6366f1", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: size * 0.4, flexShrink: 0 }}>
@@ -190,10 +193,12 @@ function StatusDot({ active }: { active: boolean }) {
   return <div title={active ? "Actif" : "Suspendu"} style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0, background: active ? "#22c55e" : "#f59e0b", border: "2px solid var(--border)" }} />;
 }
 
-export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canEditFiche = false }: {
+export function TeamView({ members, roles = [], permissions = [], onDelete, onToggleRole, onTogglePermission, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canEditFiche = false }: {
   members: Utilisateur[];
+  roles?: Role[]; permissions?: Permission[];
   onDelete: (id: number) => Promise<void>;
-  onSetMemberRole: (id: number, role: "membre" | "chef_projet" | "admin") => Promise<void>;
+  onToggleRole: (id: number, roleCode: string, currentlyHas: boolean) => Promise<void>;
+  onTogglePermission: (id: number, permCode: string, currentlyGranted: boolean) => Promise<void>;
   onToggleActive: (m: Utilisateur) => Promise<Utilisateur>;
   onValidate: (id: number, action: "approve" | "reject") => Promise<void>;
   isAdmin: boolean; isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canEditFiche?: boolean;
@@ -201,6 +206,7 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmData | null>(null);
+  const [permDetail, setPermDetail] = useState<Record<number, PermissionDetail[]>>({});
   const [deleted, setDeleted] = useState<Utilisateur[]>([]);
   const [showAllDeleted, setShowAllDeleted] = useState(false);
   const [fiche, setFiche] = useState<Utilisateur | null>(null);
@@ -214,14 +220,31 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
   const suspended = members.filter((m) => m.statut === "SUSPENDU");
   const active = members.filter((m) => m.statut === "ACTIF");
 
+  // Superadmin uniquement : détail permission par permission (rôle vs directe)
+  // pour chaque membre non-superadmin, afficher les badges cochables sur sa
+  // carte (D-08, même logique que team-tool : "cocher/décocher" directement
+  // dans la liste des membres, sans passer par un écran séparé).
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    active.filter((m) => !m.roles.includes("superadmin")).forEach((m) => {
+      api.getMemberPermissionsDetail(m.id).then((d) => setPermDetail((prev) => ({ ...prev, [m.id]: d }))).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuperadmin, members]);
+
   const withBusy = async (id: number, fn: () => Promise<void>) => {
     setBusyId(id); setErr(null);
     try { await fn(); } catch (e) { setErr(api.errorMessage(e, "Erreur")); } finally { setBusyId(null); }
   };
 
   const decide = (id: number, action: "approve" | "reject") => withBusy(id, () => onValidate(id, action));
-  const changeRole = (id: number, role: "membre" | "chef_projet" | "admin") => withBusy(id, () => onSetMemberRole(id, role));
   const handleToggleActive = (member: Utilisateur) => withBusy(member.id, async () => { await onToggleActive(member); });
+  const handleToggleRole = (member: Utilisateur, roleCode: string) => withBusy(member.id, () => onToggleRole(member.id, roleCode, member.roles.includes(roleCode)));
+  const handleTogglePermission = async (member: Utilisateur, permCode: string, currentlyGranted: boolean) => {
+    await onTogglePermission(member.id, permCode, currentlyGranted);
+    const d = await api.getMemberPermissionsDetail(member.id).catch(() => null);
+    if (d) setPermDetail((prev) => ({ ...prev, [member.id]: d }));
+  };
   const handleDelete = (member: Utilisateur) => {
     setConfirm({
       title: "Supprimer le compte",
@@ -312,50 +335,120 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
         </div>
       )}
 
-      <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        <div style={sectionHeader("var(--bg-hover)", "var(--border)", "var(--text-3)")}>MEMBRES ({active.length})</div>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em", marginBottom: 8 }}>MEMBRES ({active.length})</div>
 
         {active.length === 0 && (
-          <div style={{ textAlign: "center", padding: 40, color: "var(--text-3)" }}>
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: "var(--text-3)" }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
             <div>Aucun membre actif pour l&apos;instant.</div>
           </div>
         )}
 
-        {/* Admin est un rôle unique (comme Superadmin) : tant que quelqu'un le
-            porte déjà, il n'apparaît pas comme option pour les autres — le
-            Superadmin doit d'abord le retirer via /rbac avant de le confier
-            ailleurs (appliqué aussi côté serveur, cf. assign_member_role). */}
-        {active.map((m) => {
-          const adminDejaPris = active.some((a) => a.roles.includes("admin") && a.id !== m.id);
-          const isAdminMember = m.roles.includes("admin");
-          const busy = busyId === m.id;
-          const canAct = canActOn(m);
-          const roleCode = m.roles[0] || "membre";
+        {/* Cartes style team-tool (D-08) : rôles + permissions directement
+            cochables/décochables sur la fiche du membre par le Superadmin,
+            sans passer par un écran séparé — Admin est un rôle unique
+            (comme Superadmin) : tant que quelqu'un le porte déjà, il
+            apparaît désactivé pour les autres (appliqué aussi côté serveur,
+            cf. assign_member_role). */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+          {active.map((m) => {
+            const adminDejaPris = active.some((a) => a.roles.includes("admin") && a.id !== m.id);
+            const busy = busyId === m.id;
+            const canAct = canActOn(m);
+            const isSuperadminMember = m.roles.includes("superadmin");
+            const detail = permDetail[m.id];
 
-          return (
-            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-              <Avatar member={m} />
-              <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                {(isAdmin || isSuperadmin) && canAct ? (
-                  <select value={m.roles.includes("chef_projet") ? "chef_projet" : "membre"} onChange={(e) => changeRole(m.id, e.target.value as "membre" | "chef_projet" | "admin")} disabled={busy}
-                    style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12, color: "var(--text)", background: "var(--bg)", cursor: busy ? "not-allowed" : "pointer", fontWeight: m.roles.includes("chef_projet") ? 600 : 400 }}>
-                    <option value="membre">Membre</option>
-                    <option value="chef_projet">Chef de projet</option>
-                    {isSuperadmin && !adminDejaPris && <option value="admin">Admin</option>}
-                  </select>
+            return (
+              <div key={m.id} style={{ ...cardStyle, borderTop: `3px solid ${m.color || "#6366f1"}`, padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <Avatar member={m} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
+                  </div>
+                  <StatusDot active />
+                </div>
+
+                {isSuperadminMember ? (
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--danger)", marginBottom: 10 }}>Superadmin — accès total</div>
                 ) : (
-                  <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>{isAdminMember ? "Admin" : ROLE_LABEL[roleCode] || "Membre"}</span>
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 5 }}>RÔLES</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                      {roles.filter((r) => r.code !== "superadmin").map((r) => {
+                        const hasRole = m.roles.includes(r.code);
+                        const lockedAdmin = r.code === "admin" && !hasRole && adminDejaPris;
+                        const disabled = !isSuperadmin || busy || lockedAdmin;
+                        return (
+                          <button key={r.code} disabled={disabled} onClick={() => handleToggleRole(m, r.code)}
+                            title={lockedAdmin ? "Un Admin existe déjà — rôle unique" : undefined}
+                            style={{
+                              fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, cursor: disabled ? "not-allowed" : "pointer",
+                              border: "none", opacity: lockedAdmin ? 0.4 : 1,
+                              background: hasRole ? (ROLE_COLORS[r.code]?.bg || "var(--bg-hover)") : "var(--bg)",
+                              color: hasRole ? (ROLE_COLORS[r.code]?.color || "var(--text-2)") : "var(--text-3)",
+                            }}>
+                            {ROLE_LABEL[r.code] || r.code}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {isSuperadmin && (
+                      <>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 5 }}>PERMISSIONS DIRECTES</div>
+                        {!detail ? (
+                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>Chargement…</span>
+                        ) : permissions.length === 0 ? (
+                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>Aucune permission dans le catalogue.</span>
+                        ) : (
+                          // Regroupées par module (référentiel déjà trié module→code
+                          // côté backend) pour la lisibilité — sinon 20+ badges en vrac.
+                          Object.entries(
+                            permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+                              (acc[p.module] = acc[p.module] || []).push(p);
+                              return acc;
+                            }, {})
+                          ).map(([module, modulePerms]) => (
+                            <div key={module} style={{ marginBottom: 6 }}>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", marginBottom: 3 }}>
+                                {MODULE_LABELS[module] || module}
+                              </div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                {modulePerms.map((p) => {
+                                  const pd = detail.find((x) => x.code === p.code);
+                                  const granted = !!pd?.granted;
+                                  return (
+                                    <button key={p.code} disabled={busy} onClick={() => handleTogglePermission(m, p.code, granted)} title={p.description}
+                                      style={{
+                                        fontSize: 10.5, fontWeight: granted ? 700 : 400, padding: "3px 10px", borderRadius: 20, cursor: busy ? "not-allowed" : "pointer",
+                                        border: `1px solid ${granted ? "var(--accent)" : "var(--border)"}`,
+                                        background: granted ? "var(--accent)" : "transparent",
+                                        color: granted ? "white" : "var(--text-3)",
+                                      }}>
+                                      {p.code}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </>
+                    )}
+                  </>
                 )}
-                <button onClick={() => setFiche(m)} title="Voir la fiche" style={actionBtn("ghost")}><BadgeCheck size={13} /> Fiche</button>
-                {canAct && <button onClick={() => handleToggleActive(m)} disabled={busy} title="Suspendre ce compte" style={actionBtn("warning")}>Suspendre</button>}
-                {canAct && <button onClick={() => handleDelete(m)} disabled={busy} title="Supprimer définitivement ce compte" style={actionBtn("danger")}>Supprimer</button>}
-                <StatusDot active />
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={() => setFiche(m)} title="Voir la fiche" style={actionBtn("ghost")}><BadgeCheck size={13} /> Fiche</button>
+                  {canAct && <button onClick={() => handleToggleActive(m)} disabled={busy} title="Suspendre ce compte" style={actionBtn("warning")}>Suspendre</button>}
+                  {canAct && <button onClick={() => handleDelete(m)} disabled={busy} title="Supprimer définitivement ce compte" style={actionBtn("danger")}>Supprimer</button>}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       <ConfirmDialog data={confirm} onClose={() => setConfirm(null)} />

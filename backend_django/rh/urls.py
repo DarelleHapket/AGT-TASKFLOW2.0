@@ -15,6 +15,8 @@ router.register("rh/candidats", views.CandidatViewSet, basename="rh-candidats")
 router.register("rh/formations", views.FormationViewSet, basename="rh-formations")
 router.register("rh/inscriptions-formation", views.InscriptionFormationViewSet, basename="rh-inscriptions-formation")
 router.register("rh/signalements", views.SignalementViewSet, basename="rh-signalements")
+router.register("rh/conges", views.CongeViewSet, basename="rh-conges")
+router.register("rh/notes-frais", views.NoteFraisViewSet, basename="rh-notes-frais")
 
 urlpatterns = [
     path("rh/profils/moi", views.mon_profil),

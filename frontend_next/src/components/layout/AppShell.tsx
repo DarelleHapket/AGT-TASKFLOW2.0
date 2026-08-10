@@ -119,7 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Profil */}
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowProfile((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "5px 10px", cursor: "pointer" }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: user.color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12 }}>
                   {(user.name || "?")[0].toUpperCase()}
                 </div>
                 <div style={{ textAlign: "left" }}>
@@ -135,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {showProfile && (
                 <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-md)", minWidth: 220, zIndex: 200, overflow: "hidden" }}>
                   <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: user.color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
                       {(user.name || "?")[0].toUpperCase()}
                     </div>
                     <div>

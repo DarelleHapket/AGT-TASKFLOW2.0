@@ -6,16 +6,19 @@ from rest_framework.response import Response
 
 from authentification.services import HasPerm
 
+from notifications.services import notify
+
 from .models import (
-    Candidat, Competence, Contrat, Disponibilite, Employe, Equipe, Formation,
-    InscriptionFormation, OffreEmploi, Periodicite, Poste, Profil, Remuneration,
-    Responsabilite, Signalement, StatutCandidature, StatutInscriptionFormation, TypeContrat,
+    Candidat, Competence, Conge, Contrat, Disponibilite, Employe, Equipe, Formation,
+    InscriptionFormation, NoteFrais, OffreEmploi, Periodicite, Poste, Profil, Remuneration,
+    Responsabilite, Signalement, StatutCandidature, StatutDemande, StatutInscriptionFormation, TypeContrat,
 )
 from .serializers import (
-    CandidatSerializer, CompetenceSerializer, ContratSerializer, DisponibiliteSerializer,
-    EmployeSerializer, EquipeSerializer, FormationSerializer, InscriptionFormationSerializer,
-    OffreEmploiSerializer, PosteSerializer, ProfilSerializer, RemunerationSerializer,
-    ResponsabiliteSerializer, SignalementSerializer, TypeContratSerializer,
+    CandidatSerializer, CompetenceSerializer, CongeSerializer, ContratSerializer,
+    DisponibiliteSerializer, EmployeSerializer, EquipeSerializer, FormationSerializer,
+    InscriptionFormationSerializer, NoteFraisSerializer, OffreEmploiSerializer, PosteSerializer,
+    ProfilSerializer, RemunerationSerializer, ResponsabiliteSerializer, SignalementSerializer,
+    TypeContratSerializer,
 )
 from .services import embaucher, terminer_inscription
 
@@ -246,3 +249,72 @@ class SignalementViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(auteur=self.request.user)
+
+
+class _DemandeSalarieMixin:
+    """Commun à Congé et Note de frais (espace salarié, hors CDC initial) :
+    l'employé pose sa demande et voit ses propres demandes ; un gestionnaire
+    RH (permission `<gerer_perm>`) voit tout et valide/refuse."""
+    gerer_perm = None  # ex: "rh.conges.gerer"
+
+    def get_permissions(self):
+        if self.action in ("update", "partial_update"):
+            return [HasPerm(self.gerer_perm)()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = self.queryset_base()
+        if user.is_superadmin() or user.peut(self.gerer_perm):
+            return qs
+        return qs.filter(employe__profil__utilisateur=user)
+
+    def create(self, request, *args, **kwargs):
+        profil = Profil.objects.filter(utilisateur=request.user).first()
+        if not profil or not hasattr(profil, "employe"):
+            return Response({"error": "Aucun statut d'employé rattaché à votre profil."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(employe=profil.employe, statut=StatutDemande.EN_ATTENTE)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == 200:
+            obj = self.get_object()
+            notify(
+                obj.employe.profil.utilisateur, self.notif_type,
+                f"{self.notif_label} {obj.get_statut_display().lower()}",
+                obj.commentaire_validation or "",
+                expediteur=request.user,
+            )
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        obj = self.get_object()
+        user = request.user
+        is_owner = obj.employe.profil.utilisateur_id == user.id
+        is_manager = user.is_superadmin() or user.peut(self.gerer_perm)
+        if not (is_manager or (is_owner and obj.statut == StatutDemande.EN_ATTENTE)):
+            return Response({"error": "Non autorisé."}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
+
+class CongeViewSet(_DemandeSalarieMixin, viewsets.ModelViewSet):
+    serializer_class = CongeSerializer
+    gerer_perm = "rh.conges.gerer"
+    notif_type = "conge_traite"
+    notif_label = "Votre demande de congé a été"
+
+    def queryset_base(self):
+        return Conge.objects.select_related("employe__profil__utilisateur")
+
+
+class NoteFraisViewSet(_DemandeSalarieMixin, viewsets.ModelViewSet):
+    serializer_class = NoteFraisSerializer
+    gerer_perm = "rh.notes_frais.gerer"
+    notif_type = "note_frais_traitee"
+    notif_label = "Votre note de frais a été"
+
+    def queryset_base(self):
+        return NoteFrais.objects.select_related("employe__profil__utilisateur")

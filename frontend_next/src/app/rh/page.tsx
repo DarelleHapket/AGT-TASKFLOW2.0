@@ -57,10 +57,24 @@ export default function RhPage() {
   const [empMontant, setEmpMontant] = useState("");
   const [empDate, setEmpDate] = useState("");
   const [createErr, setCreateErr] = useState<string | null>(null);
+  const [empDejaEmploye, setEmpDejaEmploye] = useState(false);
+  const [checkingEmp, setCheckingEmp] = useState(false);
+
+  // Vérifie tout de suite si le membre choisi est déjà employé, plutôt que
+  // de laisser l'utilisateur remplir tout le formulaire pour échouer à la
+  // soumission avec une erreur 400 facile à manquer.
+  useEffect(() => {
+    if (!empMembre) { setEmpDejaEmploye(false); return; }
+    setCheckingEmp(true);
+    api.getProfilParUtilisateur(Number(empMembre))
+      .then((p) => setEmpDejaEmploye(p.est_employe))
+      .catch(() => setEmpDejaEmploye(false))
+      .finally(() => setCheckingEmp(false));
+  }, [empMembre]);
 
   async function creerEmploye() {
     setCreateErr(null);
-    if (!empMembre || !empType || !empMontant || !empDate) return;
+    if (!empMembre || !empType || !empMontant || !empDate || empDejaEmploye) return;
     try {
       const profil = await api.getProfilParUtilisateur(Number(empMembre));
       await api.creerEmploye({ profil: profil.id, type_contrat: Number(empType), date_embauche: empDate, montant: empMontant });
@@ -165,6 +179,11 @@ export default function RhPage() {
                       <option value="">Choisir un membre</option>
                       {membres.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
+                    {empMembre && empDejaEmploye && (
+                      <span style={{ fontSize: 11, color: "var(--danger)" }}>
+                        Ce membre est déjà employé — modifiez son contrat/salaire depuis sa fiche sur la page Membres plutôt que d&apos;en recréer un.
+                      </span>
+                    )}
                     <select style={inp} value={empType} onChange={(e) => setEmpType(e.target.value)}>
                       <option value="">Type de contrat</option>
                       {typesContrat.map((t) => <option key={t.id} value={t.id}>{t.nom}</option>)}
@@ -173,7 +192,7 @@ export default function RhPage() {
                     <input style={inp} type="number" placeholder="Montant du salaire" value={empMontant} onChange={(e) => setEmpMontant(e.target.value)} />
                     {createErr && <span style={{ fontSize: 11, color: "var(--danger)" }}>{createErr}</span>}
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={creerEmploye} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>Créer</button>
+                      <button onClick={creerEmploye} disabled={empDejaEmploye || checkingEmp} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "7px 16px", cursor: empDejaEmploye ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 12, opacity: empDejaEmploye ? 0.5 : 1 }}>Créer</button>
                       <button onClick={() => setCreating(false)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 16px", cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>Annuler</button>
                     </div>
                   </div>

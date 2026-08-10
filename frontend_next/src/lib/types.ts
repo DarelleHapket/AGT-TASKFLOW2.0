@@ -378,3 +378,28 @@ export interface Prevision {
 export interface Bilan { entrees: string; sorties: string; solde: string }
 
 export interface EcartPrevision { prevu: string; reel: string; ecart: string }
+
+// ── Module 2 — Matériel ──────────────────────────────────────────────────
+
+export interface TypeMateriel { id: number; nom: string; description: string }
+
+export interface Materiel {
+  id: number; nom: string; description: string;
+  type: number; type_nom: string; quantite: number; date_achat: string;
+  projet: number | null; projet_nom: string | null;
+}
+
+export type SensMouvementMateriel = "achat" | "affectation" | "retour" | "rebut";
+
+export interface MouvementMateriel {
+  id: number; materiel: number; materiel_nom: string; type_mouvement: SensMouvementMateriel;
+  quantite: number; date_mouvement: string;
+  projet: number | null; projet_nom: string | null;
+  employe: number | null; employe_nom: string | null; commentaire: string;
+}
+
+export interface Stock {
+  total: number;
+  par_type: { type: string; quantite: number }[];
+  par_projet: { projet: string; quantite: number }[];
+}

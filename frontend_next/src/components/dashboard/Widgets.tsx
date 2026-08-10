@@ -76,16 +76,21 @@ function WidgetTexte({ label, value, href }: { label: string; value: string; hre
   );
 }
 
-// Encarts RH (BF-24) et Finances (BF-31) — Matériel reste "à venir" (Module 2,
-// non implémenté). RH/Finances retombent en WidgetVide si l'utilisateur n'a
-// pas la permission de lecture correspondante (rare pour un profil qui voit
-// déjà cette section, mais respecte le RBAC/IBAC à la marge).
-export function WidgetsRessources({ canRh, canFinances, postes, equipes, soldeMois }: {
-  canRh: boolean; canFinances: boolean; postes: number; equipes: number; soldeMois: string | null;
+// Encarts RH (BF-24), Finances (BF-31) et Matériel (BF-14). Chaque encart
+// retombe en WidgetVide si l'utilisateur n'a pas la permission de lecture
+// correspondante (rare pour un profil qui voit déjà cette section, mais
+// respecte le RBAC/IBAC à la marge).
+export function WidgetsRessources({ canRh, canFinances, canMateriel, postes, equipes, soldeMois, stockTotal }: {
+  canRh: boolean; canFinances: boolean; canMateriel: boolean;
+  postes: number; equipes: number; soldeMois: string | null; stockTotal: number | null;
 }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 24 }}>
-      <WidgetVide label="Matériel (S2)" />
+      {canMateriel ? (
+        <WidgetTexte label="MATÉRIEL — STOCK TOTAL" value={stockTotal !== null ? String(stockTotal) : "—"} href="/materiel" />
+      ) : (
+        <WidgetVide label="Matériel" />
+      )}
       {canRh ? (
         <WidgetTexte label="RH" value={`${postes} poste${postes !== 1 ? "s" : ""} · ${equipes} équipe${equipes !== 1 ? "s" : ""}`} href="/rh" />
       ) : (

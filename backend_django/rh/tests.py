@@ -6,7 +6,7 @@ from authentification.services import assign_role
 from finances.models import MouvementFinancier
 
 from .models import (
-    Candidat, Competence, Contrat, Formation, InscriptionFormation, OffreEmploi,
+    Candidat, Competence, Contrat, Employe, Formation, InscriptionFormation, OffreEmploi,
     Periodicite, Poste, Profil, Remuneration, StatutCandidature, StatutInscriptionFormation,
     TypeContrat,
 )
@@ -36,19 +36,85 @@ class ReferentielPermissionTests(TestCase):
         self.admin = make_user("adminrh", "admin")
         self.membre = make_user("membrerh", "membre")
 
-    def test_membre_na_pas_acces_au_referentiel(self):
-        """Un membre ne consulte/gère que ses propres données (salaire,
-        disponibilité) — pas le catalogue RH complet, réservé à Admin."""
+    def test_membre_peut_lire_mais_pas_ecrire_les_competences(self):
+        """Le catalogue de compétences est un annuaire (lecture ouverte à
+        tout authentifié) — seule l'écriture reste réservée à Admin."""
         self.client.force_authenticate(self.membre)
         r = self.client.get("/api/rh/competences")
-        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.status_code, 200)
         r = self.client.post("/api/rh/competences", {"nom": "Django"}, format="json")
+        self.assertEqual(r.status_code, 403)
+
+    def test_membre_na_pas_acces_en_ecriture_aux_postes(self):
+        """Postes/équipes/types de contrat restent des données gérées par
+        Admin — seule la lecture des compétences a été ouverte."""
+        self.client.force_authenticate(self.membre)
+        r = self.client.post("/api/rh/postes", {"nom": "Développeur"}, format="json")
         self.assertEqual(r.status_code, 403)
 
     def test_admin_peut_ecrire_le_referentiel(self):
         self.client.force_authenticate(self.admin)
         r = self.client.post("/api/rh/competences", {"nom": "Django"}, format="json")
         self.assertEqual(r.status_code, 201)
+
+
+class EditerProfilTests(TestCase):
+    """PATCH /rh/profils/<pk> — assigner un poste/des compétences à un
+    membre, jusqu'ici possible seulement à la création via signal (jamais
+    modifiable après coup, trou constaté à l'usage)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_user("adminprofil", "admin")
+        self.membre = make_user("membreprofil", "membre")
+        self.profil = Profil.objects.get(utilisateur=self.membre)
+        self.poste = Poste.objects.create(nom="Développeur")
+        self.competence = Competence.objects.create(nom="Django")
+
+    def test_admin_peut_assigner_poste_et_competences(self):
+        self.client.force_authenticate(self.admin)
+        r = self.client.patch(
+            f"/api/rh/profils/{self.profil.id}",
+            {"poste": self.poste.id, "competences": [self.competence.id]},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.profil.refresh_from_db()
+        self.assertEqual(self.profil.poste_id, self.poste.id)
+        self.assertEqual(list(self.profil.competences.values_list("id", flat=True)), [self.competence.id])
+
+    def test_membre_ne_peut_pas_modifier_un_profil(self):
+        self.client.force_authenticate(self.membre)
+        r = self.client.patch(
+            f"/api/rh/profils/{self.profil.id}", {"poste": self.poste.id}, format="json",
+        )
+        self.assertEqual(r.status_code, 403)
+
+
+class AnnuaireProfilsTests(TestCase):
+    """Un membre peut consulter le profil (poste/compétences) d'un collègue
+    — annuaire, pas une donnée RH sensible — mais pas son salaire."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.membre = make_user("annuaire_membre")
+        self.collegue = make_user("annuaire_collegue")
+        self.profil_collegue = Profil.objects.get(utilisateur=self.collegue)
+
+    def test_membre_peut_lire_le_profil_dun_collegue(self):
+        self.client.force_authenticate(self.membre)
+        r = self.client.get(f"/api/rh/profils/{self.profil_collegue.id}")
+        self.assertEqual(r.status_code, 200)
+        r = self.client.get(f"/api/rh/profils/par-utilisateur?utilisateur={self.collegue.id}")
+        self.assertEqual(r.status_code, 200)
+
+    def test_membre_ne_voit_pas_le_salaire_dun_collegue(self):
+        """salaire_employe reste réservé à rh.employes.gerer, endpoint
+        distinct de profil_detail — non exposé par la lecture annuaire."""
+        self.client.force_authenticate(self.membre)
+        employe = Employe.objects.create(profil=self.profil_collegue, date_embauche="2026-01-01")
+        r = self.client.get(f"/api/rh/employes/{employe.id}/salaire")
+        self.assertEqual(r.status_code, 403)
 
 
 class CreerEmployeTests(TestCase):

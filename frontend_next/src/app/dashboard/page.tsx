@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [rhStats, setRhStats] = useState({ postes: 0, equipes: 0 });
   const [soldeMois, setSoldeMois] = useState<string | null>(null);
+  const [stockTotal, setStockTotal] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLogged) router.replace("/login");
@@ -39,10 +40,15 @@ export default function DashboardPage() {
 
   const canRh = hasPermission("rh.read");
   const canFinances = hasPermission("finances.bilan.voir");
+  const canMateriel = hasPermission("materiel.read");
 
   useEffect(() => {
     if (canRh) Promise.all([api.getPostes(), api.getEquipes()]).then(([p, e]) => setRhStats({ postes: p.length, equipes: e.length })).catch(() => {});
   }, [canRh]);
+
+  useEffect(() => {
+    if (canMateriel) api.getStock().then((s) => setStockTotal(s.total)).catch(() => {});
+  }, [canMateriel]);
 
   useEffect(() => {
     if (!canFinances) return;
@@ -112,7 +118,7 @@ export default function DashboardPage() {
       )}
 
       {canSeeGlobalWidgets && (
-        <WidgetsRessources canRh={canRh} canFinances={canFinances} postes={rhStats.postes} equipes={rhStats.equipes} soldeMois={soldeMois} />
+        <WidgetsRessources canRh={canRh} canFinances={canFinances} canMateriel={canMateriel} postes={rhStats.postes} equipes={rhStats.equipes} soldeMois={soldeMois} stockTotal={stockTotal} />
       )}
 
       {!canSeeGlobalWidgets && role === "chef_projet" && (

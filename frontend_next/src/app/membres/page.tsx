@@ -67,7 +67,7 @@ export default function MembresPage() {
           isSuperadmin={isSuperadmin}
           currentUser={user}
           canSeeSalaire={hasPermission("rh.employes.gerer")}
-          canSeeFiche={hasPermission("rh.read")}
+          canEditFiche={hasPermission("rh.write")}
         />
       )}
     </AppShell>

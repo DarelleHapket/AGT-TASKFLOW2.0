@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'pilotage_stage',
     'rh',
     'finances',
+    'materiel',
 ]
 
 MIDDLEWARE = [

@@ -49,13 +49,16 @@ démarrage** pour savoir lequel utiliser. L'API Django reste fixe sur 8000.
 
 ### Comptes de test (base locale)
 
-Mot de passe identique pour les trois : **`Test@2026`**
+| Email | Mot de passe | Rôle | Sert à tester |
+|---|---|---|---|
+| `SuperAdmin@agt.com` | `AGT2026!` | Superadmin | Identifiants de démarrage réels (§6 du [guide fonctionnel](./GUIDE_FONCTIONNEL.md)) |
+| `darelle@agt.test` | `Test@2026` | Superadmin | Accès total, `/rbac`, gestion des rôles |
+| `admin.test@agt.test` | `Test@2026` | Admin | RH, Finances, Matériel, sans les écrans réservés Superadmin |
+| `josue@agt.test` | `Test@2026` | Membre + Chef de projet | Ce qu'un utilisateur normal voit (Finances/RH/Matériel masqués) |
 
-| Email | Rôle | Sert à tester |
-|---|---|---|
-| `darelle@agt.test` | Superadmin | Accès total, `/rbac`, gestion des rôles |
-| `admin.test@agt.test` | Admin | RH, Finances, sans les écrans réservés Superadmin |
-| `josue@agt.test` | Membre + Chef de projet | Ce qu'un utilisateur normal voit (Finances/RH masqués) |
+Ces comptes n'existent que sur ta base locale (`db.sqlite3`) — recréés à la main pendant les
+tests, pas seedés automatiquement. Seul `SuperAdmin@agt.com` correspond au comportement réel
+de démarrage (BF-01, voir le guide fonctionnel).
 
 Pour tester un endpoint dans Swagger : se connecter d'abord sur
 `/login` dans l'appli (vérifie que le compte fonctionne), puis dans Swagger
@@ -75,11 +78,11 @@ sur les PDF correspondants). 6 modules, un par semaine de stage.
 |---|---|---|---|
 | 0 | Améliorer l'existant | Consolider projets/activités/tâches/PERT-Gantt déjà en prod, corriger les bugs connus | ✅ Fait (bugs B01/B02/B04/B07/B09/B10/B11 corrigés, cf. historique de commits) |
 | 1 | Rôles et permissions (RBAC + IBAC) | Rôles multiples par utilisateur, permissions copiées puis modifiables individuellement, superadmin unique auto-créé | ✅ Fait — `authentification/` (backend), `/rbac` (frontend) |
-| 2 | Gestion du matériel | Types de matériel, stock, mouvements (achat/affectation/retour/rebut) | ❌ Pas commencé (affiché « Matériel (S2) » en attente sur le dashboard) |
+| 2 | Gestion du matériel | Types de matériel, stock, mouvements (achat/affectation/retour/rebut) | ✅ Fait — `materiel/` (backend), `/materiel`, `/materiel/mouvements` |
 | 3 | Profils et ressources humaines | Profil (poste/compétences), employés, contrats, salaires, disponibilité, recrutement, formations, signalements | ✅ Fait — `rh/` (backend), `/rh`, `/rh/recrutement`, `/rh/signalements`, section « Mon profil » sur `/mon-compte`, fiche membre sur `/membres` |
 | 4 | Finances | Mouvements d'argent immuables, lien auto salaire→finances, bilan, prévisions, rapports PDF/TXT | ✅ Fait — `finances/` (backend), `/finances`, `/finances/bilan`, `/finances/previsions`, génération de rapport |
 | 5 | Documentation | Documents liés à n'importe quel élément, classement, dashboard complet | ❌ Pas commencé |
-| S6 | Tests et mise en ligne finale | Tests BF-00 à BF-37 par rôle, corrections, démonstration | 🔶 Partiel — tests automatisés + manuels faits pour modules 0/1/3/4 (voir §4), pas de démonstration finale ni bascule prod |
+| S6 | Tests et mise en ligne finale | Tests BF-00 à BF-37 par rôle, corrections, démonstration | 🔶 Partiel — tests automatisés + manuels faits pour modules 0/1/2/3/4 (voir §4), pas de démonstration finale ni bascule prod |
 
 **Hors plan initial, déjà fusionné dans cette stack** : l'outil interne
 `team-tool` (PERT/arbre de tâches d'équipe, sauvegardes BD) — porté dans
@@ -96,24 +99,40 @@ sur les PDF correspondants). 6 modules, un par semaine de stage.
   profil/salaire (`/membres`), page Prévisions (`/finances/previsions`),
   génération de rapport PDF/TXT (`/finances/bilan`), encarts RH/Finances sur
   le dashboard.
+- **Module 2 (Matériel) construit de bout en bout** (n'existait pas du tout) :
+  backend `materiel/` (types, inventaire, mouvements immuables, stock
+  agrégé), frontend `/materiel` + `/materiel/mouvements`, encart dashboard.
+  Détail dans [`GUIDE_FONCTIONNEL.md`](./GUIDE_FONCTIONNEL.md) §5.
+- **Profil éditable** : possibilité d'assigner poste/compétences à un membre
+  depuis sa fiche (`/membres`), lecture du profil d'un collègue ouverte à
+  tout authentifié (annuaire), salaire toujours réservé à l'intéressé +
+  Admin/Superadmin. Voir §1 du guide fonctionnel.
+- **Compte personnel éditable par tous** : nom affiché + couleur d'avatar
+  modifiables par tout membre sur `/mon-compte` (nouveau, `PATCH /auth/me`).
+- **Identifiants de démarrage** : superadmin auto-créé avec
+  `SuperAdmin@agt.com` / `AGT2026!` par défaut (configurable en prod via
+  variables d'environnement).
 - **Swagger** : `drf-spectacular` ajouté (`/api/docs/`, `/api/redoc/`,
   `/api/schema/`).
 - **Nettoyage** : `team-tool/` (déjà fusionné) et 7 fichiers obsolètes à la
   racine supprimés.
-- **Validation** : 108 tests backend (`manage.py test`) verts, `tsc` +
-  `next build` sans erreur, parcours navigateur manuel sur les 3 comptes de
-  test ci-dessus (RBAC/IBAC vérifié : un Membre n'accède ni aux pages ni aux
-  endpoints Finances/RH réservés). Un bug trouvé pendant ce test manuel
-  (`/mon-compte` plantait pour un compte sans permission `rh.read`) a été
-  corrigé dans la foulée.
+- **Validation** : 125 tests backend (`manage.py test`) verts, `tsc` +
+  `next build` sans erreur, parcours navigateur manuel sur les comptes de
+  test (RBAC/IBAC vérifié à chaque étape). Plusieurs bugs trouvés pendant ces
+  tests manuels ont été corrigés dans la foulée (voir le guide fonctionnel
+  pour le détail de chacun).
 
-Commit local sur `feat/darelle-B` (`baf1a35`), **pas encore poussé** — en
-attente de validation après test en local.
+Commit local sur `feat/darelle-B`, **pas encore poussé** — en attente de
+validation après test en local.
 
 ---
 
 ## 5. Documents liés
 
+- [`GUIDE_FONCTIONNEL.md`](./GUIDE_FONCTIONNEL.md) — comment utiliser chaque
+  module (RH, recrutement, finances, matériel), réponses aux questions
+  fréquentes en testant (pourquoi tel montant est en rouge, comment assigner
+  un poste, etc.).
 - [`BASCULE_PRODUCTION.md`](./BASCULE_PRODUCTION.md) — runbook de bascule
   vers la nouvelle stack en production (non exécuté).
 - `documents/` — cahier des charges global (PDF) + documents d'analyse et de

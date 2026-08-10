@@ -6,37 +6,67 @@
 // nouvel endpoint GET /membres/deleted (authentification/views.py), qui
 // n'existait pas dans une première passe de migration.
 import { useEffect, useState } from "react";
-import { Check, X, Clock, AlertTriangle, BadgeCheck, Wallet } from "lucide-react";
+import { Check, X, Clock, AlertTriangle, BadgeCheck, Wallet, Pencil } from "lucide-react";
 import * as api from "@/lib/api";
 import { ConfirmDialog, type ConfirmData } from "@/components/ui/ConfirmDialog";
-import type { Competence, Employe, Profil, Utilisateur } from "@/lib/types";
+import type { Competence, Employe, Poste, Profil, Utilisateur } from "@/lib/types";
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", chef_projet: "Chef de projet", membre: "Membre" };
 const PERIODICITE_LABEL: Record<string, string> = { mensuelle: "mois", hebdomadaire: "semaine", journaliere: "jour" };
 
-function FicheMembreModal({ membre, canSeeSalaire, onClose }: { membre: Utilisateur; canSeeSalaire: boolean; onClose: () => void }) {
+function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { membre: Utilisateur; canSeeSalaire: boolean; canEditFiche: boolean; onClose: () => void }) {
   const [profil, setProfil] = useState<Profil | null>(null);
   const [competences, setCompetences] = useState<Competence[]>([]);
+  const [postes, setPostes] = useState<Poste[]>([]);
   const [employe, setEmploye] = useState<Employe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [editing, setEditing] = useState(false);
+  const [editPoste, setEditPoste] = useState("");
+  const [editCompetences, setEditCompetences] = useState<number[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+
+  function load() {
     setLoading(true); setError(null);
     Promise.all([api.getProfilParUtilisateur(membre.id), api.getCompetences()])
       .then(([p, c]) => {
         setProfil(p); setCompetences(c);
+        setEditPoste(p.poste ? String(p.poste) : "");
+        setEditCompetences(p.competences);
         if (canSeeSalaire && p.est_employe && p.employe_id) {
           api.getSalaireEmploye(p.employe_id).then(setEmploye).catch(() => setEmploye(null));
         }
       })
       .catch((e) => setError(api.errorMessage(e, "Profil indisponible")))
       .finally(() => setLoading(false));
-  }, [membre.id, canSeeSalaire]);
+    if (canEditFiche) api.getPostes().then(setPostes).catch(() => {});
+  }
+  useEffect(load, [membre.id, canSeeSalaire, canEditFiche]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function enregistrer() {
+    if (!profil) return;
+    setSaving(true); setSaveErr(null);
+    try {
+      const updated = await api.updateProfil(profil.id, { poste: editPoste ? Number(editPoste) : null, competences: editCompetences });
+      setProfil(updated);
+      setEditing(false);
+    } catch (e) {
+      setSaveErr(api.errorMessage(e, "Enregistrement impossible"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleCompetence(id: number) {
+    setEditCompetences((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  }
 
   const nomCompetence = (id: number) => competences.find((c) => c.id === id)?.nom || `#${id}`;
   const contratActuel = employe?.contrats?.find((c) => !c.date_fin) || employe?.contrats?.[employe.contrats.length - 1];
   const remunerationActuelle = contratActuel?.remunerations?.[contratActuel.remunerations.length - 1];
+  const selectStyle: React.CSSProperties = { width: "100%", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, background: "var(--bg-card)", color: "var(--text)" };
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.45)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -53,13 +83,47 @@ function FicheMembreModal({ membre, canSeeSalaire, onClose }: { membre: Utilisat
             <p style={{ fontSize: 12, color: "var(--text-3)" }}>Chargement…</p>
           ) : error || !profil ? (
             <p style={{ fontSize: 12, color: "var(--danger)" }}>{error || "Profil introuvable."}</p>
+          ) : editing ? (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>POSTE</span>
+                <select style={{ ...selectStyle, marginTop: 4 }} value={editPoste} onChange={(e) => setEditPoste(e.target.value)}>
+                  <option value="">Non défini</option>
+                  {postes.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>COMPÉTENCES</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                  {competences.map((c) => {
+                    const active = editCompetences.includes(c.id);
+                    return (
+                      <button key={c.id} type="button" onClick={() => toggleCompetence(c.id)} style={{
+                        fontSize: 11, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
+                        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                        background: active ? "var(--accent-bg)" : "transparent",
+                        color: active ? "var(--accent)" : "var(--text-3)",
+                      }}>{c.nom}</button>
+                    );
+                  })}
+                  {competences.length === 0 && <span style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune compétence dans le référentiel.</span>}
+                </div>
+              </div>
+              {saveErr && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 10 }}>{saveErr}</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={enregistrer} disabled={saving} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "7px 16px", cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 12 }}>
+                  {saving ? "Enregistrement…" : "Enregistrer"}
+                </button>
+                <button onClick={() => setEditing(false)} disabled={saving} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 16px", cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>Annuler</button>
+              </div>
+            </>
           ) : (
             <>
               <div style={{ marginBottom: 12 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>POSTE</span>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{profil.poste_nom || "Non défini"}</div>
               </div>
-              <div style={{ marginBottom: profil.est_employe ? 16 : 0 }}>
+              <div style={{ marginBottom: profil.est_employe || canEditFiche ? 16 : 0 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>COMPÉTENCES</span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                   {profil.competences.length === 0 && <span style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune</span>}
@@ -68,6 +132,11 @@ function FicheMembreModal({ membre, canSeeSalaire, onClose }: { membre: Utilisat
                   ))}
                 </div>
               </div>
+              {canEditFiche && (
+                <button onClick={() => setEditing(true)} style={{ ...actionBtn("ghost"), marginBottom: profil.est_employe && canSeeSalaire ? 16 : 0 }}>
+                  <Pencil size={12} /> Modifier le poste / les compétences
+                </button>
+              )}
               {profil.est_employe && canSeeSalaire && (
                 <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
                   <Wallet size={14} color="var(--text-3)" />
@@ -121,13 +190,13 @@ function StatusDot({ active }: { active: boolean }) {
   return <div title={active ? "Actif" : "Suspendu"} style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0, background: active ? "#22c55e" : "#f59e0b", border: "2px solid var(--border)" }} />;
 }
 
-export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canSeeFiche = false }: {
+export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canEditFiche = false }: {
   members: Utilisateur[];
   onDelete: (id: number) => Promise<void>;
   onSetMemberRole: (id: number, role: "membre" | "chef_projet") => Promise<void>;
   onToggleActive: (m: Utilisateur) => Promise<Utilisateur>;
   onValidate: (id: number, action: "approve" | "reject") => Promise<void>;
-  isAdmin: boolean; isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canSeeFiche?: boolean;
+  isAdmin: boolean; isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canEditFiche?: boolean;
 }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -273,7 +342,7 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
                 ) : (
                   <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>{isAdminMember ? "Admin" : ROLE_LABEL[roleCode] || "Membre"}</span>
                 )}
-                {canSeeFiche && <button onClick={() => setFiche(m)} title="Voir la fiche" style={actionBtn("ghost")}><BadgeCheck size={13} /> Fiche</button>}
+                <button onClick={() => setFiche(m)} title="Voir la fiche" style={actionBtn("ghost")}><BadgeCheck size={13} /> Fiche</button>
                 {canAct && <button onClick={() => handleToggleActive(m)} disabled={busy} title="Suspendre ce compte" style={actionBtn("warning")}>Suspendre</button>}
                 {canAct && <button onClick={() => handleDelete(m)} disabled={busy} title="Supprimer définitivement ce compte" style={actionBtn("danger")}>Supprimer</button>}
                 <StatusDot active />
@@ -284,7 +353,7 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
       </div>
 
       <ConfirmDialog data={confirm} onClose={() => setConfirm(null)} />
-      {fiche && <FicheMembreModal membre={fiche} canSeeSalaire={canSeeSalaire} onClose={() => setFiche(null)} />}
+      {fiche && <FicheMembreModal membre={fiche} canSeeSalaire={canSeeSalaire} canEditFiche={canEditFiche} onClose={() => setFiche(null)} />}
     </div>
   );
 }

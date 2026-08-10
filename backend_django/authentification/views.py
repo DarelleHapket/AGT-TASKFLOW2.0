@@ -67,9 +67,23 @@ def register(request):
                      status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def me(request):
+    """PATCH : un membre modifie son propre compte (nom affiché, couleur
+    d'avatar) après inscription — email/rôles/statut restent hors de portée
+    ici (gérés par Admin/Superadmin via MembreViewSet)."""
+    if request.method == "PATCH":
+        user = request.user
+        if "first_name" in request.data:
+            first_name = (request.data.get("first_name") or "").strip()
+            if not first_name:
+                return Response({"error": "Le nom ne peut pas être vide."}, status=status.HTTP_400_BAD_REQUEST)
+            user.first_name = first_name
+        if "color" in request.data:
+            user.color = request.data.get("color") or user.color
+        user.save()
+        return Response(UserSerializer(user).data)
     return Response(UserSerializer(request.user).data)
 
 

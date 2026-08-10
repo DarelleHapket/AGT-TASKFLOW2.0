@@ -31,8 +31,15 @@ class _ReadWritePermMixin:
 
 
 class CompetenceViewSet(_ReadWritePermMixin, viewsets.ModelViewSet):
+    """Lecture ouverte à tout authentifié (annuaire des compétences,
+    non sensible) — seule l'écriture reste réservée à rh.write."""
     queryset = Competence.objects.all()
     serializer_class = CompetenceSerializer
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
 
 class PosteViewSet(_ReadWritePermMixin, viewsets.ModelViewSet):
@@ -62,20 +69,33 @@ def mon_profil(request):
     return Response(ProfilSerializer(profil).data)
 
 
-@api_view(["GET"])
-@permission_classes([HasPerm("rh.read")])
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
 def profil_detail(request, pk):
+    """Lecture (poste/compétences) ouverte à tout authentifié — un membre
+    peut consulter la fiche d'un collègue (annuaire), pas seulement la
+    sienne. Le salaire reste un endpoint séparé (salaire_employe),
+    réservé à rh.employes.gerer : ce n'est pas exposé ici. L'écriture
+    (assigner un poste/des compétences) reste réservée à rh.write."""
     profil = Profil.objects.filter(pk=pk).first()
     if not profil:
         return Response({"error": "Profil introuvable."}, status=status.HTTP_404_NOT_FOUND)
+    if request.method == "PATCH":
+        if not request.user.is_superadmin() and not request.user.peut("rh.write"):
+            return Response({"error": "Permission requise : rh.write"}, status=status.HTTP_403_FORBIDDEN)
+        serializer = ProfilSerializer(profil, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
     return Response(ProfilSerializer(profil).data)
 
 
 @api_view(["GET"])
-@permission_classes([HasPerm("rh.read")])
+@permission_classes([IsAuthenticated])
 def profil_par_utilisateur(request):
-    """Utilisé par le formulaire « Créer un employé » : Admin choisit un
-    membre (Utilisateur.id) dans la liste, pas directement un Profil.id."""
+    """Utilisé par le formulaire « Créer un employé » (Admin choisit un
+    membre par Utilisateur.id) et par la fiche membre (lecture annuaire,
+    cf. profil_detail) — même ouverture, mêmes raisons."""
     utilisateur_id = request.query_params.get("utilisateur")
     profil = Profil.objects.filter(utilisateur_id=utilisateur_id).first()
     if not profil:

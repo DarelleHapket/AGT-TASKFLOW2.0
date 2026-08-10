@@ -8,6 +8,28 @@ from .models import Permission, PermissionEffective, Role, StatutCompte, User
 from .services import assign_role, grant_permission, revoke_permission, revoke_role
 
 
+class UpdateMeTests(TestCase):
+    """PATCH /auth/me — tout membre peut modifier son propre nom affiché
+    après inscription, sans permission RBAC particulière."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create(username="modif", email="modif@agt.test",
+                                         first_name="Ancien", statut=StatutCompte.ACTIF, is_active=True)
+
+    def test_modifier_son_propre_nom(self):
+        self.client.force_authenticate(self.user)
+        r = self.client.patch("/api/auth/me", {"first_name": "Nouveau"}, format="json")
+        self.assertEqual(r.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Nouveau")
+
+    def test_nom_vide_refuse(self):
+        self.client.force_authenticate(self.user)
+        r = self.client.patch("/api/auth/me", {"first_name": "   "}, format="json")
+        self.assertEqual(r.status_code, 400)
+
+
 class RbacModelTests(TestCase):
     def setUp(self):
         self.voir = Permission.objects.create(code="fruit.voir", module="fruit")

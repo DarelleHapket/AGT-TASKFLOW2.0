@@ -39,6 +39,8 @@ const TAB_TITLES: Record<string, string> = {
   "/finances": "Finances",
   "/finances/bilan": "Bilan",
   "/finances/previsions": "Prévisions",
+  "/materiel": "Matériel",
+  "/materiel/mouvements": "Mouvements de matériel",
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {

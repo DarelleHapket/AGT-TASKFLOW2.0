@@ -47,6 +47,8 @@ const ROUTES: Record<string, string> = {
   finances: "/finances",
   bilan: "/finances/bilan",
   previsions: "/finances/previsions",
+  materiel: "/materiel",
+  materielMouvements: "/materiel/mouvements",
 };
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
@@ -72,7 +74,8 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
       { id: "finances", label: "Finances", Icon: Wallet, permission: "finances.mouvements.gerer" },
       { id: "bilan", label: "Bilan", sublabel: "(finances)", Icon: Wallet, permission: "finances.bilan.voir" },
       { id: "previsions", label: "Prévisions", sublabel: "(finances)", Icon: Target, permission: "finances.previsions.gerer" },
-      { id: "materiel", label: "Matériel", Icon: Package, comingSoon: "S2" },
+      { id: "materiel", label: "Matériel", Icon: Package, permission: "materiel.read" },
+      { id: "materielMouvements", label: "Mouvements", sublabel: "(matériel)", Icon: Package, permission: "materiel.read" },
     ],
   },
   {

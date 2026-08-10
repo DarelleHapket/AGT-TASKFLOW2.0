@@ -42,6 +42,7 @@ class ProfilSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profil
         fields = ["id", "utilisateur", "nom", "poste", "poste_nom", "competences", "est_employe", "employe_id"]
+        read_only_fields = ["utilisateur"]
 
     def get_nom(self, obj):
         return obj.utilisateur.display_name()

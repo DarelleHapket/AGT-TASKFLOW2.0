@@ -18,8 +18,14 @@ class Command(BaseCommand):
             self.stdout.write("Superadmin déjà présent — rien à faire.")
             return
 
-        email = os.environ.get("SUPERADMIN_EMAIL", "superadmin@ag-technologies.tech")
-        password = os.environ.get("SUPERADMIN_PASSWORD", "ChangeMoi@2026")
+        # Valeurs par défaut pour le dev/local uniquement — en production,
+        # SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD doivent être définis dans
+        # l'environnement avec des valeurs propres à chaque déploiement (ne
+        # jamais garder ces défauts, publics dans ce dépôt). Le risque reste
+        # limité par doit_changer_mdp=True ci-dessous, qui force un
+        # changement de mot de passe dès la première connexion.
+        email = os.environ.get("SUPERADMIN_EMAIL", "SuperAdmin@agt.com")
+        password = os.environ.get("SUPERADMIN_PASSWORD", "AGT2026!")
         username = email.split("@")[0]
 
         user, created = User.objects.get_or_create(

@@ -6,11 +6,13 @@
 // (src/lib/auth.tsx) — voir le commentaire là-bas.
 import type {
   Activite, Besoin, Bilan, Candidat, Competence, Disponibilite, EcartPrevision, Employe, Equipe,
-  Formation, InscriptionFormation, LoginResponse, MembreProjet, MouvementFinancier, NiveauFinancier, Note,
+  Formation, InscriptionFormation, LoginResponse, Materiel, MembreProjet, MouvementFinancier,
+  MouvementMateriel, NiveauFinancier, Note,
   Notification, OffreEmploi, OrdreJournalier, Periodicite, Permission, PermissionDetail, PerformanceEntry,
   PilotageBranch, PilotageTache, Poste, Prevision, Profil, Projet, RapportData, RapportProjet,
-  Role, Sauvegarde, Signalement, StatutCandidature, StatutDisponibilite, StatutInscriptionFormation, Tache,
-  TachesResponse, TypeContrat, TypeMouvementFinancier, SensMouvement, Utilisateur,
+  Role, Sauvegarde, Signalement, StatutCandidature, StatutDisponibilite, StatutInscriptionFormation,
+  Stock, Tache, TachesResponse, TypeContrat, TypeMateriel, TypeMouvementFinancier, SensMouvement,
+  SensMouvementMateriel, Utilisateur,
 } from "./types";
 
 const BASE = "/api";
@@ -73,6 +75,8 @@ export const register = (name: string, email: string, password: string) =>
 export const me = () => req<Utilisateur>("GET", "/auth/me");
 export const changerMdp = (ancien: string, nouveau: string) =>
   req("POST", "/auth/changer-mdp", { ancien, nouveau });
+export const updateMe = (data: { first_name?: string; color?: string }) =>
+  req<Utilisateur>("PATCH", "/auth/me", data);
 
 // ── Membres / RBAC ───────────────────────────────────────────────────────
 export const getMembres = () => req<Utilisateur[]>("GET", "/membres");
@@ -234,6 +238,8 @@ export const createTypeContrat = (data: { nom: string; description?: string }) =
 export const getMonProfil = () => req<Profil>("GET", "/rh/profils/moi");
 export const getProfil = (id: number) => req<Profil>("GET", `/rh/profils/${id}`);
 export const getProfilParUtilisateur = (utilisateurId: number) => req<Profil>("GET", `/rh/profils/par-utilisateur?utilisateur=${utilisateurId}`);
+export const updateProfil = (id: number, data: { poste?: number | null; competences?: number[] }) =>
+  req<Profil>("PATCH", `/rh/profils/${id}`, data);
 export const creerEmploye = (data: { profil: number; type_contrat: number; date_embauche: string; montant: string; periodicite?: Periodicite }) =>
   req<Employe>("POST", "/rh/employes", data);
 export const getMonSalaire = () => req<Employe>("GET", "/rh/employes/moi/salaire");
@@ -274,6 +280,18 @@ export const createPrevision = (data: { periode_debut: string; periode_fin: stri
 export const getEcartPrevision = (id: number) => req<EcartPrevision>("GET", `/finances/previsions/${id}/ecart`);
 export const creerRapportFinancier = (data: { format: "pdf" | "txt"; periode_debut: string; periode_fin: string }) =>
   req("POST", "/finances/rapports", data);
+
+// ── Module 2 — Matériel ──────────────────────────────────────────────────
+export const getTypesMateriel = () => req<TypeMateriel[]>("GET", "/materiel/types");
+export const createTypeMateriel = (data: { nom: string; description?: string }) =>
+  req<TypeMateriel>("POST", "/materiel/types", data);
+export const getInventaire = () => req<Materiel[]>("GET", "/materiel/inventaire");
+export const createMateriel = (data: { nom: string; description?: string; type: number; date_achat: string; projet?: number }) =>
+  req<Materiel>("POST", "/materiel/inventaire", data);
+export const getStock = () => req<Stock>("GET", "/materiel/stock");
+export const getMouvementsMateriel = () => req<MouvementMateriel[]>("GET", "/materiel/mouvements");
+export const createMouvementMateriel = (data: { materiel: number; type_mouvement: SensMouvementMateriel; quantite: number; projet?: number; employe?: number; commentaire?: string }) =>
+  req<MouvementMateriel>("POST", "/materiel/mouvements", data);
 
 export function errorMessage(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback;

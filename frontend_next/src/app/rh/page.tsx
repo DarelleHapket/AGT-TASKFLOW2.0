@@ -74,7 +74,11 @@ export default function RhPage() {
 
   async function creerEmploye() {
     setCreateErr(null);
-    if (!empMembre || !empType || !empMontant || !empDate || empDejaEmploye) return;
+    if (empDejaEmploye) return; // message déjà affiché au-dessus du champ membre
+    if (!empMembre || !empType || !empMontant || !empDate) {
+      setCreateErr("Membre, type de contrat, date d'embauche et montant sont obligatoires.");
+      return;
+    }
     try {
       const profil = await api.getProfilParUtilisateur(Number(empMembre));
       await api.creerEmploye({ profil: profil.id, type_contrat: Number(empType), date_embauche: empDate, montant: empMontant });

@@ -48,7 +48,10 @@ export default function MaterielPage() {
 
   async function creerMateriel() {
     setCreateErr(null);
-    if (!nom.trim() || !type || !dateAchat) return;
+    if (!nom.trim() || !type || !dateAchat) {
+      setCreateErr("Nom, type et date d'achat sont obligatoires.");
+      return;
+    }
     try {
       await api.createMateriel({ nom: nom.trim(), type: Number(type), date_achat: dateAchat, projet: projet ? Number(projet) : undefined });
       setCreating(false); setNom(""); setType(""); setDateAchat(""); setProjet("");

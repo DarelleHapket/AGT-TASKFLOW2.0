@@ -55,7 +55,14 @@ export default function MouvementsMaterielPage() {
 
   async function ajouter() {
     setFormErr(null);
-    if (!materiel || !quantite) return;
+    if (!materiel || !quantite) {
+      setFormErr("Choisissez un matériel et une quantité.");
+      return;
+    }
+    if (Number(quantite) <= 0) {
+      setFormErr("La quantité doit être supérieure à 0.");
+      return;
+    }
     try {
       await api.createMouvementMateriel({
         materiel: Number(materiel), type_mouvement: sens, quantite: Number(quantite),

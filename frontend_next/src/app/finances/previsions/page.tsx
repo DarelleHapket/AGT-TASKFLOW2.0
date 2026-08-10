@@ -42,7 +42,10 @@ export default function PrevisionsPage() {
 
   async function ajouter() {
     setFormErr(null);
-    if (!periodeDebut || !periodeFin || !montant) return;
+    if (!periodeDebut || !periodeFin || !montant) {
+      setFormErr("Période de début, période de fin et montant sont obligatoires.");
+      return;
+    }
     try {
       await api.createPrevision({
         periode_debut: periodeDebut, periode_fin: periodeFin, montant_prevu: montant, niveau,

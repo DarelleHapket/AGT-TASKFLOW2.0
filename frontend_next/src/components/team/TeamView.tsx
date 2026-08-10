@@ -1,0 +1,290 @@
+"use client";
+
+// Port fidèle de frontend/src/components/team/TeamView.jsx, y compris la
+// section "Comptes supprimés" (historique, avatar grisé, nom barré, date de
+// suppression, collapsible "voir les X autres" au-delà de 3) — portée via le
+// nouvel endpoint GET /membres/deleted (authentification/views.py), qui
+// n'existait pas dans une première passe de migration.
+import { useEffect, useState } from "react";
+import { Check, X, Clock, AlertTriangle, BadgeCheck, Wallet } from "lucide-react";
+import * as api from "@/lib/api";
+import { ConfirmDialog, type ConfirmData } from "@/components/ui/ConfirmDialog";
+import type { Competence, Employe, Profil, Utilisateur } from "@/lib/types";
+
+const ROLE_LABEL: Record<string, string> = { admin: "Admin", chef_projet: "Chef de projet", membre: "Membre" };
+const PERIODICITE_LABEL: Record<string, string> = { mensuelle: "mois", hebdomadaire: "semaine", journaliere: "jour" };
+
+function FicheMembreModal({ membre, canSeeSalaire, onClose }: { membre: Utilisateur; canSeeSalaire: boolean; onClose: () => void }) {
+  const [profil, setProfil] = useState<Profil | null>(null);
+  const [competences, setCompetences] = useState<Competence[]>([]);
+  const [employe, setEmploye] = useState<Employe | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true); setError(null);
+    Promise.all([api.getProfilParUtilisateur(membre.id), api.getCompetences()])
+      .then(([p, c]) => {
+        setProfil(p); setCompetences(c);
+        if (canSeeSalaire && p.est_employe && p.employe_id) {
+          api.getSalaireEmploye(p.employe_id).then(setEmploye).catch(() => setEmploye(null));
+        }
+      })
+      .catch((e) => setError(api.errorMessage(e, "Profil indisponible")))
+      .finally(() => setLoading(false));
+  }, [membre.id, canSeeSalaire]);
+
+  const nomCompetence = (id: number) => competences.find((c) => c.id === id)?.nom || `#${id}`;
+  const contratActuel = employe?.contrats?.find((c) => !c.date_fin) || employe?.contrats?.[employe.contrats.length - 1];
+  const remunerationActuelle = contratActuel?.remunerations?.[contratActuel.remunerations.length - 1];
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.45)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", boxShadow: "0 20px 50px rgba(0,0,0,0.25)", width: "100%", maxWidth: 420, overflow: "hidden" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+          <Avatar member={membre} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{membre.name}</div>
+            <div style={{ fontSize: 12, color: "var(--text-3)" }}>{membre.email}</div>
+          </div>
+        </div>
+        <div style={{ padding: 20 }}>
+          {loading ? (
+            <p style={{ fontSize: 12, color: "var(--text-3)" }}>Chargement…</p>
+          ) : error || !profil ? (
+            <p style={{ fontSize: 12, color: "var(--danger)" }}>{error || "Profil introuvable."}</p>
+          ) : (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>POSTE</span>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{profil.poste_nom || "Non défini"}</div>
+              </div>
+              <div style={{ marginBottom: profil.est_employe ? 16 : 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>COMPÉTENCES</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                  {profil.competences.length === 0 && <span style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune</span>}
+                  {profil.competences.map((id) => (
+                    <span key={id} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "var(--accent-bg)", color: "var(--accent)" }}>{nomCompetence(id)}</span>
+                  ))}
+                </div>
+              </div>
+              {profil.est_employe && canSeeSalaire && (
+                <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <Wallet size={14} color="var(--text-3)" />
+                  {contratActuel && remunerationActuelle ? (
+                    <span style={{ fontSize: 13, color: "var(--text)" }}>
+                      <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
+                      <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <div style={{ padding: "0 20px 20px", textAlign: "right" }}>
+          <button onClick={onClose} style={{ border: "1px solid var(--border)", background: "var(--bg)", borderRadius: 10, padding: "8px 16px", cursor: "pointer", color: "var(--text-2)", fontWeight: 600, fontSize: 13 }}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type Variant = "ghost" | "warning" | "danger" | "success" | "approve";
+const VARIANTS: Record<Variant, { bg: string; border: string; color: string }> = {
+  ghost: { bg: "transparent", border: "var(--border)", color: "var(--text-3)" },
+  warning: { bg: "#fffbeb", border: "#fde68a", color: "#d97706" },
+  danger: { bg: "#fef2f2", border: "#fecaca", color: "#ef4444" },
+  success: { bg: "#f0fdf4", border: "#bbf7d0", color: "#16a34a" },
+  approve: { bg: "#f0fdf4", border: "#bbf7d0", color: "#16a34a" },
+};
+function actionBtn(variant: Variant = "ghost"): React.CSSProperties {
+  const v = VARIANTS[variant];
+  return { background: v.bg, border: `1px solid ${v.border}`, color: v.color, borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" };
+}
+
+function sectionHeader(bg: string, border: string, color: string): React.CSSProperties {
+  return { padding: "12px 16px", background: bg, borderBottom: `1px solid ${border}`, fontSize: 10, fontWeight: 700, color, letterSpacing: ".1em", display: "flex", alignItems: "center", gap: 6 };
+}
+
+function Avatar({ member, size = 40 }: { member: { name: string; color?: string }; size?: number }) {
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: member.color || "#6366f1", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: size * 0.4, flexShrink: 0 }}>
+      {(member.name || "?")[0].toUpperCase()}
+    </div>
+  );
+}
+
+function StatusDot({ active }: { active: boolean }) {
+  return <div title={active ? "Actif" : "Suspendu"} style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0, background: active ? "#22c55e" : "#f59e0b", border: "2px solid var(--border)" }} />;
+}
+
+export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canSeeFiche = false }: {
+  members: Utilisateur[];
+  onDelete: (id: number) => Promise<void>;
+  onSetMemberRole: (id: number, role: "membre" | "chef_projet") => Promise<void>;
+  onToggleActive: (m: Utilisateur) => Promise<Utilisateur>;
+  onValidate: (id: number, action: "approve" | "reject") => Promise<void>;
+  isAdmin: boolean; isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canSeeFiche?: boolean;
+}) {
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmData | null>(null);
+  const [deleted, setDeleted] = useState<Utilisateur[]>([]);
+  const [showAllDeleted, setShowAllDeleted] = useState(false);
+  const [fiche, setFiche] = useState<Utilisateur | null>(null);
+
+  useEffect(() => {
+    if (!(isAdmin || isSuperadmin)) return;
+    api.getDeletedMembres().then(setDeleted).catch(() => {});
+  }, [isAdmin, isSuperadmin]);
+
+  const pending = members.filter((m) => m.statut === "EN_ATTENTE");
+  const suspended = members.filter((m) => m.statut === "SUSPENDU");
+  const active = members.filter((m) => m.statut === "ACTIF");
+
+  const withBusy = async (id: number, fn: () => Promise<void>) => {
+    setBusyId(id); setErr(null);
+    try { await fn(); } catch (e) { setErr(api.errorMessage(e, "Erreur")); } finally { setBusyId(null); }
+  };
+
+  const decide = (id: number, action: "approve" | "reject") => withBusy(id, () => onValidate(id, action));
+  const changeRole = (id: number, role: "membre" | "chef_projet") => withBusy(id, () => onSetMemberRole(id, role));
+  const handleToggleActive = (member: Utilisateur) => withBusy(member.id, async () => { await onToggleActive(member); });
+  const handleDelete = (member: Utilisateur) => {
+    setConfirm({
+      title: "Supprimer le compte",
+      message: `Le compte de ${member.name} sera définitivement supprimé. Ses tâches et activités seront conservées mais sans responsable. Action irréversible.`,
+      confirmLabel: "Supprimer", danger: true,
+      onConfirm: () => withBusy(member.id, async () => {
+        await onDelete(member.id);
+        setDeleted((prev) => [{ ...member, statut: "SUPPRIME", deleted_at: new Date().toISOString() }, ...prev]);
+      }),
+    });
+  };
+
+  const canActOn = (m: Utilisateur) => isSuperadmin && !m.roles.includes("admin") && !m.roles.includes("superadmin") && m.id !== currentUser?.id;
+
+  return (
+    <div style={{ maxWidth: 580 }}>
+      <h2 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Équipe</h2>
+
+      {err && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#ef4444", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertTriangle size={14} /> {err}
+        </div>
+      )}
+
+      {(isAdmin || isSuperadmin) && pending.length > 0 && (
+        <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid #fed7aa", overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 20 }}>
+          <div style={sectionHeader("#fff7ed", "#fed7aa", "#ea580c")}><Clock size={12} /> DEMANDES EN ATTENTE ({pending.length})</div>
+          {pending.map((p) => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+              <Avatar member={{ name: p.name, color: "#f59e0b" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.email}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button onClick={() => decide(p.id, "approve")} disabled={busyId === p.id} style={actionBtn("approve")}><Check size={13} /> Valider</button>
+                <button onClick={() => setConfirm({ title: "Rejeter la demande", message: `La demande de ${p.name} sera rejetée. La personne ne pourra pas se connecter.`, confirmLabel: "Rejeter", danger: true, onConfirm: () => decide(p.id, "reject") })} disabled={busyId === p.id} style={actionBtn("danger")}><X size={13} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(isAdmin || isSuperadmin) && suspended.length > 0 && (
+        <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid #fde68a", overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 20 }}>
+          <div style={sectionHeader("#fffbeb", "#fde68a", "#d97706")}>COMPTES SUSPENDUS ({suspended.length})</div>
+          {suspended.map((m) => (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+              <Avatar member={m} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-2)" }}>{m.name}</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button onClick={() => handleToggleActive(m)} disabled={busyId === m.id} style={actionBtn("success")}><Check size={13} /> Réactiver</button>
+                <button onClick={() => handleDelete(m)} disabled={busyId === m.id} style={actionBtn("danger")}><X size={13} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(isAdmin || isSuperadmin) && deleted.length > 0 && (
+        <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 20 }}>
+          <div style={sectionHeader("var(--bg)", "var(--border)", "var(--text-3)")}>COMPTES SUPPRIMÉS ({deleted.length})</div>
+          {(showAllDeleted ? deleted : deleted.slice(0, 3)).map((m) => (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)", opacity: 0.6 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+                {(m.name || "?")[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-2)", textDecoration: "line-through" }}>{m.name}</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
+              </div>
+              <div style={{ flexShrink: 0, textAlign: "right" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 2 }}>SUPPRIMÉ LE</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)" }}>
+                  {m.deleted_at && new Date(m.deleted_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                </div>
+              </div>
+            </div>
+          ))}
+          {deleted.length >= 3 && (
+            <button onClick={() => setShowAllDeleted((v) => !v)} style={{ width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", fontWeight: 600, borderTop: "1px solid var(--border)", textAlign: "left" }}>
+              {showAllDeleted ? "▲ Réduire" : `▾ Voir les ${deleted.length - 3} autres comptes supprimés`}
+            </button>
+          )}
+        </div>
+      )}
+
+      <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
+        <div style={sectionHeader("var(--bg-hover)", "var(--border)", "var(--text-3)")}>MEMBRES ({active.length})</div>
+
+        {active.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
+            <div>Aucun membre actif pour l&apos;instant.</div>
+          </div>
+        )}
+
+        {active.map((m) => {
+          const isAdminMember = m.roles.includes("admin");
+          const busy = busyId === m.id;
+          const canAct = canActOn(m);
+          const roleCode = m.roles[0] || "membre";
+
+          return (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+              <Avatar member={m} />
+              <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {(isAdmin || isSuperadmin) && canAct ? (
+                  <select value={m.roles.includes("chef_projet") ? "chef_projet" : "membre"} onChange={(e) => changeRole(m.id, e.target.value as "membre" | "chef_projet")} disabled={busy}
+                    style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12, color: "var(--text)", background: "var(--bg)", cursor: busy ? "not-allowed" : "pointer", fontWeight: m.roles.includes("chef_projet") ? 600 : 400 }}>
+                    <option value="membre">Membre</option>
+                    <option value="chef_projet">Chef de projet</option>
+                  </select>
+                ) : (
+                  <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>{isAdminMember ? "Admin" : ROLE_LABEL[roleCode] || "Membre"}</span>
+                )}
+                {canSeeFiche && <button onClick={() => setFiche(m)} title="Voir la fiche" style={actionBtn("ghost")}><BadgeCheck size={13} /> Fiche</button>}
+                {canAct && <button onClick={() => handleToggleActive(m)} disabled={busy} title="Suspendre ce compte" style={actionBtn("warning")}>Suspendre</button>}
+                {canAct && <button onClick={() => handleDelete(m)} disabled={busy} title="Supprimer définitivement ce compte" style={actionBtn("danger")}>Supprimer</button>}
+                <StatusDot active />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <ConfirmDialog data={confirm} onClose={() => setConfirm(null)} />
+      {fiche && <FicheMembreModal membre={fiche} canSeeSalaire={canSeeSalaire} onClose={() => setFiche(null)} />}
+    </div>
+  );
+}

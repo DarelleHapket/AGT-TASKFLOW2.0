@@ -1,0 +1,74 @@
+# Nouvelle stack Django/DRF/Postgres/Next.js — cf. plan de migration
+# (eventual-jumping-pie.md). Tourne EN PARALLÈLE de docker-compose.yml
+# (Flask/React, toujours en production) le temps de la validation : ports
+# différents, aucun conflit. Le port 4001 (backend Flask actuel) et le port
+# de l'API Django ne se recouvrent pas non plus.
+#
+# Bascule réelle (cutover) seulement après validation explicite par Gabriel,
+# comme convenu — ce fichier ne remplace pas docker-compose.yml pour l'instant.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agterp}
+      POSTGRES_USER: ${POSTGRES_USER:-agterp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - agt_django_db_data:/var/lib/postgresql/data
+    networks: [agt_django]
+
+  api:
+    build: ./backend_django
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?definir SECRET_KEY dans .env}
+      DEBUG: ${DEBUG:-0}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      POSTGRES_DB: ${POSTGRES_DB:-agterp}
+      POSTGRES_USER: ${POSTGRES_USER:-agterp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-superadmin@ag-technologies.tech}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?definir SUPERADMIN_PASSWORD dans .env}
+      BACKUP_DIR: /backups
+    volumes:
+      - agt_django_backups:/backups
+    depends_on: [db]
+    networks: [agt_django]
+    # Pas de "ports:" ici — l'API reste interne, seul le frontend est exposé
+    # (même principe que team-tool, D-03).
+
+  web:
+    build: ./frontend_next
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "4100:4100"
+    depends_on: [api]
+    networks: [agt_django]
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - agt_django_backups:/backups
+    # Une seule ligne, sans saut de ligne interne : un bloc YAML replié (>)
+    # avec des indentations différentes entre lignes préserve certains sauts
+    # de ligne littéraux (règle de pliage YAML), ce que `ash` (BusyBox, dans
+    # postgres:alpine) refuse juste avant un `|` ou un `&&' ("unexpected |").
+    entrypoint: >
+      sh -c 'while true; do pg_dump -h db -U ${POSTGRES_USER:-agterp} --clean --if-exists ${POSTGRES_DB:-agterp} | gzip > /backups/auto_$$(date +%Y-%m-%d_%Hh%M).sql.gz && echo "backup auto ok"; find /backups -name "auto_*.sql.gz" -mtime +14 -delete; sleep 86400; done'
+    depends_on: [db]
+    networks: [agt_django]
+
+volumes:
+  agt_django_db_data:
+  agt_django_backups:
+
+networks:
+  agt_django:
+    driver: bridge

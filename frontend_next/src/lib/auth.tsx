@@ -39,7 +39,26 @@ function loadUser(): Utilisateur | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Utilisateur | null>(loadUser);
+  // État initial toujours null (y compris côté client) pour correspondre au
+  // rendu serveur, qui n'a jamais accès à localStorage — lire l'utilisateur
+  // dans l'initialiseur de useState causait un mismatch d'hydratation
+  // systématique (serveur: null, client: utilisateur réel dès le premier
+  // rendu), React jetait alors tout le HTML serveur et re-rendait à froid
+  // côté client sur CHAQUE page. Lu à la place dans un effet, après montage.
+  const [user, setUser] = useState<Utilisateur | null>(null);
+  // `initializing` (littéral, pas de lecture externe) est identique au
+  // premier rendu serveur et client — pas de mismatch possible. Tant qu'il
+  // est vrai, isLogged reste optimiste (true) pour que les ~25 pages qui
+  // font `if (!isLogged) router.replace("/login")` dans leur propre effet
+  // ne redirigent pas avant que cet effet-ci (sur le composant parent
+  // AuthProvider) ait eu la chance de restaurer l'utilisateur — les effets
+  // des enfants se déclenchent toujours avant ceux du parent.
+  const [initializing, setInitializing] = useState(true);
+
+  useEffect(() => {
+    setUser(loadUser());
+    setInitializing(false);
+  }, []);
 
   const login = useCallback((token: string, u: Utilisateur) => {
     setToken(token);
@@ -81,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isSuperadmin = roles.includes("superadmin");
   const value: AuthState = {
     user,
-    isLogged: !!user,
+    isLogged: initializing ? true : !!user,
     isSuperadmin,
     isAdmin: roles.includes("admin"),
     isChef: roles.includes("chef_projet"),

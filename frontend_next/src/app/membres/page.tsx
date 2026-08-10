@@ -29,9 +29,11 @@ export default function MembresPage() {
   }
   useEffect(load, []);
 
-  async function setMemberRole(id: number, role: "membre" | "chef_projet") {
-    if (role === "chef_projet") await api.assignRole(id, "chef_projet");
-    else await api.revokeRole(id, "chef_projet");
+  async function setMemberRole(id: number, role: "membre" | "chef_projet" | "admin") {
+    const membre = membres.find((m) => m.id === id);
+    const roleActuel = membre?.roles.find((r) => r === "chef_projet" || r === "admin");
+    if (roleActuel && roleActuel !== role) await api.revokeRole(id, roleActuel);
+    if (role !== "membre") await api.assignRole(id, role);
     load();
   }
 

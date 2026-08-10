@@ -111,12 +111,20 @@ export function RBACView({ members, roles, onReload }: {
             </tr>
           </thead>
           <tbody>
-            {members.map((m) => {
+            {/* Admin est un rôle unique (comme Superadmin, décision produit) :
+                une fois attribué, il n'est plus proposable ailleurs tant que
+                le Superadmin ne l'a pas retiré à son titulaire (appliqué
+                aussi côté serveur, cf. assign_member_role). */}
+            {(() => { const adminDejaAttribue = members.some((mb) => mb.roles.includes("admin")); return members.map((m) => {
               const memberRoles = m.roles;
               const isSuperadminMember = memberRoles.includes("superadmin");
               // Superadmin a déjà un accès total : le rôle Admin (lecture
               // seule) n'a pas de sens en plus et n'est donc pas proposable.
-              const availableToAdd = roles.filter((r) => !memberRoles.includes(r.code) && r.code !== "superadmin" && !(r.code === "admin" && isSuperadminMember));
+              const availableToAdd = roles.filter((r) =>
+                !memberRoles.includes(r.code) && r.code !== "superadmin" &&
+                !(r.code === "admin" && isSuperadminMember) &&
+                !(r.code === "admin" && adminDejaAttribue),
+              );
               const memberDetail = detail[m.id];
               const permsByModule = (memberDetail || []).reduce<Record<string, PermissionDetail[]>>((acc, p) => {
                 (acc[p.module] = acc[p.module] || []).push(p);
@@ -198,7 +206,7 @@ export function RBACView({ members, roles, onReload }: {
                   )}
                 </Fragment>
               );
-            })}
+            }); })()}
           </tbody>
         </table>
       </div>

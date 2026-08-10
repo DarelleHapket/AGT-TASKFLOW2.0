@@ -201,6 +201,18 @@ def assign_member_role(request, pk):
     # trompeur sur un compte qui n'est justement pas limité en lecture seule.
     if role_code == "admin" and target.is_superadmin():
         return Response({"error": "Le Superadmin ne peut pas porter aussi le rôle Admin (accès déjà total)."}, status=status.HTTP_400_BAD_REQUEST)
+    # Admin est un rôle unique (décision produit) : un seul membre à la fois.
+    # Pour le confier à quelqu'un d'autre, le Superadmin doit d'abord le
+    # retirer à l'actuel titulaire (DELETE /rbac/membres/<pk>/roles/admin).
+    if role_code == "admin":
+        deja_admin = User.objects.filter(
+            attributionrole__role__code="admin"
+        ).exclude(statut=StatutCompte.SUPPRIME).exclude(pk=target.pk).exists()
+        if deja_admin:
+            return Response(
+                {"error": "Un Admin existe déjà — rôle unique. Retirez-le d'abord à son titulaire actuel avant de le confier à quelqu'un d'autre."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     assign_role(target, role_code, assigned_by=request.user)
     return Response(UserSerializer(target).data, status=status.HTTP_201_CREATED)
 

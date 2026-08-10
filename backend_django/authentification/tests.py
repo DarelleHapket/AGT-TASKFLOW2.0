@@ -158,6 +158,39 @@ class SuperadminAdminExclusivityTests(TestCase):
         self.assertIn("admin", membre.roles_codes())
 
 
+class AdminRoleUniqueTests(TestCase):
+    """Décision produit : Admin est un rôle unique, comme Superadmin — un
+    seul titulaire à la fois. Le Superadmin doit d'abord le retirer avant
+    de le confier à quelqu'un d'autre."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.superadmin_actor = User.objects.create(username="root3", is_superuser=True)
+        self.premier_admin = User.objects.create(username="premier_admin", statut=StatutCompte.ACTIF, is_active=True)
+        assign_role(self.premier_admin, "admin")
+        self.autre_membre = User.objects.create(username="autre_membre", statut=StatutCompte.ACTIF, is_active=True)
+
+    def test_assigner_admin_a_un_second_membre_refuse(self):
+        self.client.force_authenticate(self.superadmin_actor)
+        r = self.client.post(f"/api/rbac/membres/{self.autre_membre.pk}/roles", {"role": "admin"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertNotIn("admin", self.autre_membre.roles_codes())
+
+    def test_apres_retrait_le_role_redevient_disponible(self):
+        self.client.force_authenticate(self.superadmin_actor)
+        self.client.delete(f"/api/rbac/membres/{self.premier_admin.pk}/roles/admin")
+        r = self.client.post(f"/api/rbac/membres/{self.autre_membre.pk}/roles", {"role": "admin"}, format="json")
+        self.assertEqual(r.status_code, 201)
+        self.assertIn("admin", self.autre_membre.roles_codes())
+
+    def test_reattribuer_le_meme_role_au_meme_membre_fonctionne(self):
+        """Pas de faux positif : le titulaire actuel peut se voir
+        réattribuer/rafraîchir son propre rôle admin sans être bloqué."""
+        self.client.force_authenticate(self.superadmin_actor)
+        r = self.client.post(f"/api/rbac/membres/{self.premier_admin.pk}/roles", {"role": "admin"}, format="json")
+        self.assertEqual(r.status_code, 201)
+
+
 class DeletedMembersHistoryTests(TestCase):
     """Historique des comptes supprimés (A-08, Flask) — port de GET /members/deleted,
     manquant lors de la première migration (TeamView.jsx en avait besoin pour sa

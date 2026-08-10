@@ -11,7 +11,7 @@ import * as api from "@/lib/api";
 import { ConfirmDialog, type ConfirmData } from "@/components/ui/ConfirmDialog";
 import type { Competence, Employe, Poste, Profil, Utilisateur } from "@/lib/types";
 
-const ROLE_LABEL: Record<string, string> = { admin: "Admin", chef_projet: "Chef de projet", membre: "Membre" };
+const ROLE_LABEL: Record<string, string> = { superadmin: "Superadmin", admin: "Admin", chef_projet: "Chef de projet", membre: "Membre" };
 const PERIODICITE_LABEL: Record<string, string> = { mensuelle: "mois", hebdomadaire: "semaine", journaliere: "jour" };
 
 function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { membre: Utilisateur; canSeeSalaire: boolean; canEditFiche: boolean; onClose: () => void }) {
@@ -193,7 +193,7 @@ function StatusDot({ active }: { active: boolean }) {
 export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canEditFiche = false }: {
   members: Utilisateur[];
   onDelete: (id: number) => Promise<void>;
-  onSetMemberRole: (id: number, role: "membre" | "chef_projet") => Promise<void>;
+  onSetMemberRole: (id: number, role: "membre" | "chef_projet" | "admin") => Promise<void>;
   onToggleActive: (m: Utilisateur) => Promise<Utilisateur>;
   onValidate: (id: number, action: "approve" | "reject") => Promise<void>;
   isAdmin: boolean; isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canEditFiche?: boolean;
@@ -220,7 +220,7 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
   };
 
   const decide = (id: number, action: "approve" | "reject") => withBusy(id, () => onValidate(id, action));
-  const changeRole = (id: number, role: "membre" | "chef_projet") => withBusy(id, () => onSetMemberRole(id, role));
+  const changeRole = (id: number, role: "membre" | "chef_projet" | "admin") => withBusy(id, () => onSetMemberRole(id, role));
   const handleToggleActive = (member: Utilisateur) => withBusy(member.id, async () => { await onToggleActive(member); });
   const handleDelete = (member: Utilisateur) => {
     setConfirm({
@@ -322,7 +322,12 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
           </div>
         )}
 
+        {/* Admin est un rôle unique (comme Superadmin) : tant que quelqu'un le
+            porte déjà, il n'apparaît pas comme option pour les autres — le
+            Superadmin doit d'abord le retirer via /rbac avant de le confier
+            ailleurs (appliqué aussi côté serveur, cf. assign_member_role). */}
         {active.map((m) => {
+          const adminDejaPris = active.some((a) => a.roles.includes("admin") && a.id !== m.id);
           const isAdminMember = m.roles.includes("admin");
           const busy = busyId === m.id;
           const canAct = canActOn(m);
@@ -334,10 +339,11 @@ export function TeamView({ members, onDelete, onSetMemberRole, onToggleActive, o
               <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 {(isAdmin || isSuperadmin) && canAct ? (
-                  <select value={m.roles.includes("chef_projet") ? "chef_projet" : "membre"} onChange={(e) => changeRole(m.id, e.target.value as "membre" | "chef_projet")} disabled={busy}
+                  <select value={m.roles.includes("chef_projet") ? "chef_projet" : "membre"} onChange={(e) => changeRole(m.id, e.target.value as "membre" | "chef_projet" | "admin")} disabled={busy}
                     style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12, color: "var(--text)", background: "var(--bg)", cursor: busy ? "not-allowed" : "pointer", fontWeight: m.roles.includes("chef_projet") ? 600 : 400 }}>
                     <option value="membre">Membre</option>
                     <option value="chef_projet">Chef de projet</option>
+                    {isSuperadmin && !adminDejaPris && <option value="admin">Admin</option>}
                   </select>
                 ) : (
                   <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>{isAdminMember ? "Admin" : ROLE_LABEL[roleCode] || "Membre"}</span>

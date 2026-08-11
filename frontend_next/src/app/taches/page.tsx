@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Port fidèle : la logique de filtrage vient de App.jsx (`filtered`), pas de
 // paramètres serveur — l'original chargeait toutes les tâches puis filtrait
@@ -107,7 +108,7 @@ function TachesPageInner() {
 
   return (
     <AppShell>
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
       {loading ? (
         <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p>
       ) : (

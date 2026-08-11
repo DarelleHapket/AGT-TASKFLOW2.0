@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Port fidèle de frontend/src/components/reports/ReportsView.jsx (page
 // conteneur) — export PDF via jsPDF (comme l'original), corrigé pour le
@@ -30,7 +31,7 @@ export default function RapportsPage() {
 
   return (
     <AppShell>
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
       <ReportsView members={membres} projects={projets} user={user} isAdmin={isAdmin} isChef={isChef} isSuperadmin={isSuperadmin} />
     </AppShell>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 3 — Profils & RH. Référentiel (compétences/postes/équipes) +
 // création d'employé (UC "Créer un employé et son contrat"). Styles inline
@@ -128,7 +129,7 @@ export default function RhPage() {
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>RH & Profils</h2>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Référentiel, employés, contrats et rémunérations</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {TABS.filter((t) => t.id !== "demandes" || canGererConges || canGererFrais).map((t) => (

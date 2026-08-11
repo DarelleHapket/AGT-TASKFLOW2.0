@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Page combinée PERT / Gantt (D-08) : le lien de menu "PERT / Gantt" ne
 // pointait que vers ce Gantt, la table PERT ajoutée sur /pert restait donc
@@ -65,7 +66,7 @@ export default function GanttPage() {
 
   return (
     <AppShell>
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", width: "fit-content", marginBottom: 16 }}>
         <button onClick={() => setVue("gantt")} title="Vue Gantt"

@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 4 — Bilan sur une période (BF-27) + prévisions (BF-28). Le bilan est
 // calculé à la volée côté serveur, jamais stocké (Document d'Analyse §11).
@@ -110,7 +111,7 @@ export default function BilanPage() {
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Bilan</h2>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Bilan sur une période — vise la conformité OHADA, à faire vérifier par un expert avant tout usage officiel</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20 }}>
         <input style={inp} type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />

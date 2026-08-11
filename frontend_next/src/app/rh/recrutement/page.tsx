@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 3 — Recrutement (BF-46 à BF-49). Une candidature passée à "retenue"
 // déclenche côté serveur la création automatique du compte + profil + employé
@@ -61,7 +62,7 @@ export default function RecrutementPage() {
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Recrutement</h2>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Offres d&apos;emploi et candidatures — une candidature retenue crée l&apos;employé automatiquement</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
       {actionErr && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{actionErr}</p>}
 
       {loading ? <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p> : (

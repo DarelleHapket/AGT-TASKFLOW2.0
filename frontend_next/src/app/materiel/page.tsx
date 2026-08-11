@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 2 — Matériel (BF-09 à BF-11). Types de matériel (référentiel) +
 // inventaire (création, quantité tenue à jour par les mouvements — voir
@@ -66,7 +67,7 @@ export default function MaterielPage() {
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Matériel</h2>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Types, inventaire et stock — le détail des mouvements est sur la page Mouvements</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       {loading ? <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p> : (
         <>

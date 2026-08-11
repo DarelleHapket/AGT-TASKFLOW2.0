@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 2 — Journal des mouvements de matériel (BF-12/BF-13). Immuable
 // après création (BNF-04) — pas de bouton modifier/supprimer, une
@@ -93,7 +94,7 @@ export default function MouvementsMaterielPage() {
       </div>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal daté — achat, affectation, retour, rebut — immuable une fois enregistré</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       {adding && (
         <div style={{ background: "var(--accent-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 16, maxWidth: 660 }}>

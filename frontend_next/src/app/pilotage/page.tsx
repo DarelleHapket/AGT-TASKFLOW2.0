@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Port simplifié de team-tool frontend/src/app/taches (VuesTaches.tsx +
 // DetailTache.tsx) — pilotage du travail de l'équipe elle-même (workflow de
@@ -112,7 +113,7 @@ export default function PilotagePage() {
       )}
 
       {loading && <p className="text-sm text-text-3">Chargement…</p>}
-      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p className="mb-3 text-sm text-danger">{error}</p>)}
 
       <div className="flex flex-col gap-3">
         {taches.map((t) => (

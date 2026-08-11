@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Port fidèle de frontend/src/components/dashboard/DashboardView.jsx.
 import { useEffect, useState } from "react";
@@ -101,7 +102,7 @@ export default function DashboardPage() {
           : `Vous êtes ${ROLE_LABELS[role] || role} : vos projets, votre équipe et vos tâches`}
       </div>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       {canSeeGlobalWidgets ? (
         <WidgetsGlobaux membersActifs={activeMembers.length} demandesEnAttente={enAttente.length} projetsCount={projets.length} rolesActifs={rolesActifsCount} />

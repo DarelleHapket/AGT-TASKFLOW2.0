@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 3 — Signalements (BF-53, BNF-18). Réservé Admin/Superadmin côté
 // backend (SignalementViewSet) — un membre peut créer un signalement mais ne
@@ -49,7 +50,7 @@ export default function SignalementsPage() {
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Signalements</h2>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Difficultés et différends remontés par l&apos;équipe — visible uniquement par Admin/Superadmin</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       {loading ? <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p> : (
         <div style={{ maxWidth: 680 }}>

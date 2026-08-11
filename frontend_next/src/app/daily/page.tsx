@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Port fidèle de frontend/src/components/daily/DailyOrderView.jsx (page
 // conteneur) — référencée depuis le menu profil ("Ma journée"), route
@@ -30,7 +31,7 @@ export default function DailyPage() {
 
   return (
     <AppShell>
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
       <DailyOrderView tasks={taches} members={membres} user={user} isAdmin={isAdmin} isChef={isChef} />
     </AppShell>
   );

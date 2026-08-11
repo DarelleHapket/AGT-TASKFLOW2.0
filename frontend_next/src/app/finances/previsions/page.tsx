@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 4 — Prévisions financières (BF-28). Miroir de /finances (journal) :
 // liste + formulaire d'ajout, avec en plus un bouton "écart" par ligne qui
@@ -78,7 +79,7 @@ export default function PrevisionsPage() {
       </div>
       <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Montants prévus par période — comparez au réel avec &quot;Écart&quot;</p>
 
-      {error && <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
+      {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
       {adding && (
         <div style={{ background: "var(--accent-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 16, maxWidth: 620 }}>

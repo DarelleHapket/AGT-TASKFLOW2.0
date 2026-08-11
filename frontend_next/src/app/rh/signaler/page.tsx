@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Module 3 — Signaler une difficulté (BF-53). Accessible à tout utilisateur
 // connecté, pas seulement à ceux qui gèrent les signalements — c'est le canal
@@ -50,7 +51,7 @@ export default function SignalerPage() {
             placeholder="Décrivez la situation…" rows={5}
             style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid var(--border)", fontSize: 13, background: "var(--bg-input)", color: "var(--text)", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
           />
-          {error && <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{error}</div>}
+          {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{error}</div>)}
           {envoye && <div style={{ marginTop: 10, fontSize: 12, color: "#16a34a" }}>Signalement envoyé.</div>}
           <button onClick={envoyer} disabled={busy || !description.trim()} style={{ marginTop: 14, background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "9px 18px", cursor: busy || !description.trim() ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 13, opacity: busy || !description.trim() ? 0.6 : 1 }}>
             {busy ? "Envoi…" : "Envoyer"}

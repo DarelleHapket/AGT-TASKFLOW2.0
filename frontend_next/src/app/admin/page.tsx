@@ -1,4 +1,5 @@
 "use client";
+import { AccessDenied } from "@/components/AccessDenied";
 
 // Sauvegardes — fusion de frontend/src/components/dashboard/SectionDatabase.jsx
 // (AGT, export seul) et team-tool/frontend/src/app/sauvegardes/page.tsx
@@ -117,7 +118,11 @@ export default function AdminPage() {
       </div>
 
       {error && (
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, color: "#ef4444" }}>{error}</div>
+        error.startsWith("Permission requise") ? (
+          <AccessDenied code={error.replace("Permission requise : ", "")} />
+        ) : (
+          <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, color: "#ef4444" }}>{error}</div>
+        )
       )}
       {message && (
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#16a34a" }}>{message}</div>

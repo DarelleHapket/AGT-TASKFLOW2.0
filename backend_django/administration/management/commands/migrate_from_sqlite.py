@@ -33,7 +33,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
 from authentification.models import PermissionEffective, StatutCompte, User
-from authentification.services import assign_role
+from authentification.services import assign_role, grant_permission
 from notifications.models import Notification
 from operations.models import Besoin, Note, OrdreJournalier
 from projets.models import Activite, Difficulte, MembreProjet, Projet, Tache
@@ -45,6 +45,20 @@ STATUT_MAP = {
     "rejected": StatutCompte.SUPPRIME,
     "deleted": StatutCompte.SUPPRIME,
 }
+
+# Catalogue réduit à 2 rôles (superadmin/user, 2026-08-19) : les anciens rôles
+# legacy "admin"/"chef_projet" de la base SQLite source n'existent plus comme
+# rôles nommés — on préserve leurs capacités en octroyant directement (IBAC)
+# l'équivalent des permissions qu'ils portaient (cf. authentification/
+# migrations/0006_reduire_roles_a_deux.py, même principe pour les comptes
+# existants côté Django).
+PERMISSIONS_LEGACY_ADMIN = [
+    "membres.read", "membres.write", "membres.validate", "membres.suspend",
+    "membres.delete", "projets.read", "dashboard.read", "members.manage",
+]
+PERMISSIONS_LEGACY_CHEF_PROJET = [
+    "membres.read", "projets.read", "projets.write", "dashboard.read", "operations.manage",
+]
 
 
 def _sqlite_dict_conn(path):
@@ -149,14 +163,24 @@ class Command(BaseCommand):
             user.save()
             mdp_temp.append((user.email, temp_password))
 
-            # Rôle : is_admin=1 -> 'admin' (prioritaire), sinon la colonne
-            # legacy 'role' si elle correspond à un rôle connu.
+            # Rôle : is_admin=1 -> capacités "admin" legacy en octroi direct
+            # (prioritaire), sinon la colonne legacy 'role' si elle
+            # correspond à un rôle connu. "admin"/"chef_projet" n'existent
+            # plus comme rôles nommés (catalogue réduit) — le rôle assigné
+            # reste "user" dans ces deux cas, avec les permissions
+            # équivalentes accordées directement.
             if row.get("is_admin"):
-                assign_role(user, "admin")
-            elif row.get("role") in ("membre", "chef_projet", "superadmin"):
-                assign_role(user, row["role"])
+                assign_role(user, "user")
+                for perm_code in PERMISSIONS_LEGACY_ADMIN:
+                    grant_permission(user, perm_code)
+            elif row.get("role") == "chef_projet":
+                assign_role(user, "user")
+                for perm_code in PERMISSIONS_LEGACY_CHEF_PROJET:
+                    grant_permission(user, perm_code)
+            elif row.get("role") == "superadmin":
+                assign_role(user, "superadmin")
             else:
-                assign_role(user, "membre")
+                assign_role(user, "user")
             n += 1
         counts["Membres -> Utilisateurs"] = n
 

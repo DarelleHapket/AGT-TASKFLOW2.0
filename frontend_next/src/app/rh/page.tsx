@@ -143,7 +143,7 @@ export default function RhPage() {
       </div>
 
       {loading ? <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p> : tab === "referentiel" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 16 }}>
           <div style={card}>
             <div style={sectionHead}>COMPÉTENCES ({competences.length})</div>
             <div style={{ padding: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -244,7 +244,7 @@ export default function RhPage() {
           </p>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 16 }}>
           {canGererConges && (
             <div style={card}>
               <div style={sectionHead}>CONGÉS ({conges.length})</div>

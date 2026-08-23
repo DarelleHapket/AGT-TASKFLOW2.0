@@ -4,37 +4,26 @@ from rest_framework.decorators import action, api_view
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
+from authentification.services import HasPerm
 from notifications.services import notify
 
 from .acces import (
-    can_access_task, can_create_activity, can_edit_activity, get_task_permission_level,
-    get_user_project_ids, is_admin_role, is_task_visible, validate_task_creation,
+    ROLE_PERMISSIONS_PAR_DEFAUT, can_access_task, can_create_activity, can_edit_activity,
+    get_task_permission_level, get_user_project_ids, has_project_permission, is_task_visible,
+    validate_task_creation,
 )
-from .models import Activite, Difficulte, MembreProjet, Projet, Tache
+from .models import Activite, Difficulte, MembreProjet, PermissionMembreProjet, PermissionProjetCode, Projet, Tache
 from .pert import CycleError, compute_pert
 from .serializers import (
     ActiviteSerializer, DifficulteSerializer, MembreProjetSerializer, ProjetSerializer, TacheSerializer,
 )
 
 
-class RequireChefOnly(BasePermission):
-    """Écriture projet réservée au Chef de projet global ou Superadmin
-    (CDC : l'admin est en lecture seule) — port de require_chef_only (Flask)."""
-    message = "Réservé au chef de projet."
-
-    def has_permission(self, request, view):
-        user = request.user
-        return bool(user.is_authenticated and (user.is_superadmin() or "chef_projet" in user.roles_codes()))
-
-
-class IsProjectOwner(BasePermission):
-    message = "Vous n'êtes pas le propriétaire de ce projet."
+class CanManageProject(BasePermission):
+    message = "Vous n'avez pas la permission de gérer ce projet."
 
     def has_object_permission(self, request, view, obj):
-        if is_admin_role(request.user):
-            self.message = "L'administrateur dispose d'un accès en lecture seule sur les projets."
-            return False
-        return MembreProjet.objects.filter(projet=obj, utilisateur=request.user, role=MembreProjet.OWNER).exists()
+        return has_project_permission(request.user, obj.id, "projet.gerer")
 
 
 class ProjetViewSet(viewsets.ModelViewSet):
@@ -45,8 +34,8 @@ class ProjetViewSet(viewsets.ModelViewSet):
         if self.action in ("list", "retrieve", "membres"):
             return [IsAuthenticated()]
         if self.action == "create":
-            return [RequireChefOnly()]
-        return [IsAuthenticated(), IsProjectOwner()]
+            return [HasPerm("projets.write")()]
+        return [IsAuthenticated(), CanManageProject()]
 
     def perform_create(self, serializer):
         projet = serializer.save()
@@ -58,9 +47,9 @@ class ProjetViewSet(viewsets.ModelViewSet):
         if request.method == "GET":
             qs = projet.membres.select_related("utilisateur")
             return Response(MembreProjetSerializer(qs, many=True).data)
-        # POST — ajout d'un membre, réservé à l'owner
-        if not MembreProjet.objects.filter(projet=projet, utilisateur=request.user, role=MembreProjet.OWNER).exists():
-            return Response({"error": "Réservé au propriétaire du projet."}, status=status.HTTP_403_FORBIDDEN)
+        # POST — ajout d'un membre, réservé à qui a la permission equipe.gerer
+        if not has_project_permission(request.user, projet.id, "equipe.gerer"):
+            return Response({"error": "Vous n'avez pas la permission de gérer l'équipe de ce projet."}, status=status.HTTP_403_FORBIDDEN)
         role = request.data.get("role", MembreProjet.CONTRIBUTOR)
         if role not in (MembreProjet.MANAGER, MembreProjet.CONTRIBUTOR):
             return Response({"error": "role doit être 'manager' ou 'contributor'."}, status=status.HTTP_400_BAD_REQUEST)
@@ -75,12 +64,13 @@ class ProjetViewSet(viewsets.ModelViewSet):
 
 @api_view(["PUT", "DELETE"])
 def membre_projet_detail(request, pid, mid):
-    """Modifier le rôle (PUT) ou retirer (DELETE) un membre — owner uniquement."""
+    """Modifier le rôle (PUT) ou retirer (DELETE) un membre — réservé à qui a
+    la permission equipe.gerer sur ce projet."""
     projet = Projet.objects.filter(pk=pid).first()
     if not projet:
         return Response({"error": "Projet introuvable."}, status=status.HTTP_404_NOT_FOUND)
-    if not MembreProjet.objects.filter(projet=projet, utilisateur=request.user, role=MembreProjet.OWNER).exists():
-        return Response({"error": "Réservé au propriétaire du projet."}, status=status.HTTP_403_FORBIDDEN)
+    if not has_project_permission(request.user, projet.id, "equipe.gerer"):
+        return Response({"error": "Vous n'avez pas la permission de gérer l'équipe de ce projet."}, status=status.HTTP_403_FORBIDDEN)
     membre = MembreProjet.objects.filter(projet=projet, pk=mid).first()
     if not membre:
         return Response({"error": "Membre introuvable dans ce projet."}, status=status.HTTP_404_NOT_FOUND)
@@ -99,6 +89,62 @@ def membre_projet_detail(request, pid, mid):
     return Response(MembreProjetSerializer(membre).data)
 
 
+PERMISSIONS_PROJET_CATALOGUE = list(PermissionProjetCode.choices)
+
+
+@api_view(["GET"])
+def membre_projet_permissions_detail(request, pid, mid):
+    """Détail permission par permission pour un membre de CE projet : d'où
+    vient chaque permission (paquet du rôle vs directe/IBAC projet) — même
+    forme que authentification/views.py::member_permissions_detail, catalogue
+    fixe de 4 codes au lieu du catalogue Permission global. Réservé à qui a
+    la permission equipe.gerer sur ce projet."""
+    projet = Projet.objects.filter(pk=pid).first()
+    if not projet:
+        return Response({"error": "Projet introuvable."}, status=status.HTTP_404_NOT_FOUND)
+    if not has_project_permission(request.user, projet.id, "equipe.gerer"):
+        return Response({"error": "Vous n'avez pas la permission de gérer l'équipe de ce projet."}, status=status.HTTP_403_FORBIDDEN)
+    membre = MembreProjet.objects.filter(projet=projet, pk=mid).first()
+    if not membre:
+        return Response({"error": "Membre introuvable dans ce projet."}, status=status.HTTP_404_NOT_FOUND)
+
+    paquet_role = ROLE_PERMISSIONS_PAR_DEFAUT.get(membre.role, set())
+    directs = {pd.code: pd for pd in membre.permissions_directes.all()}
+
+    result = []
+    for code, label in PERMISSIONS_PROJET_CATALOGUE:
+        pd = directs.get(code)
+        if pd is not None:
+            result.append({"code": code, "label": label, "granted": pd.accordee, "source": "direct"})
+        elif code in paquet_role:
+            result.append({"code": code, "label": label, "granted": True, "source": "role"})
+        else:
+            result.append({"code": code, "label": label, "granted": False, "source": None})
+    return Response(result)
+
+
+@api_view(["PUT"])
+def set_membre_projet_permission(request, pid, mid, code):
+    """Accorde/retire une permission directe à un membre sur CE projet
+    (IBAC projet) — réservé à qui a la permission equipe.gerer."""
+    if code not in PermissionProjetCode.values:
+        return Response({"error": "Code de permission inconnu."}, status=status.HTTP_400_BAD_REQUEST)
+    projet = Projet.objects.filter(pk=pid).first()
+    if not projet:
+        return Response({"error": "Projet introuvable."}, status=status.HTTP_404_NOT_FOUND)
+    if not has_project_permission(request.user, projet.id, "equipe.gerer"):
+        return Response({"error": "Vous n'avez pas la permission de gérer l'équipe de ce projet."}, status=status.HTTP_403_FORBIDDEN)
+    membre = MembreProjet.objects.filter(projet=projet, pk=mid).first()
+    if not membre:
+        return Response({"error": "Membre introuvable dans ce projet."}, status=status.HTTP_404_NOT_FOUND)
+
+    granted = bool(request.data.get("granted"))
+    PermissionMembreProjet.objects.update_or_create(
+        membre_projet=membre, code=code, defaults={"accordee": granted}
+    )
+    return Response({"code": code, "granted": granted})
+
+
 class ActiviteViewSet(viewsets.ModelViewSet):
     serializer_class = ActiviteSerializer
 
@@ -108,13 +154,11 @@ class ActiviteViewSet(viewsets.ModelViewSet):
         projet_id = self.request.query_params.get("projet")
         if projet_id:
             qs = qs.filter(projet_id=projet_id)
-        if is_admin_role(user) or user.is_superadmin():
+        if user.is_superadmin():
             return qs
         return qs.filter(projet_id__in=get_user_project_ids(user))
 
     def create(self, request, *args, **kwargs):
-        if is_admin_role(request.user):
-            return Response({"error": "L'administrateur dispose d'un accès en lecture seule."}, status=status.HTTP_403_FORBIDDEN)
         projet_id = request.data.get("projet")
         if not can_create_activity(request.user, projet_id):
             return Response({"error": "Réservé au propriétaire ou manager du projet."}, status=status.HTTP_403_FORBIDDEN)
@@ -191,9 +235,29 @@ class TacheViewSet(viewsets.ModelViewSet):
             expediteur=expediteur, tache_id=tache.id,
         )
 
+    def _notify_progression(self, expediteur, tache):
+        """Le responsable assigné met à jour sa progression (en cours/terminé) :
+        prévient le créateur de la tâche et les owner/manager du projet, pour
+        qu'ils sachent où ça en est sans avoir à revenir vérifier. notify()
+        ignore déjà l'auto-notification (expediteur==destinataire)."""
+        label = "en cours" if tache.statut == Tache.IN_PROGRESS else "terminée"
+        destinataires = set()
+        if tache.createur_id:
+            destinataires.add(tache.createur)
+        if tache.projet_id:
+            chefs = MembreProjet.objects.filter(
+                projet_id=tache.projet_id, role__in=[MembreProjet.OWNER, MembreProjet.MANAGER]
+            ).select_related("utilisateur")
+            destinataires.update(mp.utilisateur for mp in chefs)
+        for destinataire in destinataires:
+            notify(
+                destinataire, "task_progression",
+                f"Tâche {label} : {tache.id}",
+                f"{expediteur.display_name()} a mis à jour « {tache.description} » : {label}.",
+                expediteur=expediteur, tache_id=tache.id,
+            )
+
     def create(self, request, *args, **kwargs):
-        if is_admin_role(request.user):
-            return Response({"error": "L'administrateur dispose d'un accès en lecture seule."}, status=status.HTTP_403_FORBIDDEN)
         projet_id = request.data.get("projet")
         responsable_id = request.data.get("responsable")
         ok, msg, code = validate_task_creation(request.user, projet_id, responsable_id)
@@ -215,16 +279,22 @@ class TacheViewSet(viewsets.ModelViewSet):
             statut = request.data.get("statut")
             if statut is None or set(request.data.keys()) - {"statut"}:
                 return Response({"error": "Vous ne pouvez modifier que le statut."}, status=status.HTTP_403_FORBIDDEN)
+            ancien_statut = tache.statut
             tache.statut = statut
             if statut == Tache.DONE and not tache.date_completion:
                 tache.date_completion = timezone.now()
             tache.save()
+            if statut != ancien_statut and statut in (Tache.IN_PROGRESS, Tache.DONE):
+                self._notify_progression(request.user, tache)
             return Response(self.get_serializer(tache, context={"request": request}).data)
         old_responsable_id = tache.responsable_id
+        ancien_statut = tache.statut
         response = super().update(request, *args, **kwargs)
         tache.refresh_from_db()
         if tache.responsable_id and tache.responsable_id != old_responsable_id:
             self._notify_assignation(request.user, tache)
+        if tache.statut != ancien_statut and tache.statut in (Tache.IN_PROGRESS, Tache.DONE):
+            self._notify_progression(request.user, tache)
         return response
 
     def destroy(self, request, *args, **kwargs):

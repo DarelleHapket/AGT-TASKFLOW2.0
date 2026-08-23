@@ -1,12 +1,6 @@
 // Port fidèle de SectionMembresRoles.jsx.
+import { ROLE_COLORS, ROLE_LABELS } from "@/components/rbac/RBACView";
 import type { Utilisateur } from "@/lib/types";
-
-const ROLE_META: Record<string, { label: string; bg: string; color: string }> = {
-  superadmin: { label: "Superadmin", bg: "var(--accent-bg)", color: "var(--accent)" },
-  admin: { label: "Admin", bg: "#f3e8ff", color: "#9333ea" },
-  chef_projet: { label: "Chef de projet", bg: "#fff7ed", color: "var(--warning, #f59e0b)" },
-  membre: { label: "Membre", bg: "var(--bg-hover)", color: "var(--text-2)" },
-};
 
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
   ACTIF: { label: "Actif", bg: "#dcfce7", color: "#16a34a" },
@@ -30,7 +24,8 @@ export function SectionMembresRoles({ members, canManage, onManageRoles }: {
         )}
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+      <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 360 }}>
         <thead>
           <tr>
             <th style={thStyle}>Membre</th>
@@ -40,14 +35,15 @@ export function SectionMembresRoles({ members, canManage, onManageRoles }: {
         </thead>
         <tbody>
           {members.map((m) => {
-            const roleCode = m.roles[0] || "membre";
-            const roleMeta = ROLE_META[roleCode] || ROLE_META.membre;
+            const roleCode = m.roles[0] || "user";
+            const roleLabel = ROLE_LABELS[roleCode] || roleCode;
+            const roleColors = ROLE_COLORS[roleCode] || ROLE_COLORS.user;
             const statusMeta = STATUS_META[m.statut] || STATUS_META.ACTIF;
             return (
               <tr key={m.id}>
                 <td style={tdStyle}>{m.name}</td>
                 <td style={tdStyle}>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: roleMeta.bg, color: roleMeta.color }}>{roleMeta.label}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: roleColors.bg, color: roleColors.color }}>{roleLabel}</span>
                 </td>
                 <td style={tdStyle}>
                   <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: statusMeta.bg, color: statusMeta.color }}>{statusMeta.label}</span>
@@ -57,6 +53,7 @@ export function SectionMembresRoles({ members, canManage, onManageRoles }: {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

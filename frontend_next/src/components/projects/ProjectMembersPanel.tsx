@@ -1,8 +1,13 @@
 "use client";
 
-// Port fidèle de frontend/src/components/projects/ProjectMembersPanel.jsx.
+// Port fidèle de frontend/src/components/projects/ProjectMembersPanel.jsx,
+// enrichi (2026-08-23) d'un panneau « permissions directes » par membre —
+// même pattern que TeamView.tsx au niveau global (IBAC), mais scopé à ce
+// projet précis (4 permissions fixes indépendantes du rôle owner/manager/
+// contributor : taches.gerer, activites.gerer, equipe.gerer, projet.gerer).
 import { useCallback, useEffect, useState } from "react";
-import type { MembreProjet, Projet, Utilisateur } from "@/lib/types";
+import * as api from "@/lib/api";
+import type { MembreProjet, PermissionProjetCode, PermissionProjetDetail, Projet, Utilisateur } from "@/lib/types";
 
 const ROLE_META: Record<string, { label: string; bg: string; color: string; border: string }> = {
   owner: { label: "Propriétaire", bg: "#eef2ff", color: "#4338ca", border: "#c7d2fe" },
@@ -39,6 +44,8 @@ export function ProjectMembersPanel({ project, allMembers, onGetMembers, onAddMe
   const [addRole, setAddRole] = useState<"contributor" | "manager">("contributor");
   const [adding, setAdding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [permDetail, setPermDetail] = useState<Record<number, PermissionProjetDetail[]>>({});
+  const [expandedPerms, setExpandedPerms] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -54,9 +61,29 @@ export function ProjectMembersPanel({ project, allMembers, onGetMembers, onAddMe
   useEffect(() => { load(); }, [load]);
 
   const memberIds = new Set((members || []).map((m) => m.utilisateur));
-  // Admin (lecture seule) et Superadmin ne travaillent pas sur les projets :
-  // ils ne doivent jamais apparaître comme membre assignable.
-  const availableToAdd = allMembers.filter((m) => !memberIds.has(m.id) && m.statut === "ACTIF" && !m.roles.includes("admin") && !m.roles.includes("superadmin"));
+  // Superadmin ne travaille pas sur les projets : ne doit jamais apparaître
+  // comme membre assignable.
+  const availableToAdd = allMembers.filter((m) => !memberIds.has(m.id) && m.statut === "ACTIF" && !m.roles.includes("superadmin"));
+
+  const loadPermDetail = async (mid: number) => {
+    try {
+      const detail = await api.getMembreProjetPermissions(project.id, mid);
+      setPermDetail((prev) => ({ ...prev, [mid]: detail }));
+    } catch { /* silencieux — juste l'affichage optionnel du détail */ }
+  };
+
+  const togglePermsPanel = (mid: number) => {
+    const opening = expandedPerms !== mid;
+    setExpandedPerms(opening ? mid : null);
+    if (opening && !permDetail[mid]) loadPermDetail(mid);
+  };
+
+  const handleTogglePermission = async (mid: number, code: PermissionProjetCode, currentlyGranted: boolean) => {
+    await api.setMembreProjetPermission(project.id, mid, code, !currentlyGranted).catch((e) => {
+      setActionError(e instanceof Error ? e.message : "Erreur");
+    });
+    loadPermDetail(mid);
+  };
 
   const handleAdd = async () => {
     if (!addMemberId) return;
@@ -106,26 +133,58 @@ export function ProjectMembersPanel({ project, allMembers, onGetMembers, onAddMe
       {!loading && members && members.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
           {members.map((m) => (
-            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "white", flexShrink: 0 }}>
-                {(m.nom || "?")[0].toUpperCase()}
+            <div key={m.id} style={{ borderRadius: 8, background: "var(--bg-card)", border: "1px solid var(--border)", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "white", flexShrink: 0 }}>
+                  {(m.nom || "?")[0].toUpperCase()}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nom}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: "auto" }}>
+                  {isOwner && m.role !== "owner" ? (
+                    <select value={m.role} onChange={(e) => handleRoleChange(m.id, e.target.value as "manager" | "contributor")}
+                      style={{ fontSize: 11, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-2)", cursor: "pointer" }}>
+                      {SELECT_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  ) : (
+                    <RoleBadge role={m.role} />
+                  )}
+                  {isOwner && m.role !== "owner" && (
+                    <button onClick={() => togglePermsPanel(m.id)} style={{ padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-2)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                      Permissions
+                    </button>
+                  )}
+                  {isOwner && m.role !== "owner" && (
+                    <button onClick={() => handleRemove(m.id, m.nom)} style={{ padding: "3px 10px", borderRadius: 6, border: "1px solid #fecaca", background: "transparent", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                      Retirer
+                    </button>
+                  )}
+                </div>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nom}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: "auto" }}>
-                {isOwner && m.role !== "owner" ? (
-                  <select value={m.role} onChange={(e) => handleRoleChange(m.id, e.target.value as "manager" | "contributor")}
-                    style={{ fontSize: 11, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-2)", cursor: "pointer" }}>
-                    {SELECT_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                  </select>
-                ) : (
-                  <RoleBadge role={m.role} />
-                )}
-                {isOwner && m.role !== "owner" && (
-                  <button onClick={() => handleRemove(m.id, m.nom)} style={{ padding: "3px 10px", borderRadius: 6, border: "1px solid #fecaca", background: "transparent", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                    Retirer
-                  </button>
-                )}
-              </div>
+
+              {isOwner && m.role !== "owner" && expandedPerms === m.id && (
+                <div style={{ padding: "10px 12px", borderTop: "1px solid var(--border)", background: "var(--bg)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 6 }}>
+                    PERMISSIONS SUR CE PROJET (en plus/moins du paquet {ROLE_META[m.role]?.label.toLowerCase() || m.role})
+                  </div>
+                  {!permDetail[m.id] ? (
+                    <span style={{ fontSize: 11, color: "var(--text-3)" }}>Chargement…</span>
+                  ) : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {permDetail[m.id].map((p) => (
+                        <button key={p.code} onClick={() => handleTogglePermission(m.id, p.code, p.granted)}
+                          title={p.source === "role" ? "Accordée par défaut par le rôle" : p.source === "direct" ? "Accordée/retirée directement" : "Non accordée"}
+                          style={{
+                            fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, cursor: "pointer", border: "none",
+                            background: p.granted ? "var(--accent-bg)" : "var(--bg-hover)",
+                            color: p.granted ? "var(--accent)" : "var(--text-3)",
+                          }}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -24,13 +24,13 @@ function addMinutes(hhmm: string | null, min: number | null | undefined): string
   return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
 }
 
-export function DailyOrderView({ tasks, members, user, isAdmin, isChef }: {
-  tasks: Tache[]; members: Utilisateur[]; user: Utilisateur | null; isAdmin: boolean; isChef: boolean;
+export function DailyOrderView({ tasks, members, user, canViewOthers }: {
+  tasks: Tache[]; members: Utilisateur[]; user: Utilisateur | null; canViewOthers: boolean;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const myId = user?.id || "";
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedMember, setSelectedMember] = useState<number | string>((isAdmin || isChef) ? (members[0]?.id || "") : myId);
+  const [selectedMember, setSelectedMember] = useState<number | string>(canViewOthers ? (members[0]?.id || "") : myId);
   const [order, setOrder] = useState<OrdreJournalier[]>([]);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -135,7 +135,7 @@ export function DailyOrderView({ tasks, members, user, isAdmin, isChef }: {
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>Organisez vos tâches et vos plages horaires</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {(isAdmin || isChef) && (
+          {canViewOthers && (
             <select value={selectedMember} onChange={(e) => setSelectedMember(e.target.value)}
               style={{ fontSize: 13, padding: "7px 12px", borderRadius: 8, border: "1px solid var(--border)" }}>
               {members.map((m) => <option key={m.id} value={m.id}>{m.name}{String(m.id) === String(myId) ? " (moi)" : ""}</option>)}

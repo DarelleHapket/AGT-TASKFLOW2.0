@@ -24,7 +24,8 @@ class TypeMateriel(models.Model):
 class Materiel(models.Model):
     """BF-10 : nom, description, type, quantité, date d'achat, projet
     associé. `quantite` est le stock total actuellement possédé, tenu à
-    jour par les mouvements achat (+) et rebut (-) — cf. services.py."""
+    jour par les mouvements achat (+) et hors service/consommation (-) —
+    cf. services.py."""
     nom = models.CharField(max_length=200)
     description = models.TextField(blank=True, default="")
     type = models.ForeignKey(TypeMateriel, on_delete=models.PROTECT, related_name="materiels")
@@ -45,7 +46,8 @@ class SensMouvementMateriel(models.TextChoices):
     ACHAT = "achat", "Achat"
     AFFECTATION = "affectation", "Affectation"
     RETOUR = "retour", "Retour"
-    REBUT = "rebut", "Rebut"
+    HORS_SERVICE = "hors_service", "Hors service"
+    CONSOMMATION = "consommation", "Consommation"
 
 
 class MouvementMateriel(models.Model):
@@ -70,3 +72,36 @@ class MouvementMateriel(models.Model):
 
     class Meta:
         ordering = ["-date_mouvement"]
+
+
+class TypeAlerte(models.TextChoices):
+    RUPTURE_STOCK = "rupture_stock", "Rupture de stock"
+    ANOMALIE = "anomalie", "Anomalie"
+    RAPPEL = "rappel", "Rappel"
+
+
+class StatutAlerte(models.TextChoices):
+    OUVERTE = "ouverte", "Ouverte"
+    TRAITEE = "traitee", "Traitée"
+
+
+class AlerteMateriel(models.Model):
+    """BF-08 à BF-11 : alerte automatique (rupture de stock) ou manuelle
+    (anomalie/rappel), traitée par un gestionnaire matériel. Notification
+    ciblée (Superadmin + détenteurs de materiel.write), pas un broadcast —
+    cf. notifier_gestionnaires_materiel dans services.py."""
+    materiel = models.ForeignKey(Materiel, on_delete=models.CASCADE, related_name="alertes")
+    type_alerte = models.CharField(max_length=20, choices=TypeAlerte.choices)
+    message = models.CharField(max_length=250, blank=True, default="")
+    statut = models.CharField(max_length=10, choices=StatutAlerte.choices, default=StatutAlerte.OUVERTE)
+    cree_le = models.DateTimeField(auto_now_add=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+    )
+    traitee_le = models.DateTimeField(null=True, blank=True)
+    traitee_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+    )
+
+    class Meta:
+        ordering = ["-cree_le"]

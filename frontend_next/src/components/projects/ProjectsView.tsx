@@ -117,8 +117,8 @@ function ProjectCard({ project, editing, onEdit, onDelete, onStartEdit, onCancel
   );
 }
 
-export function ProjectsView({ projects, members, isChef, isSuperadmin, onAdd, onUpdate, onDelete, onGetProjectMembers, onAddProjectMember, onUpdateProjectMember, onRemoveProjectMember }: {
-  projects: Projet[]; members: Utilisateur[]; isChef: boolean; isSuperadmin: boolean;
+export function ProjectsView({ projects, members, canCreateProject, isSuperadmin, onAdd, onUpdate, onDelete, onGetProjectMembers, onAddProjectMember, onUpdateProjectMember, onRemoveProjectMember }: {
+  projects: Projet[]; members: Utilisateur[]; canCreateProject: boolean; isSuperadmin: boolean;
   onAdd: (d: { nom: string; description: string }) => Promise<void>;
   onUpdate: (id: number, d: { nom: string; description: string }) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
@@ -150,7 +150,7 @@ export function ProjectsView({ projects, members, isChef, isSuperadmin, onAdd, o
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Projets</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>{projects.length} projet{projects.length !== 1 ? "s" : ""}</span>
         </div>
-        {(isChef || isSuperadmin) && (
+        {(canCreateProject || isSuperadmin) && (
           <button onClick={() => { setAdding(true); setEditing(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
             <Plus size={15} /> Nouveau projet
           </button>
@@ -158,14 +158,14 @@ export function ProjectsView({ projects, members, isChef, isSuperadmin, onAdd, o
       </div>
 
       <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        {adding && (isChef || isSuperadmin) && (
+        {adding && (canCreateProject || isSuperadmin) && (
           <ProjectForm onSave={async (d) => { await onAdd(d); setAdding(false); }} onCancel={() => setAdding(false)} />
         )}
 
         {projects.length === 0 && !adding && (
           <div style={{ textAlign: "center", padding: 60, color: "var(--text-3)" }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>📁</div>
-            <div>{isChef ? "Aucun projet. Commencez par en créer un." : "Aucun projet auquel vous participez."}</div>
+            <div>{canCreateProject ? "Aucun projet. Commencez par en créer un." : "Aucun projet auquel vous participez."}</div>
           </div>
         )}
 

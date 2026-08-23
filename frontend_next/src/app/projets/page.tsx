@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 import type { Projet, Utilisateur } from "@/lib/types";
 
 export default function ProjetsPage() {
-  const { isLogged, isChef, isSuperadmin } = useAuth();
+  const { isLogged, isSuperadmin, hasPermission } = useAuth();
   const router = useRouter();
   const [projets, setProjets] = useState<Projet[]>([]);
   const [membres, setMembres] = useState<Utilisateur[]>([]);
@@ -26,10 +26,9 @@ export default function ProjetsPage() {
     Promise.all([api.getProjets(), api.getMembres()])
       .then(([p, m]) => {
         setProjets(p);
-        // Admin (lecture seule) et Superadmin ne travaillent pas sur les
-        // projets : ils ne doivent pas apparaître dans la liste des membres
-        // assignables à un projet.
-        setMembres(m.filter((x) => x.statut === "ACTIF" && !x.roles.includes("admin") && !x.roles.includes("superadmin")));
+        // Superadmin ne travaille pas sur les projets : ne doit pas
+        // apparaître dans la liste des membres assignables à un projet.
+        setMembres(m.filter((x) => x.statut === "ACTIF" && !x.roles.includes("superadmin")));
       })
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger les projets")))
       .finally(() => setLoading(false));
@@ -43,7 +42,7 @@ export default function ProjetsPage() {
         <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p>
       ) : (
         <ProjectsView
-          projects={projets} members={membres} isChef={isChef} isSuperadmin={isSuperadmin}
+          projects={projets} members={membres} canCreateProject={hasPermission("projets.write")} isSuperadmin={isSuperadmin}
           onAdd={async (d) => { await api.createProjet(d); load(); }}
           onUpdate={async (id, d) => { await api.updateProjet(id, d); load(); }}
           onDelete={async (id) => { await api.deleteProjet(id); load(); }}

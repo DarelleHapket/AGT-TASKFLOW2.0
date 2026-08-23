@@ -64,7 +64,7 @@ function NeedForm({ initial, projects, activities, onSave, onCancel }: {
 
   return (
     <div style={{ padding: 20, background: "var(--accent-bg)", borderBottom: "1px solid var(--border)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12, marginBottom: 12 }}>
         <div style={{ gridColumn: "1/-1" }}>
           <label style={lbl}>TITRE DU BESOIN *</label>
           <input style={inp} value={f.titre} onChange={(e) => set("titre", e.target.value)} placeholder="Ex: Licence Adobe XD" />

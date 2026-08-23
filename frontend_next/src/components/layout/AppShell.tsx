@@ -8,12 +8,29 @@
 // (`children`) correspond à ce qu'affichait App.jsx pour ce tab.
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, ClipboardList, FileText, LogOut, KeyRound, AlertTriangle } from "lucide-react";
+import { Bell, ClipboardList, FileText, LogOut, KeyRound, AlertTriangle, Menu } from "lucide-react";
 import * as api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
+import { ROLE_LABELS } from "@/components/rbac/RBACView";
 import type { Notification, Tache } from "@/lib/types";
+
+// Catalogue réduit à 2 rôles par défaut (superadmin + user, 2026-08-19) —
+// "user" est le rôle de base, pas un badge distinctif. Tout rôle
+// supplémentaire (personnalisé, créé via /rbac) reste affiché dynamiquement.
+function RoleBadges({ roles }: { roles: string[] }) {
+  const badges = roles.filter((r) => r !== "superadmin" && r !== "user");
+  return (
+    <>
+      {badges.map((code) => (
+        <span key={code} style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>
+          {(ROLE_LABELS[code] || code).toUpperCase()}
+        </span>
+      ))}
+    </>
+  );
+}
 
 const TAB_TITLES: Record<string, string> = {
   "/dashboard": "Tableau de bord",
@@ -44,7 +61,7 @@ const TAB_TITLES: Record<string, string> = {
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, isLogged, isAdmin, isChef, hasPermission, logout } = useAuth();
+  const { user, isLogged, hasPermission, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -52,12 +69,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showBell, setShowBell] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!isLogged) return;
     api.getTaches().then((r) => setTasks(r.tasks)).catch(() => {});
     api.getNotifications().then(setNotifications).catch(() => {});
   }, [isLogged]);
+
+  // Ferme le tiroir (mobile/tablette) à chaque changement de route, en plus
+  // de la fermeture au clic sur un lien (Sidebar.tsx) — filet de sécurité.
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
 
   if (!isLogged || !user) return null;
 
@@ -66,27 +90,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex" }}>
-      <Sidebar hasPermission={hasPermission} />
+      <Sidebar hasPermission={hasPermission} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
-        <div style={{
+        <div className="px-3 lg:px-6" style={{
           background: "var(--bg-card)", borderBottom: "1px solid var(--border)",
-          padding: "0 24px", display: "flex", alignItems: "center",
+          display: "flex", alignItems: "center",
           justifyContent: "space-between", height: 60,
           position: "sticky", top: 0, zIndex: 100,
         }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-            {TAB_TITLES[pathname] || ""}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <button onClick={() => setSidebarOpen((v) => !v)} aria-label="Ouvrir le menu"
+              className="lg:hidden" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-2)", padding: 4, display: "flex", flexShrink: 0 }}>
+              <Menu size={20} />
+            </button>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {TAB_TITLES[pathname] || ""}
+            </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-            <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
+            <div className="hidden sm:flex" style={{ gap: 12, fontSize: 11 }}>
               <span style={{ color: "var(--text-3)" }}>{tasks.length} tâche{tasks.length !== 1 ? "s" : ""}</span>
               {critCount > 0 && <span style={{ color: "#ef4444", fontWeight: 700 }}>● {critCount} critique{critCount > 1 ? "s" : ""}</span>}
               {critCount === 0 && tasks.length > 0 && <span style={{ color: "#22c55e", fontWeight: 600 }}>✓ OK</span>}
             </div>
-            <div style={{ width: 1, height: 20, background: "var(--border)" }} />
+            <div className="hidden sm:block" style={{ width: 1, height: 20, background: "var(--border)" }} />
 
             {/* Cloche */}
             <div style={{ position: "relative" }}>
@@ -111,7 +141,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onMarkRead={async (id) => { await api.markNotificationRead(id); setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, lu_le: new Date().toISOString() } : n)); }}
                   onMarkAllRead={async () => { await api.markAllNotificationsRead(); setNotifications((prev) => prev.map((n) => ({ ...n, lu_le: new Date().toISOString() }))); }}
                   onDeleteNotif={async (id) => { await api.deleteNotification(id); setNotifications((prev) => prev.filter((n) => n.id !== id)); }}
-                  onNotifClick={(n) => { setShowBell(false); router.push(n.type === "register_request" ? "/membres" : "/taches"); }}
+                  onNotifClick={(n) => {
+                    setShowBell(false);
+                    if (n.type === "register_request") router.push("/membres");
+                    else if (n.type === "signalement") router.push("/rh/signalements");
+                    else router.push("/taches");
+                  }}
                 />
               )}
             </div>
@@ -119,14 +154,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Profil */}
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowProfile((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "5px 10px", cursor: "pointer" }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: user.color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: user.color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
                   {(user.name || "?")[0].toUpperCase()}
                 </div>
-                <div style={{ textAlign: "left" }}>
+                <div className="hidden sm:block" style={{ textAlign: "left" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 5 }}>
                     {user.name}
-                    {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
-                    {isChef && <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
+                    <RoleBadges roles={user.roles} />
                   </div>
                   <div style={{ fontSize: 10, color: "var(--text-2)" }}>{user.email}</div>
                 </div>
@@ -141,8 +175,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 5 }}>
                         {user.name}
-                        {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent)", color: "white", borderRadius: 4, padding: "1px 6px" }}>ADMIN</span>}
-                        {isChef && <span style={{ fontSize: 10, fontWeight: 700, background: "#0ea5e9", color: "white", borderRadius: 4, padding: "1px 6px" }}>CHEF</span>}
+                        <RoleBadges roles={user.roles} />
                       </div>
                       <div style={{ fontSize: 11, color: "var(--text-3)" }}>{user.email}</div>
                     </div>
@@ -169,7 +202,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Contenu */}
-        <div style={{ padding: 24, maxWidth: 1440, margin: "0 auto", width: "100%" }}>
+        <div className="p-3 lg:p-6" style={{ maxWidth: 1440, margin: "0 auto", width: "100%" }}>
           {user.doit_changer_mdp && pathname !== "/mon-compte" && (
             // D-11 (team-tool) assoupli : mot de passe temporaire (recrutement,
             // migration, superadmin par défaut) -> rappel permanent plutôt

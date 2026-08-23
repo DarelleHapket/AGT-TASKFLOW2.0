@@ -73,9 +73,10 @@ class MembresApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.admin = User.objects.create(username="admin", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(self.admin, "admin")
+        assign_role(self.admin, "user")
+        grant_permission(self.admin, "membres.validate")
         self.membre = User.objects.create(username="darelle", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(self.membre, "membre")
+        assign_role(self.membre, "user")
 
     def test_membre_ne_gere_pas_membres(self):
         self.client.force_authenticate(self.membre)
@@ -91,7 +92,7 @@ class MembresApiTests(TestCase):
         demandeur.refresh_from_db()
         self.assertEqual(demandeur.statut, StatutCompte.ACTIF)
         self.assertTrue(demandeur.is_active)
-        self.assertIn("membre", demandeur.roles_codes())
+        self.assertIn("user", demandeur.roles_codes())
 
     def test_membre_ne_valide_pas_de_demande(self):
         demandeur = User.objects.create(username="nouveau2", statut=StatutCompte.EN_ATTENTE, is_active=False)
@@ -121,74 +122,19 @@ class MembresApiTests(TestCase):
     def test_bug02_revoke_role_puis_reattribution_coherente(self):
         """Non-régression BUG-02 : après retrait d'un rôle puis réattribution,
         le rôle et les permissions doivent rester cohérents (contrairement au
-        legacy Flask où members.role et member_roles pouvaient diverger)."""
+        legacy Flask où members.role et member_roles pouvaient diverger).
+        Rôle "chef_projet" (2026-08-19, catalogue réduit à 2 rôles) remplacé
+        par un rôle personnalisé équivalent portant la même permission."""
+        role_projet = Role.objects.create(code="gestion_projet")
+        role_projet.permissions.add(Permission.objects.get(code="projets.write"))
         chef = User.objects.create(username="josue", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(chef, "chef_projet")
+        assign_role(chef, "gestion_projet")
         self.assertTrue(chef.peut("projets.write"))
-        revoke_role(chef, "chef_projet")
-        self.assertNotIn("chef_projet", chef.roles_codes())
-        assign_role(chef, "chef_projet")
-        self.assertIn("chef_projet", chef.roles_codes())
+        revoke_role(chef, "gestion_projet")
+        self.assertNotIn("gestion_projet", chef.roles_codes())
+        assign_role(chef, "gestion_projet")
+        self.assertIn("gestion_projet", chef.roles_codes())
         self.assertTrue(chef.peut("projets.write"))
-
-
-class SuperadminAdminExclusivityTests(TestCase):
-    """Superadmin a déjà un accès total (bypass RBAC) ; Admin n'accorde qu'un
-    accès en lecture seule. Les deux combinés affichent un badge ADMIN
-    trompeur sur un compte qui n'est pas limité — cette combinaison doit être
-    refusée par l'API (pas seulement cachée côté UI)."""
-
-    def setUp(self):
-        self.client = APIClient()
-        self.superadmin_actor = User.objects.create(username="root2", is_superuser=True)
-        self.target = User.objects.create(username="cible3", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(self.target, "superadmin")
-
-    def test_assigner_admin_a_un_superadmin_refuse(self):
-        self.client.force_authenticate(self.superadmin_actor)
-        r = self.client.post(f"/api/rbac/membres/{self.target.pk}/roles", {"role": "admin"}, format="json")
-        self.assertEqual(r.status_code, 400)
-        self.assertNotIn("admin", self.target.roles_codes())
-
-    def test_assigner_admin_a_un_membre_normal_fonctionne(self):
-        membre = User.objects.create(username="cible4", statut=StatutCompte.ACTIF, is_active=True)
-        self.client.force_authenticate(self.superadmin_actor)
-        r = self.client.post(f"/api/rbac/membres/{membre.pk}/roles", {"role": "admin"}, format="json")
-        self.assertEqual(r.status_code, 201)
-        self.assertIn("admin", membre.roles_codes())
-
-
-class AdminRoleUniqueTests(TestCase):
-    """Décision produit : Admin est un rôle unique, comme Superadmin — un
-    seul titulaire à la fois. Le Superadmin doit d'abord le retirer avant
-    de le confier à quelqu'un d'autre."""
-
-    def setUp(self):
-        self.client = APIClient()
-        self.superadmin_actor = User.objects.create(username="root3", is_superuser=True)
-        self.premier_admin = User.objects.create(username="premier_admin", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(self.premier_admin, "admin")
-        self.autre_membre = User.objects.create(username="autre_membre", statut=StatutCompte.ACTIF, is_active=True)
-
-    def test_assigner_admin_a_un_second_membre_refuse(self):
-        self.client.force_authenticate(self.superadmin_actor)
-        r = self.client.post(f"/api/rbac/membres/{self.autre_membre.pk}/roles", {"role": "admin"}, format="json")
-        self.assertEqual(r.status_code, 400)
-        self.assertNotIn("admin", self.autre_membre.roles_codes())
-
-    def test_apres_retrait_le_role_redevient_disponible(self):
-        self.client.force_authenticate(self.superadmin_actor)
-        self.client.delete(f"/api/rbac/membres/{self.premier_admin.pk}/roles/admin")
-        r = self.client.post(f"/api/rbac/membres/{self.autre_membre.pk}/roles", {"role": "admin"}, format="json")
-        self.assertEqual(r.status_code, 201)
-        self.assertIn("admin", self.autre_membre.roles_codes())
-
-    def test_reattribuer_le_meme_role_au_meme_membre_fonctionne(self):
-        """Pas de faux positif : le titulaire actuel peut se voir
-        réattribuer/rafraîchir son propre rôle admin sans être bloqué."""
-        self.client.force_authenticate(self.superadmin_actor)
-        r = self.client.post(f"/api/rbac/membres/{self.premier_admin.pk}/roles", {"role": "admin"}, format="json")
-        self.assertEqual(r.status_code, 201)
 
 
 class DeletedMembersHistoryTests(TestCase):
@@ -199,9 +145,11 @@ class DeletedMembersHistoryTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.admin = User.objects.create(username="admin2", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(self.admin, "admin")
+        assign_role(self.admin, "user")
+        grant_permission(self.admin, "membres.read")
+        grant_permission(self.admin, "membres.write")
         self.membre = User.objects.create(username="cible2", statut=StatutCompte.ACTIF, is_active=True)
-        assign_role(self.membre, "membre")
+        assign_role(self.membre, "user")
 
     def test_destroy_pose_deleted_at(self):
         self.client.force_authenticate(self.admin)

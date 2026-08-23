@@ -44,16 +44,17 @@ def login(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
-    """Port de backend/routes/auth.py::register — notifie chaque admin/superadmin
-    actif d'une nouvelle demande de compte (type_="register_request"), pour que
-    la cloche les alerte sans qu'ils aient à revenir régulièrement sur /membres."""
+    """Port de backend/routes/auth.py::register — notifie quiconque peut
+    valider un compte (permission membres.validate, ou superadmin) d'une
+    nouvelle demande (type_="register_request"), pour que la cloche les
+    alerte sans qu'ils aient à revenir régulièrement sur /membres."""
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     new_user = serializer.save()
 
     destinataires = [
         u for u in User.objects.filter(statut=StatutCompte.ACTIF, is_active=True)
-        if u.is_superadmin() or "admin" in u.roles_codes()
+        if u.is_superadmin() or u.peut("membres.validate")
     ]
     for admin in destinataires:
         notify(
@@ -116,7 +117,7 @@ def validate_member(request, pk):
     if action == "approve":
         target.statut = StatutCompte.ACTIF
         target.is_active = True
-        assign_role(target, "membre")
+        assign_role(target, "user")
     else:
         target.statut = StatutCompte.SUPPRIME
         target.is_active = False
@@ -196,23 +197,6 @@ def assign_member_role(request, pk):
     role_code = request.data.get("role")
     if not Role.objects.filter(code=role_code).exists():
         return Response({"error": "Rôle inconnu"}, status=status.HTTP_400_BAD_REQUEST)
-    # Admin = accès en lecture seule (ROLE_PERMS) ; Superadmin a déjà un accès
-    # total. Les deux combinés n'ont pas de sens et affichent un badge ADMIN
-    # trompeur sur un compte qui n'est justement pas limité en lecture seule.
-    if role_code == "admin" and target.is_superadmin():
-        return Response({"error": "Le Superadmin ne peut pas porter aussi le rôle Admin (accès déjà total)."}, status=status.HTTP_400_BAD_REQUEST)
-    # Admin est un rôle unique (décision produit) : un seul membre à la fois.
-    # Pour le confier à quelqu'un d'autre, le Superadmin doit d'abord le
-    # retirer à l'actuel titulaire (DELETE /rbac/membres/<pk>/roles/admin).
-    if role_code == "admin":
-        deja_admin = User.objects.filter(
-            attributionrole__role__code="admin"
-        ).exclude(statut=StatutCompte.SUPPRIME).exclude(pk=target.pk).exists()
-        if deja_admin:
-            return Response(
-                {"error": "Un Admin existe déjà — rôle unique. Retirez-le d'abord à son titulaire actuel avant de le confier à quelqu'un d'autre."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
     assign_role(target, role_code, assigned_by=request.user)
     return Response(UserSerializer(target).data, status=status.HTTP_201_CREATED)
 

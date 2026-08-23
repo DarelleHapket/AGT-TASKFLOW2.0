@@ -12,7 +12,7 @@ from authentification.services import assign_role
 from projets.models import Difficulte, Projet, Tache
 
 
-def make_user(username, role="membre"):
+def make_user(username, role="user"):
     u = User.objects.create(username=username, statut=StatutCompte.ACTIF, is_active=True)
     assign_role(u, role)
     return u
@@ -24,7 +24,7 @@ class BackupApiTests(TestCase):
         self.override = override_settings(BACKUP_DIR=self.tmp)
         self.override.enable()
         self.superadmin = make_user("gabriel", "superadmin")
-        self.membre = make_user("darelle", "membre")
+        self.membre = make_user("darelle", "user")
         self.client = APIClient()
 
     def tearDown(self):
@@ -104,8 +104,14 @@ class MigrateFromSqliteTests(TestCase):
         self.assertEqual(User.objects.count(), 2)
         gabriel = User.objects.get(pk=1)
         darelle = User.objects.get(pk=2)
-        self.assertIn("admin", gabriel.roles_codes())
-        self.assertIn("chef_projet", darelle.roles_codes())
+        # Catalogue réduit à 2 rôles (2026-08-19) : "admin"/"chef_projet"
+        # legacy n'existent plus comme rôles — les deux comptes obtiennent le
+        # rôle "user" avec les permissions équivalentes accordées en direct
+        # (cf. migrate_from_sqlite.py::PERMISSIONS_LEGACY_ADMIN/_CHEF_PROJET).
+        self.assertIn("user", gabriel.roles_codes())
+        self.assertTrue(gabriel.peut("membres.validate"))
+        self.assertIn("user", darelle.roles_codes())
+        self.assertTrue(darelle.peut("projets.write"))
         self.assertTrue(gabriel.doit_changer_mdp)
         # Mot de passe legacy (SHA-256 non salé) non conservé tel quel :
         # un nouveau hash Django (compatible) a été généré.

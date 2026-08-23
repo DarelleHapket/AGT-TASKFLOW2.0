@@ -4,7 +4,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from authentification.models import StatutCompte, User
-from authentification.services import assign_role
+from authentification.services import assign_role, grant_permission
 from projets.models import Projet
 from rh.models import Contrat, Employe, Periodicite, Profil, Remuneration, TypeContrat
 
@@ -12,7 +12,7 @@ from .models import MouvementFinancier, NiveauFinancier, SensMouvement, TypeMouv
 from .services import calculer_bilan, comparer_prevision, generer_mouvement_salarial
 
 
-def make_user(username, role="membre"):
+def make_user(username, role="user"):
     u = User.objects.create(username=username, statut=StatutCompte.ACTIF, is_active=True)
     assign_role(u, role)
     return u
@@ -35,10 +35,12 @@ class MembreNaAccesAuxFinancesTests(TestCase):
         r = client.get("/api/finances/mouvements")
         self.assertEqual(r.status_code, 403)
 
-    def test_chef_de_projet_ne_voit_pas_les_finances(self):
-        """Être promu chef de projet ne donne jamais de droit de regard
-        financier, même sur le budget de son propre projet."""
-        chef = make_user("chefsansfinances", "chef_projet")
+    def test_operations_manage_ne_donne_pas_acces_aux_finances(self):
+        """La permission operations.manage (visibilité élargie sur les
+        équipes qu'on gère, ex-rôle chef_projet) ne donne jamais de droit de
+        regard financier — les deux modules restent indépendants."""
+        chef = make_user("chefsansfinances", "user")
+        grant_permission(chef, "operations.manage")
         client = APIClient()
         client.force_authenticate(chef)
         r = client.get("/api/finances/mouvements")
@@ -50,7 +52,8 @@ class MouvementImmuableTests(TestCase):
     après son enregistrement."""
 
     def setUp(self):
-        self.admin = make_user("adminfin", "admin")
+        self.admin = make_user("adminfin", "user")
+        grant_permission(self.admin, "finances.mouvements.gerer")
         self.type_mouvement = TypeMouvementFinancier.objects.create(nom="Vente", sens=SensMouvement.ENTREE)
         self.mouvement = MouvementFinancier.objects.create(
             type_mouvement=self.type_mouvement, montant=Decimal("1000"), niveau=NiveauFinancier.ENTREPRISE
@@ -78,13 +81,56 @@ class MouvementImmuableTests(TestCase):
         self.assertEqual(r.status_code, 201)
 
 
+class SuppressionTypeProtegeTests(TestCase):
+    """BF-01 : suppression d'un type utilisé par des mouvements -> message
+    propre (409), pas un 500 ProtectedError non intercepté."""
+
+    def test_suppression_type_utilise_refusee_proprement(self):
+        admin = make_user("adminsupprfin", "user")
+        grant_permission(admin, "finances.mouvements.gerer")
+        type_mouvement = TypeMouvementFinancier.objects.create(nom="Loyer", sens=SensMouvement.SORTIE)
+        MouvementFinancier.objects.create(type_mouvement=type_mouvement, montant=Decimal("100"), niveau=NiveauFinancier.ENTREPRISE)
+        client = APIClient()
+        client.force_authenticate(admin)
+        r = client.delete(f"/api/finances/types-mouvement/{type_mouvement.id}")
+        self.assertEqual(r.status_code, 409)
+
+
+class NiveauEmployeTests(TestCase):
+    """BF-02 : un mouvement peut être enregistré manuellement au niveau
+    employé, pas seulement via la sortie salariale automatique."""
+
+    def test_niveau_employe_avec_employe_accepte(self):
+        admin = make_user("adminniveauemp", "user")
+        grant_permission(admin, "finances.mouvements.gerer")
+        type_mouvement = TypeMouvementFinancier.objects.create(nom="Prime", sens=SensMouvement.SORTIE)
+        employe, _ = make_employe("primee")
+        client = APIClient()
+        client.force_authenticate(admin)
+        r = client.post("/api/finances/mouvements", {
+            "type_mouvement": type_mouvement.id, "montant": "50000", "niveau": "employe", "employe": employe.id,
+        }, format="json")
+        self.assertEqual(r.status_code, 201, r.data)
+
+    def test_liste_employes_accessible_pour_choisir_la_cible(self):
+        admin = make_user("adminlisteemp", "user")
+        grant_permission(admin, "finances.mouvements.gerer")
+        make_employe("cibleemp")
+        client = APIClient()
+        client.force_authenticate(admin)
+        r = client.get("/api/rh/employes")
+        self.assertEqual(r.status_code, 200)
+        self.assertGreaterEqual(len(r.data), 1)
+
+
 class NiveauCoherenceTests(TestCase):
     """Document d'Analyse §11 : niveau <-> FK renseignée, mutuellement
     exclusif — vérifié côté serializer (validate()) avant même la contrainte
     base de données."""
 
     def setUp(self):
-        self.admin = make_user("adminniveau", "admin")
+        self.admin = make_user("adminniveau", "user")
+        grant_permission(self.admin, "finances.mouvements.gerer")
         self.type_mouvement = TypeMouvementFinancier.objects.create(nom="Achat", sens=SensMouvement.SORTIE)
         self.projet = Projet.objects.create(nom="Projet Finances")
         self.client = APIClient()
@@ -148,3 +194,15 @@ class BilanTests(TestCase):
         client.force_authenticate(membre)
         r = client.get("/api/finances/bilan?date_from=2026-01-01&date_to=2026-12-31")
         self.assertEqual(r.status_code, 403)
+
+    def test_bilan_inclut_les_derniers_mouvements(self):
+        """BF-07 : encart tableau de bord — solde courant + mouvements
+        récents dans la même réponse."""
+        admin = make_user("adminbilanrecent", "user")
+        grant_permission(admin, "finances.bilan.voir")
+        client = APIClient()
+        client.force_authenticate(admin)
+        r = client.get("/api/finances/bilan?date_from=2026-01-01&date_to=2026-12-31")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("derniers_mouvements", r.data)
+        self.assertGreaterEqual(len(r.data["derniers_mouvements"]), 2)

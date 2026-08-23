@@ -49,6 +49,26 @@ services:
     depends_on: [api]
     networks: [agt_django]
 
+  cron:
+    build: ./backend_django
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?definir SECRET_KEY dans .env}
+      DEBUG: ${DEBUG:-0}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      POSTGRES_DB: ${POSTGRES_DB:-agterp}
+      POSTGRES_USER: ${POSTGRES_USER:-agterp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+    # BF-26/BF-54 : cron mensuel de sortie salariale + fiche de paie, sur le
+    # même modèle que le service "backup" ci-dessous (boucle sh + sleep, pas
+    # de vrai crond) — appelé chaque jour, no-op si déjà généré ce mois-ci
+    # (contrainte unique FichePaie.contrat+periode, cf. rh/models.py).
+    entrypoint: >
+      sh -c 'until python -c "import socket; socket.create_connection((\"db\", 5432), 2)" 2>/dev/null; do sleep 1; done; while true; do python manage.py generer_fiches_paie_mensuelles; sleep 86400; done'
+    depends_on: [db]
+    networks: [agt_django]
+
   backup:
     image: postgres:16-alpine
     restart: unless-stopped

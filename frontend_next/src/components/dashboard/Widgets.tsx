@@ -21,7 +21,7 @@ export function WidgetsGlobaux({ membersActifs, demandesEnAttente, projetsCount,
   membersActifs: number; demandesEnAttente: number; projetsCount: number; rolesActifs: number;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+    <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginBottom: 24 }}>
       <Widget label="MEMBRES ACTIFS" value={membersActifs} href="/membres" />
       <Widget label="DEMANDES EN ATTENTE" value={demandesEnAttente} href="/membres" />
       <Widget label="PROJETS" value={projetsCount} href="/projets" />
@@ -34,7 +34,7 @@ export function WidgetsChef({ mesProjets, monEquipe, tachesEnCours, difficultesS
   mesProjets: number; monEquipe: number; tachesEnCours: number; difficultesSignalees: number;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+    <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginBottom: 24 }}>
       <Widget label="MES PROJETS" value={mesProjets} href="/projets" />
       <Widget label="MON ÉQUIPE" value={monEquipe} href="/membres" />
       <Widget label="TÂCHES EN COURS" value={tachesEnCours} href="/taches?status=in_progress" />
@@ -47,7 +47,7 @@ export function WidgetsMembre({ mesTaches, enCours, terminees, enRetard, userId 
   mesTaches: number; enCours: number; terminees: number; enRetard: number; userId: number;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+    <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginBottom: 24 }}>
       <Widget label="MES TÂCHES" value={mesTaches} href={`/taches?member=${userId}`} />
       <Widget label="EN COURS" value={enCours} color="#2563eb" href={`/taches?member=${userId}&status=in_progress`} />
       <Widget label="TERMINÉES" value={terminees} color="var(--success, #22c55e)" href={`/taches?member=${userId}&status=done`} />
@@ -65,12 +65,13 @@ function WidgetVide({ label }: { label: string }) {
   );
 }
 
-function WidgetTexte({ label, value, href }: { label: string; value: string; href: string }) {
+function WidgetTexte({ label, value, href, sublabel }: { label: string; value: string; href: string; sublabel?: string }) {
   return (
     <Link href={href} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, boxShadow: "var(--shadow)", cursor: "pointer" }}>
         <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, marginBottom: 6 }}>{label}</div>
         <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)" }}>{value}</div>
+        {sublabel && <div style={{ fontSize: 11, fontWeight: 700, color: "var(--danger)", marginTop: 4 }}>{sublabel}</div>}
       </div>
     </Link>
   );
@@ -80,14 +81,19 @@ function WidgetTexte({ label, value, href }: { label: string; value: string; hre
 // retombe en WidgetVide si l'utilisateur n'a pas la permission de lecture
 // correspondante (rare pour un profil qui voit déjà cette section, mais
 // respecte le RBAC/IBAC à la marge).
-export function WidgetsRessources({ canRh, canFinances, canMateriel, postes, equipes, soldeMois, stockTotal }: {
+export function WidgetsRessources({ canRh, canFinances, canMateriel, postes, equipes, soldeMois, stockTotal, alertesOuvertes }: {
   canRh: boolean; canFinances: boolean; canMateriel: boolean;
-  postes: number; equipes: number; soldeMois: string | null; stockTotal: number | null;
+  postes: number; equipes: number; soldeMois: string | null; stockTotal: number | null; alertesOuvertes?: number;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 24 }}>
+    <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 14, marginBottom: 24 }}>
       {canMateriel ? (
-        <WidgetTexte label="MATÉRIEL — STOCK TOTAL" value={stockTotal !== null ? String(stockTotal) : "—"} href="/materiel" />
+        <WidgetTexte
+          label="MATÉRIEL — STOCK TOTAL"
+          value={stockTotal !== null ? String(stockTotal) : "—"}
+          sublabel={alertesOuvertes ? `${alertesOuvertes} alerte${alertesOuvertes !== 1 ? "s" : ""} ouverte${alertesOuvertes !== 1 ? "s" : ""}` : undefined}
+          href="/materiel"
+        />
       ) : (
         <WidgetVide label="Matériel" />
       )}

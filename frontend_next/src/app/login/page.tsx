@@ -7,16 +7,16 @@
 // UX d'origine — "L'utilisateur saisit email et mot de passe").
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogIn, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, UserPlus, Zap } from "lucide-react";
+import { LogIn, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, UserPlus } from "lucide-react";
 import * as api from "@/lib/api";
 import { consumeSessionExpiredFlag, useAuth } from "@/lib/auth";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 
 const NAVY = "#0D1B2A";
 const SLATE = "#475569";
 const MUTED = "#64748b";
 const GHOST = "#94a3b8";
 const ACCENT = "#6366f1";
-const BG = "#E1F2F5";
 
 type Mode = "login" | "register";
 
@@ -39,6 +39,7 @@ export default function LoginPage() {
   useEffect(() => {
     setMounted(true);
     setSessionExpired(consumeSessionExpiredFlag());
+    if (new URLSearchParams(window.location.search).get("mode") === "register") setMode("register");
   }, []);
 
   function switchMode() {
@@ -92,52 +93,8 @@ export default function LoginPage() {
   const iconColor = (field: string) => (focused === field ? ACCENT : MUTED);
 
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", background: BG,
-      fontFamily: "'DM Sans', system-ui, sans-serif", overflow: "hidden", position: "relative",
-    }}>
-      <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: `linear-gradient(rgba(0,150,170,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,150,170,0.07) 1px, transparent 1px)`,
-        backgroundSize: "48px 48px", pointerEvents: "none",
-      }} />
-      <div style={{ position: "absolute", top: "-20%", left: "-10%", width: "60%", height: "70%", background: "radial-gradient(ellipse, rgba(99,102,241,0.1) 0%, transparent 65%)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", bottom: "-20%", right: "-10%", width: "55%", height: "65%", background: "radial-gradient(ellipse, rgba(0,176,195,0.12) 0%, transparent 65%)", pointerEvents: "none" }} />
-
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "60px 80px", position: "relative", zIndex: 1 }}>
-        <div style={{ opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(24px)", transition: "all 0.7s cubic-bezier(.16,1,.3,1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 64 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 14, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 28px rgba(99,102,241,0.35)" }}>
-              <Zap size={22} color="white" fill="white" />
-            </div>
-            <span style={{ fontSize: 18, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>AGT TaskFlow</span>
-          </div>
-
-          <h1 style={{ fontSize: 52, fontWeight: 800, color: NAVY, lineHeight: 1.1, letterSpacing: "-0.03em", margin: "0 0 20px" }}>
-            Pilotez vos<br />
-            <span style={{ background: "linear-gradient(90deg, #6366f1, #00B4C8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>projets</span>{" "}avec<br />précision.
-          </h1>
-
-          <p style={{ fontSize: 16, color: SLATE, lineHeight: 1.7, maxWidth: 380, margin: 0 }}>
-            Outil de pilotage interne d&apos;AG Technologies. Tâches, Gantt, PERT et performances en temps réel.
-          </p>
-
-          <div style={{ display: "flex", gap: 40, marginTop: 56 }}>
-            {[
-              { val: "100%", label: "Usage interne" },
-              { val: "3h", label: "Par coupon" },
-              { val: "∞", label: "Productivité" },
-            ].map(({ val, label }) => (
-              <div key={label}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>{val}</div>
-                <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ width: 480, display: "flex", alignItems: "center", justifyContent: "center", padding: 40, position: "relative", zIndex: 1 }}>
+    <AuthLayout>
+      <div className="w-full lg:w-[480px] p-6 lg:p-10" style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
         <div style={{
           width: "100%", background: "rgba(255,255,255,0.72)", border: "1px solid rgba(0,176,195,0.18)",
           borderRadius: 24, padding: 40, backdropFilter: "blur(24px)", boxShadow: "0 32px 80px rgba(0,100,130,0.12)",
@@ -240,6 +197,6 @@ export default function LoginPage() {
         input::placeholder { color: rgba(100,116,139,0.55); }
         input:-webkit-autofill { -webkit-box-shadow: 0 0 0 100px #E1F2F5 inset !important; -webkit-text-fill-color: #0D1B2A !important; }
       `}</style>
-    </div>
+    </AuthLayout>
   );
 }

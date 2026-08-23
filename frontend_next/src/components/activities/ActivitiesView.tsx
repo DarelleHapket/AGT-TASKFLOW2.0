@@ -49,19 +49,16 @@ function ActivityForm({ initial, projects, onSave, onCancel }: {
   );
 }
 
-export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete, isAdmin }: {
+export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete }: {
   activities: Activite[]; projects: Projet[];
   onAdd: (d: ActivityFormData) => Promise<void>;
   onUpdate: (id: number, d: ActivityFormData) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
-  isAdmin: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Activite | null>(null);
   const [filterPid, setFilterPid] = useState("all");
   const [error, setError] = useState<string | null>(null);
-
-  const canCreate = !isAdmin;
 
   const visible = filterPid === "all" ? activities : activities.filter((a) => String(a.projet) === filterPid);
 
@@ -78,11 +75,9 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Activités</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>{activities.length} activité{activities.length !== 1 ? "s" : ""}</span>
         </div>
-        {canCreate && (
-          <button onClick={() => { setAdding(true); setEditing(null); setError(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-            <Plus size={15} /> Nouvelle activité
-          </button>
-        )}
+        <button onClick={() => { setAdding(true); setEditing(null); setError(null); }} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Nouvelle activité
+        </button>
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, padding: "10px 14px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)" }}>
@@ -110,7 +105,7 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
       )}
 
       <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        {canCreate && adding && (
+        {adding && (
           <ActivityForm projects={projects} onSave={handleAdd} onCancel={() => { setAdding(false); setError(null); }} />
         )}
 
@@ -122,7 +117,7 @@ export function ActivitiesView({ activities, projects, onAdd, onUpdate, onDelete
         )}
 
         {visible.map((a) =>
-          canCreate && editing?.id === a.id ? (
+          editing?.id === a.id ? (
             <ActivityForm key={a.id} initial={a} projects={projects}
               onSave={async (d) => {
                 setError(null);

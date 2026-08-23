@@ -10,7 +10,11 @@ import { Plus } from "lucide-react";
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
-import type { Materiel, Projet, Stock, TypeMateriel } from "@/lib/types";
+import type { AlerteMateriel, Materiel, Projet, Stock, TypeAlerte, TypeMateriel } from "@/lib/types";
+
+const ALERTE_LABEL: Record<TypeAlerte, string> = {
+  rupture_stock: "Rupture de stock", anomalie: "Anomalie", rappel: "Rappel",
+};
 
 const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, background: "var(--bg-card)", color: "var(--text)" };
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden" };
@@ -23,6 +27,7 @@ export default function MaterielPage() {
   const [inventaire, setInventaire] = useState<Materiel[]>([]);
   const [projets, setProjets] = useState<Projet[]>([]);
   const [stock, setStock] = useState<Stock | null>(null);
+  const [alertes, setAlertes] = useState<AlerteMateriel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,12 +37,35 @@ export default function MaterielPage() {
 
   function load() {
     setLoading(true);
-    Promise.all([api.getTypesMateriel(), api.getInventaire(), api.getProjets(), api.getStock()])
-      .then(([t, i, p, s]) => { setTypes(t); setInventaire(i); setProjets(p); setStock(s); })
+    Promise.all([api.getTypesMateriel(), api.getInventaire(), api.getProjets(), api.getStock(), api.getAlertesMateriel("ouverte")])
+      .then(([t, i, p, s, a]) => { setTypes(t); setInventaire(i); setProjets(p); setStock(s); setAlertes(a); })
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger le matériel")))
       .finally(() => setLoading(false));
   }
   useEffect(load, []);
+
+  const [reporting, setReporting] = useState(false);
+  const [alerteMateriel, setAlerteMateriel] = useState("");
+  const [alerteType, setAlerteType] = useState<TypeAlerte>("anomalie");
+  const [alerteMessage, setAlerteMessage] = useState("");
+  const [alerteErr, setAlerteErr] = useState<string | null>(null);
+
+  async function signalerAlerte() {
+    setAlerteErr(null);
+    if (!alerteMateriel) { setAlerteErr("Choisissez un matériel."); return; }
+    try {
+      await api.createAlerteMateriel({ materiel: Number(alerteMateriel), type_alerte: alerteType, message: alerteMessage || undefined });
+      setReporting(false); setAlerteMateriel(""); setAlerteType("anomalie"); setAlerteMessage("");
+      load();
+    } catch (e) {
+      setAlerteErr(api.errorMessage(e, "Signalement impossible"));
+    }
+  }
+
+  async function traiterAlerte(id: number) {
+    await api.traiterAlerteMateriel(id);
+    load();
+  }
 
   const [newType, setNewType] = useState("");
   const [creating, setCreating] = useState(false);
@@ -72,10 +100,14 @@ export default function MaterielPage() {
       {loading ? <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p> : (
         <>
           {stock && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 20, maxWidth: 760 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginBottom: 20 }}>
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, boxShadow: "var(--shadow)" }}>
                 <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, marginBottom: 6 }}>STOCK TOTAL</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>{stock.total}</div>
+              </div>
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, boxShadow: "var(--shadow)" }}>
+                <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, marginBottom: 6 }}>ALERTES OUVERTES</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: stock.alertes_ouvertes > 0 ? "var(--danger)" : "var(--text)" }}>{stock.alertes_ouvertes}</div>
               </div>
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, boxShadow: "var(--shadow)" }}>
                 <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, marginBottom: 6 }}>PAR TYPE</div>
@@ -90,7 +122,62 @@ export default function MaterielPage() {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 16, marginBottom: 20 }}>
+            <div style={card}>
+              <div style={{ ...sectionHead, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>ALERTES OUVERTES ({alertes.length})</span>
+                <button onClick={() => setReporting((v) => !v)} style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-2)", cursor: "pointer" }}>
+                  Signaler
+                </button>
+              </div>
+              {reporting && (
+                <div style={{ padding: 12, borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <select style={inp} value={alerteMateriel} onChange={(e) => setAlerteMateriel(e.target.value)}>
+                    <option value="">Matériel concerné</option>
+                    {inventaire.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+                  </select>
+                  <select style={inp} value={alerteType} onChange={(e) => setAlerteType(e.target.value as TypeAlerte)}>
+                    <option value="anomalie">Anomalie</option>
+                    {canWrite && <option value="rappel">Rappel (avant expiration)</option>}
+                  </select>
+                  <input style={inp} placeholder="Message (optionnel)" value={alerteMessage} onChange={(e) => setAlerteMessage(e.target.value)} />
+                  {alerteErr && <span style={{ fontSize: 11, color: "var(--danger)" }}>{alerteErr}</span>}
+                  <button onClick={signalerAlerte} style={{ ...inp, background: "var(--accent)", color: "white", border: "none", cursor: "pointer", fontWeight: 700 }}>Envoyer le signalement</button>
+                </div>
+              )}
+              {alertes.map((a) => (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--danger)" }}>{ALERTE_LABEL[a.type_alerte]}</span>
+                    <span style={{ fontSize: 12, color: "var(--text)", marginLeft: 8 }}>{a.materiel_nom}</span>
+                    {a.message && <div style={{ fontSize: 11, color: "var(--text-3)" }}>{a.message}</div>}
+                  </div>
+                  {canWrite && (
+                    <button onClick={() => traiterAlerte(a.id)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", color: "var(--text-2)" }}>
+                      Traiter
+                    </button>
+                  )}
+                </div>
+              ))}
+              {alertes.length === 0 && !reporting && <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>Aucune alerte ouverte.</div>}
+            </div>
+
+            <div style={card}>
+              <div style={sectionHead}>DERNIERS MOUVEMENTS</div>
+              {stock?.derniers_mouvements.map((m) => (
+                <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{m.materiel_nom}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 8 }}>{m.type_mouvement}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-3)" }}>{new Date(m.date_mouvement).toLocaleDateString("fr-FR")}</span>
+                </div>
+              ))}
+              {(!stock || stock.derniers_mouvements.length === 0) && <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>Aucun mouvement enregistré.</div>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr]" style={{ gap: 16 }}>
             <div style={card}>
               <div style={sectionHead}>TYPES DE MATÉRIEL ({types.length})</div>
               {types.map((t) => (

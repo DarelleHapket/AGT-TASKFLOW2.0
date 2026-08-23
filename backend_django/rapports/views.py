@@ -10,7 +10,6 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from authentification.models import User
-from projets.acces import is_admin_role
 from projets.models import Projet, Tache
 
 
@@ -30,7 +29,7 @@ def _date_range(period):
 
 
 def _has_full_access(user):
-    return is_admin_role(user) or user.is_superadmin()
+    return user.is_superadmin()
 
 
 def _task_dict(t):
@@ -95,7 +94,7 @@ def report_data(request):
     user = request.user
     if _has_full_access(user):
         allowed_ids = None
-    elif "chef_projet" in user.roles_codes():
+    elif user.peut("operations.manage"):
         allowed_ids = set(
             Tache.objects.filter(projet__membres__utilisateur=user, projet__membres__role="owner")
             .values_list("responsable_id", flat=True)
@@ -124,8 +123,8 @@ def report_data(request):
 @api_view(["GET"])
 def project_report(request):
     user = request.user
-    if not (_has_full_access(user) or "chef_projet" in user.roles_codes()):
-        return Response({"error": "Rapport par projet réservé aux chefs de projet et à l'admin"}, status=403)
+    if not (_has_full_access(user) or user.peut("operations.manage")):
+        return Response({"error": "Rapport par projet réservé aux personnes avec la permission operations.manage"}, status=403)
 
     projet_id = request.query_params.get("project_id")
     period = request.query_params.get("period", "week")

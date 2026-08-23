@@ -68,6 +68,15 @@ export interface MembreProjet {
   rejoint_le: string;
 }
 
+export type PermissionProjetCode = "taches.gerer" | "activites.gerer" | "equipe.gerer" | "projet.gerer";
+
+export interface PermissionProjetDetail {
+  code: PermissionProjetCode;
+  label: string;
+  granted: boolean;
+  source: "role" | "direct" | null;
+}
+
 export interface Activite {
   id: number;
   nom: string;
@@ -324,6 +333,8 @@ export interface Contrat {
 
 export interface Employe { id: number; profil: number; nom: string; date_embauche: string; contrats: Contrat[] }
 
+export interface EmployeListe { id: number; nom: string }
+
 export type StatutDemande = "en_attente" | "validee" | "refusee";
 
 export interface Conge {
@@ -334,6 +345,12 @@ export interface Conge {
 export interface NoteFrais {
   id: number; employe: number; employe_nom: string; montant: string; motif: string; date_depense: string;
   statut: StatutDemande; commentaire_validation: string; cree_le: string;
+}
+
+export type StatutFichePaie = "generee" | "consultee";
+
+export interface FichePaie {
+  id: number; periode: string; montant: string; statut: StatutFichePaie; date_generation: string;
 }
 
 export type StatutDisponibilite = "disponible" | "indisponible";
@@ -387,7 +404,7 @@ export interface Prevision {
   projet: number | null; projet_nom: string | null; employe: number | null; employe_nom: string | null;
 }
 
-export interface Bilan { entrees: string; sorties: string; solde: string }
+export interface Bilan { entrees: string; sorties: string; solde: string; derniers_mouvements: MouvementFinancier[] }
 
 export interface EcartPrevision { prevu: string; reel: string; ecart: string }
 
@@ -401,7 +418,7 @@ export interface Materiel {
   projet: number | null; projet_nom: string | null;
 }
 
-export type SensMouvementMateriel = "achat" | "affectation" | "retour" | "rebut";
+export type SensMouvementMateriel = "achat" | "affectation" | "retour" | "hors_service" | "consommation";
 
 export interface MouvementMateriel {
   id: number; materiel: number; materiel_nom: string; type_mouvement: SensMouvementMateriel;
@@ -410,8 +427,20 @@ export interface MouvementMateriel {
   employe: number | null; employe_nom: string | null; commentaire: string;
 }
 
+export type TypeAlerte = "rupture_stock" | "anomalie" | "rappel";
+export type StatutAlerte = "ouverte" | "traitee";
+
+export interface AlerteMateriel {
+  id: number; materiel: number; materiel_nom: string;
+  type_alerte: TypeAlerte; message: string; statut: StatutAlerte;
+  cree_le: string; cree_par_nom: string | null;
+  traitee_le: string | null; traitee_par_nom: string | null;
+}
+
 export interface Stock {
   total: number;
   par_type: { type: string; quantite: number }[];
   par_projet: { projet: string; quantite: number }[];
+  alertes_ouvertes: number;
+  derniers_mouvements: MouvementMateriel[];
 }

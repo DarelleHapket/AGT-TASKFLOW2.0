@@ -66,7 +66,7 @@ function RoleCatalog({ roles, permissions, onReload }: { roles: Role[]; permissi
   return (
     <div style={{ marginBottom: 24 }}>
       {error && <p style={{ marginBottom: 10, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 16, alignItems: "start" }}>
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", margin: "0 0 8px" }}>Rôles (catalogue)</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -126,15 +126,16 @@ function RoleCatalog({ roles, permissions, onReload }: { roles: Role[]; permissi
   );
 }
 
+// Catalogue réduit à 2 rôles par défaut (superadmin + user, 2026-08-19) —
+// tout autre code est un rôle personnalisé créé via cet écran, affiché avec
+// la couleur/le libellé de repli (fallback) au point d'appel.
 export const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   superadmin: { bg: "var(--accent-bg)", color: "var(--accent)" },
-  admin: { bg: "#f3e8ff", color: "#9333ea" },
-  chef_projet: { bg: "#fff7ed", color: "#f59e0b" },
-  membre: { bg: "var(--bg-hover)", color: "var(--text-2)" },
+  user: { bg: "var(--bg-hover)", color: "var(--text-2)" },
 };
 
 export const ROLE_LABELS: Record<string, string> = {
-  superadmin: "Superadmin", admin: "Admin", chef_projet: "Chef de projet", membre: "Membre",
+  superadmin: "Superadmin", user: "Utilisateur",
 };
 
 export const MODULE_LABELS: Record<string, string> = {
@@ -218,7 +219,8 @@ export function RBACView({ members, roles, permissions, onReload }: {
       <RoleCatalog roles={roles} permissions={permissions} onReload={onReload} />
 
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+       <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
           <thead>
             <tr style={{ background: "var(--bg-hover)" }}>
               <th style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, color: "var(--text-3)", fontWeight: 700 }}>MEMBRE</th>
@@ -228,20 +230,15 @@ export function RBACView({ members, roles, permissions, onReload }: {
             </tr>
           </thead>
           <tbody>
-            {/* Admin est un rôle unique (comme Superadmin, décision produit) :
-                une fois attribué, il n'est plus proposable ailleurs tant que
-                le Superadmin ne l'a pas retiré à son titulaire (appliqué
-                aussi côté serveur, cf. assign_member_role). */}
-            {(() => { const adminDejaAttribue = members.some((mb) => mb.roles.includes("admin")); return members.map((m) => {
+            {members.map((m) => {
               const memberRoles = m.roles;
               const isSuperadminMember = memberRoles.includes("superadmin");
-              // Superadmin a déjà un accès total : le rôle Admin (lecture
-              // seule) n'a pas de sens en plus et n'est donc pas proposable.
-              const availableToAdd = roles.filter((r) =>
-                !memberRoles.includes(r.code) && r.code !== "superadmin" &&
-                !(r.code === "admin" && isSuperadminMember) &&
-                !(r.code === "admin" && adminDejaAttribue),
-              );
+              // Catalogue réduit à 2 rôles par défaut (superadmin + user,
+              // 2026-08-19) — superadmin a déjà un accès total, jamais
+              // proposable en plus. Tout autre rôle listé ici est un rôle
+              // personnalisé créé par le Superadmin, sans contrainte
+              // d'unicité particulière.
+              const availableToAdd = roles.filter((r) => !memberRoles.includes(r.code) && r.code !== "superadmin");
               const memberDetail = detail[m.id];
               const permsByModule = (memberDetail || []).reduce<Record<string, PermissionDetail[]>>((acc, p) => {
                 (acc[p.module] = acc[p.module] || []).push(p);
@@ -323,9 +320,10 @@ export function RBACView({ members, roles, permissions, onReload }: {
                   )}
                 </Fragment>
               );
-            }); })()}
+            })}
           </tbody>
         </table>
+       </div>
       </div>
     </div>
   );

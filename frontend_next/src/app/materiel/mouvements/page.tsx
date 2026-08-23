@@ -6,7 +6,7 @@ import { AccessDenied } from "@/components/AccessDenied";
 // correction se fait par un nouveau mouvement inverse.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, ArrowDownCircle, ArrowUpCircle, RotateCcw, Trash2 } from "lucide-react";
+import { Plus, ArrowDownCircle, ArrowUpCircle, Minus, RotateCcw, Trash2 } from "lucide-react";
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
@@ -18,8 +18,11 @@ const SENS_ICON: Record<SensMouvementMateriel, { Icon: typeof ArrowUpCircle; col
   achat: { Icon: ArrowUpCircle, color: "#16a34a", label: "Achat" },
   affectation: { Icon: ArrowDownCircle, color: "#f59e0b", label: "Affectation" },
   retour: { Icon: RotateCcw, color: "#3b82f6", label: "Retour" },
-  rebut: { Icon: Trash2, color: "#ef4444", label: "Rebut" },
+  hors_service: { Icon: Trash2, color: "#ef4444", label: "Hors service" },
+  consommation: { Icon: Minus, color: "#a855f7", label: "Consommation" },
 };
+
+const SORTIES_DEFINITIVES: SensMouvementMateriel[] = ["hors_service", "consommation"];
 
 export default function MouvementsMaterielPage() {
   const { isLogged, hasPermission } = useAuth();
@@ -92,7 +95,7 @@ export default function MouvementsMaterielPage() {
           </button>
         )}
       </div>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal daté — achat, affectation, retour, rebut — immuable une fois enregistré</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal daté — achat, affectation, retour, hors service, consommation — immuable une fois enregistré</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
@@ -107,7 +110,8 @@ export default function MouvementsMaterielPage() {
               <option value="achat">Achat (entrée)</option>
               <option value="affectation">Affectation</option>
               <option value="retour">Retour</option>
-              <option value="rebut">Rebut (sortie définitive)</option>
+              <option value="hors_service">Hors service (sortie définitive)</option>
+              <option value="consommation">Consommation (sortie définitive)</option>
             </select>
             <input style={inp} type="number" min={1} placeholder="Quantité" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
             {sens === "affectation" && (
@@ -149,7 +153,7 @@ export default function MouvementsMaterielPage() {
                   {m.commentaire && <div style={{ fontSize: 11, color: "var(--text-3)" }}>{m.commentaire}</div>}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 800, color }}>
-                  {m.type_mouvement === "achat" ? "+" : m.type_mouvement === "rebut" ? "-" : ""}{m.quantite}
+                  {m.type_mouvement === "achat" ? "+" : SORTIES_DEFINITIVES.includes(m.type_mouvement) ? "-" : ""}{m.quantite}
                 </span>
                 <span style={{ fontSize: 10, color: "var(--text-3)", width: 90, textAlign: "right" }}>{new Date(m.date_mouvement).toLocaleDateString("fr-FR")}</span>
               </div>

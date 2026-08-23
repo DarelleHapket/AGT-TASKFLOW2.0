@@ -5,13 +5,14 @@
 // setUnauthorizedHandler est appelé explicitement au montage de AuthProvider
 // (src/lib/auth.tsx) — voir le commentaire là-bas.
 import type {
-  Activite, Besoin, Bilan, Candidat, Competence, Conge, Disponibilite, EcartPrevision, Employe, Equipe,
-  Formation, InscriptionFormation, LoginResponse, Materiel, MembreProjet, MouvementFinancier,
+  Activite, AlerteMateriel, Besoin, Bilan, Candidat, Competence, Conge, Disponibilite, EcartPrevision, Employe, EmployeListe, Equipe,
+  FichePaie, Formation, InscriptionFormation, LoginResponse, Materiel, MembreProjet, MouvementFinancier,
   MouvementMateriel, NiveauFinancier, Note, NoteFrais,
   Notification, OffreEmploi, OrdreJournalier, Periodicite, Permission, PermissionDetail, PerformanceEntry,
+  PermissionProjetCode, PermissionProjetDetail,
   PilotageBranch, PilotageTache, Poste, Prevision, Profil, Projet, RapportData, RapportProjet,
   Role, Sauvegarde, Signalement, StatutCandidature, StatutDemande, StatutDisponibilite, StatutInscriptionFormation,
-  Stock, Tache, TachesResponse, TypeContrat, TypeMateriel, TypeMouvementFinancier, SensMouvement,
+  Stock, Tache, TachesResponse, TypeAlerte, TypeContrat, TypeMateriel, TypeMouvementFinancier, SensMouvement,
   SensMouvementMateriel, Utilisateur,
 } from "./types";
 
@@ -114,6 +115,10 @@ export const addMembreProjet = (id: number, utilisateur: number, role: "manager"
 export const updateMembreProjet = (pid: number, mid: number, role: "manager" | "contributor") =>
   req<MembreProjet>("PUT", `/projets/${pid}/membres/${mid}`, { role });
 export const removeMembreProjet = (pid: number, mid: number) => req<void>("DELETE", `/projets/${pid}/membres/${mid}`);
+export const getMembreProjetPermissions = (pid: number, mid: number) =>
+  req<PermissionProjetDetail[]>("GET", `/projets/${pid}/membres/${mid}/permissions`);
+export const setMembreProjetPermission = (pid: number, mid: number, code: PermissionProjetCode, granted: boolean) =>
+  req<{ code: string; granted: boolean }>("PUT", `/projets/${pid}/membres/${mid}/permissions/${code}`, { granted });
 
 // ── Activités ────────────────────────────────────────────────────────────
 export const getActivites = (projetId?: number) =>
@@ -249,8 +254,11 @@ export const updateProfil = (id: number, data: { poste?: number | null; competen
   req<Profil>("PATCH", `/rh/profils/${id}`, data);
 export const creerEmploye = (data: { profil: number; type_contrat: number; date_embauche: string; montant: string; periodicite?: Periodicite }) =>
   req<Employe>("POST", "/rh/employes", data);
+export const getEmployes = () => req<EmployeListe[]>("GET", "/rh/employes");
 export const getMonSalaire = () => req<Employe>("GET", "/rh/employes/moi/salaire");
 export const getSalaireEmploye = (id: number) => req<Employe>("GET", `/rh/employes/${id}/salaire`);
+export const changerRemuneration = (id: number, data: { montant: string; periodicite?: Periodicite }) =>
+  req<Employe>("POST", `/rh/employes/${id}/remuneration`, data);
 export const getDisponibilites = () => req<Disponibilite[]>("GET", "/rh/disponibilites");
 export const createDisponibilite = (data: { employe: number; statut: StatutDisponibilite; periode_debut: string; periode_fin?: string }) =>
   req<Disponibilite>("POST", "/rh/disponibilites", data);
@@ -269,6 +277,7 @@ export const updateInscriptionFormationStatut = (id: number, statut: StatutInscr
 export const getSignalements = () => req<Signalement[]>("GET", "/rh/signalements");
 export const createSignalement = (description: string) => req<Signalement>("POST", "/rh/signalements", { description });
 export const traiterSignalement = (id: number) => req<Signalement>("PATCH", `/rh/signalements/${id}`, { statut: "traite" });
+export const supprimerSignalement = (id: number) => req<void>("DELETE", `/rh/signalements/${id}`);
 
 // Espace salarié — congés & notes de frais (hors CDC initial, ajouté le 2026-08-10).
 export const getConges = () => req<Conge[]>("GET", "/rh/conges");
@@ -284,6 +293,9 @@ export const createNoteFrais = (data: { montant: string; motif: string; date_dep
 export const traiterNoteFrais = (id: number, statut: StatutDemande, commentaire_validation?: string) =>
   req<NoteFrais>("PATCH", `/rh/notes-frais/${id}`, { statut, commentaire_validation });
 export const annulerNoteFrais = (id: number) => req<void>("DELETE", `/rh/notes-frais/${id}`);
+
+// BF-54 : historique des fiches de paie générées par le cron mensuel (BF-26).
+export const getMesFichesPaie = () => req<FichePaie[]>("GET", "/rh/fiches-paie/moi");
 
 // ── Module 4 — Finances ────────────────────────────────────────────────────
 export const getTypesMouvement = () => req<TypeMouvementFinancier[]>("GET", "/finances/types-mouvement");
@@ -314,6 +326,11 @@ export const getStock = () => req<Stock>("GET", "/materiel/stock");
 export const getMouvementsMateriel = () => req<MouvementMateriel[]>("GET", "/materiel/mouvements");
 export const createMouvementMateriel = (data: { materiel: number; type_mouvement: SensMouvementMateriel; quantite: number; projet?: number; employe?: number; commentaire?: string }) =>
   req<MouvementMateriel>("POST", "/materiel/mouvements", data);
+export const getAlertesMateriel = (statut?: string) =>
+  req<AlerteMateriel[]>("GET", statut ? `/materiel/alertes?statut=${statut}` : "/materiel/alertes");
+export const createAlerteMateriel = (data: { materiel: number; type_alerte: TypeAlerte; message?: string }) =>
+  req<AlerteMateriel>("POST", "/materiel/alertes", data);
+export const traiterAlerteMateriel = (id: number) => req<AlerteMateriel>("POST", `/materiel/alertes/${id}/traiter`);
 
 export function errorMessage(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback;

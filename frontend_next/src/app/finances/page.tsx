@@ -10,7 +10,7 @@ import { Plus, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
-import type { MouvementFinancier, NiveauFinancier, Projet, TypeMouvementFinancier } from "@/lib/types";
+import type { EmployeListe, MouvementFinancier, NiveauFinancier, Projet, TypeMouvementFinancier } from "@/lib/types";
 
 const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, background: "var(--bg-card)", color: "var(--text)" };
 
@@ -20,6 +20,7 @@ export default function FinancesPage() {
   const [mouvements, setMouvements] = useState<MouvementFinancier[]>([]);
   const [types, setTypes] = useState<TypeMouvementFinancier[]>([]);
   const [projets, setProjets] = useState<Projet[]>([]);
+  const [employes, setEmployes] = useState<EmployeListe[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -27,6 +28,7 @@ export default function FinancesPage() {
   const [montant, setMontant] = useState("");
   const [niveau, setNiveau] = useState<NiveauFinancier>("entreprise");
   const [projet, setProjet] = useState("");
+  const [employe, setEmploye] = useState("");
   const [newTypeNom, setNewTypeNom] = useState("");
   const [newTypeSens, setNewTypeSens] = useState<"entree" | "sortie">("sortie");
   const [addingType, setAddingType] = useState(false);
@@ -36,8 +38,8 @@ export default function FinancesPage() {
 
   function load() {
     setLoading(true);
-    Promise.all([api.getMouvements(), api.getTypesMouvement(), api.getProjets()])
-      .then(([m, t, p]) => { setMouvements(m); setTypes(t); setProjets(p); })
+    Promise.all([api.getMouvements(), api.getTypesMouvement(), api.getProjets(), api.getEmployes()])
+      .then(([m, t, p, e]) => { setMouvements(m); setTypes(t); setProjets(p); setEmployes(e); })
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger les finances")))
       .finally(() => setLoading(false));
   }
@@ -50,8 +52,9 @@ export default function FinancesPage() {
       await api.createMouvement({
         type_mouvement: Number(type), montant, niveau,
         projet: niveau === "projet" ? Number(projet) : undefined,
+        employe: niveau === "employe" ? Number(employe) : undefined,
       });
-      setAdding(false); setType(""); setMontant(""); setNiveau("entreprise"); setProjet("");
+      setAdding(false); setType(""); setMontant(""); setNiveau("entreprise"); setProjet(""); setEmploye("");
       load();
     } catch (e) {
       setFormErr(api.errorMessage(e, "Création impossible"));
@@ -66,7 +69,7 @@ export default function FinancesPage() {
           <Plus size={14} /> Mouvement
         </button>
       </div>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal des mouvements — réservé Admin/Superadmin, immuable une fois enregistré</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal des mouvements — réservé à la gestion financière, immuable une fois enregistré</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
@@ -81,11 +84,18 @@ export default function FinancesPage() {
             <select style={inp} value={niveau} onChange={(e) => setNiveau(e.target.value as NiveauFinancier)}>
               <option value="entreprise">Entreprise</option>
               <option value="projet">Projet</option>
+              <option value="employe">Employé</option>
             </select>
             {niveau === "projet" && (
               <select style={inp} value={projet} onChange={(e) => setProjet(e.target.value)}>
                 <option value="">Choisir un projet</option>
                 {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+              </select>
+            )}
+            {niveau === "employe" && (
+              <select style={inp} value={employe} onChange={(e) => setEmploye(e.target.value)}>
+                <option value="">Choisir un employé</option>
+                {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
               </select>
             )}
           </div>

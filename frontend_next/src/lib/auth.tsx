@@ -19,8 +19,6 @@ interface AuthState {
   user: Utilisateur | null;
   isLogged: boolean;
   isSuperadmin: boolean;
-  isAdmin: boolean;
-  isChef: boolean;
   hasPermission: (code: string) => boolean;
   login: (token: string, user: Utilisateur) => void;
   logout: () => void;
@@ -102,8 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     isLogged: initializing ? true : !!user,
     isSuperadmin,
-    isAdmin: roles.includes("admin"),
-    isChef: roles.includes("chef_projet"),
     hasPermission: (code) => isSuperadmin || permissions.includes(code),
     login,
     logout,

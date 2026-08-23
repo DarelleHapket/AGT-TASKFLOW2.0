@@ -35,6 +35,30 @@ class MembreProjet(models.Model):
         unique_together = ("projet", "utilisateur")
 
 
+class PermissionProjetCode(models.TextChoices):
+    TACHES_GERER = "taches.gerer", "Gérer les tâches"
+    ACTIVITES_GERER = "activites.gerer", "Gérer les activités"
+    EQUIPE_GERER = "equipe.gerer", "Gérer l'équipe"
+    PROJET_GERER = "projet.gerer", "Modifier/supprimer le projet"
+
+
+class PermissionMembreProjet(models.Model):
+    """Permission directe accordée/retirée à un membre sur CE projet précis
+    (IBAC scopé projet), indépendamment de son rôle (owner/manager/
+    contributor) — même pattern que authentification.PermissionEffective au
+    niveau global : le rôle porte un paquet de permissions par défaut (non
+    stocké, cf. acces.py::ROLE_PERMISSIONS_PAR_DEFAUT), une ligne ici
+    accorde/retire une permission précise en plus ou en moins de ce paquet,
+    et prime toujours sur ce que le rôle donnerait par défaut."""
+    membre_projet = models.ForeignKey(MembreProjet, on_delete=models.CASCADE, related_name="permissions_directes")
+    code = models.CharField(max_length=30, choices=PermissionProjetCode.choices)
+    accordee = models.BooleanField(default=True)
+    mis_a_jour_le = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("membre_projet", "code")
+
+
 class Activite(models.Model):
     nom = models.CharField(max_length=200)
     description = models.TextField(blank=True)

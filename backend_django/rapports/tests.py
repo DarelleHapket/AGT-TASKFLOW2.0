@@ -6,7 +6,7 @@ from authentification.services import assign_role
 from projets.models import MembreProjet, Projet, Tache
 
 
-def make_user(username, role="membre"):
+def make_user(username, role="user"):
     u = User.objects.create(username=username, statut=StatutCompte.ACTIF, is_active=True)
     assign_role(u, role)
     return u
@@ -18,7 +18,7 @@ class RapportSuperadminTests(TestCase):
 
     def setUp(self):
         self.superadmin = make_user("gabriel", "superadmin")
-        self.autre = make_user("darelle", "membre")
+        self.autre = make_user("darelle", "user")
         self.projet = Projet.objects.create(nom="P")
         MembreProjet.objects.create(projet=self.projet, utilisateur=self.autre, role="owner")
         Tache.objects.create(id="T1", description="d", projet=self.projet, responsable=self.autre)

@@ -20,15 +20,13 @@ interface Props {
   filters: TaskFilters; setFilters: (u: (f: TaskFilters) => TaskFilters) => void;
   onAdd: () => void; onEdit: (t: Tache) => void; onDelete: (id: string) => void;
   onStatusChange: (id: string, statut: StatutTache) => void;
-  isAdmin: boolean;
 }
 
-export function TasksView({ tasks, projects, activities, members, filters, setFilters, onAdd, onEdit, onDelete, onStatusChange, isAdmin }: Props) {
+export function TasksView({ tasks, projects, activities, members, filters, setFilters, onAdd, onEdit, onDelete, onStatusChange }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<"liste" | "tableau">("liste");
 
   const tog = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
-  const canCreate = !isAdmin;
 
   const projetNom = (id: number | null) => projects.find((p) => p.id === id)?.nom || "Sans projet";
   const activiteNom = (id: number | null) => activities.find((a) => a.id === id)?.nom || "Sans activité";
@@ -63,11 +61,9 @@ export function TasksView({ tasks, projects, activities, members, filters, setFi
             </button>
           </div>
 
-          {canCreate && (
-            <button onClick={onAdd} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-              <Plus size={15} /> Nouvelle tâche
-            </button>
-          )}
+          <button onClick={onAdd} style={{ background: "var(--accent)", color: "white", border: "none", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+            <Plus size={15} /> Nouvelle tâche
+          </button>
         </div>
       </div>
 
@@ -130,9 +126,9 @@ export function TasksView({ tasks, projects, activities, members, filters, setFi
                         <StatusBadge statut={t.statut} />
                       )}
 
-                      <button onClick={() => onEdit(t)} title={isAdmin ? "Voir les détails" : canFullEdit ? "Modifier la tâche" : "Voir la tâche"}
+                      <button onClick={() => onEdit(t)} title={canFullEdit ? "Modifier la tâche" : "Voir la tâche"}
                         style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "var(--text-2)", display: "flex", alignItems: "center" }}>
-                        {isAdmin || !canFullEdit ? <Eye size={13} /> : <Pencil size={13} />}
+                        {canFullEdit ? <Pencil size={13} /> : <Eye size={13} />}
                       </button>
 
                       {canFullEdit && (

@@ -29,6 +29,12 @@ function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { me
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
+  const [editingSalaire, setEditingSalaire] = useState(false);
+  const [nouveauMontant, setNouveauMontant] = useState("");
+  const [nouvellePeriodicite, setNouvellePeriodicite] = useState<"mensuelle" | "hebdomadaire" | "journaliere">("mensuelle");
+  const [savingSalaire, setSavingSalaire] = useState(false);
+  const [salaireErr, setSalaireErr] = useState<string | null>(null);
+
   function load() {
     setLoading(true); setError(null);
     Promise.all([api.getProfilParUtilisateur(membre.id), api.getCompetences()])
@@ -62,6 +68,20 @@ function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { me
 
   function toggleCompetence(id: number) {
     setEditCompetences((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  }
+
+  async function enregistrerSalaire() {
+    if (!employe || !nouveauMontant) return;
+    setSavingSalaire(true); setSalaireErr(null);
+    try {
+      const updated = await api.changerRemuneration(employe.id, { montant: nouveauMontant, periodicite: nouvellePeriodicite });
+      setEmploye(updated);
+      setEditingSalaire(false); setNouveauMontant("");
+    } catch (e) {
+      setSalaireErr(api.errorMessage(e, "Enregistrement impossible"));
+    } finally {
+      setSavingSalaire(false);
+    }
   }
 
   const nomCompetence = (id: number) => competences.find((c) => c.id === id)?.nom || `#${id}`;
@@ -139,15 +159,38 @@ function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { me
                 </button>
               )}
               {profil.est_employe && canSeeSalaire && (
-                <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <Wallet size={14} color="var(--text-3)" />
-                  {contratActuel && remunerationActuelle ? (
-                    <span style={{ fontSize: 13, color: "var(--text)" }}>
-                      <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
-                      <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
-                    </span>
+                <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Wallet size={14} color="var(--text-3)" />
+                    {contratActuel && remunerationActuelle ? (
+                      <span style={{ fontSize: 13, color: "var(--text)" }}>
+                        <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
+                        <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
+                    )}
+                  </div>
+                  {!editingSalaire ? (
+                    <button onClick={() => setEditingSalaire(true)} style={{ ...actionBtn("ghost"), marginTop: 10 }}>
+                      <Pencil size={12} /> Changer la rémunération
+                    </button>
                   ) : (
-                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
+                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <input type="number" placeholder="Nouveau montant" value={nouveauMontant} onChange={(e) => setNouveauMontant(e.target.value)} style={selectStyle} />
+                      <select value={nouvellePeriodicite} onChange={(e) => setNouvellePeriodicite(e.target.value as typeof nouvellePeriodicite)} style={selectStyle}>
+                        <option value="mensuelle">Mensuelle</option>
+                        <option value="hebdomadaire">Hebdomadaire</option>
+                        <option value="journaliere">Journalière</option>
+                      </select>
+                      {salaireErr && <span style={{ fontSize: 11, color: "var(--danger)" }}>{salaireErr}</span>}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={enregistrerSalaire} disabled={savingSalaire || !nouveauMontant} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "7px 16px", cursor: savingSalaire ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 12 }}>
+                          {savingSalaire ? "Enregistrement…" : "Enregistrer"}
+                        </button>
+                        <button onClick={() => { setEditingSalaire(false); setSalaireErr(null); }} disabled={savingSalaire} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 16px", cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>Annuler</button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -193,7 +236,7 @@ function StatusDot({ active }: { active: boolean }) {
   return <div title={active ? "Actif" : "Suspendu"} style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0, background: active ? "#22c55e" : "#f59e0b", border: "2px solid var(--border)" }} />;
 }
 
-export function TeamView({ members, roles = [], permissions = [], onDelete, onToggleRole, onTogglePermission, onToggleActive, onValidate, isAdmin, isSuperadmin, currentUser, canSeeSalaire = false, canEditFiche = false }: {
+export function TeamView({ members, roles = [], permissions = [], onDelete, onToggleRole, onTogglePermission, onToggleActive, onValidate, canValidate, canSuspend, canManageMembers, isSuperadmin, currentUser, canSeeSalaire = false, canEditFiche = false }: {
   members: Utilisateur[];
   roles?: Role[]; permissions?: Permission[];
   onDelete: (id: number) => Promise<void>;
@@ -201,7 +244,8 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
   onTogglePermission: (id: number, permCode: string, currentlyGranted: boolean) => Promise<void>;
   onToggleActive: (m: Utilisateur) => Promise<Utilisateur>;
   onValidate: (id: number, action: "approve" | "reject") => Promise<void>;
-  isAdmin: boolean; isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canEditFiche?: boolean;
+  canValidate: boolean; canSuspend: boolean; canManageMembers: boolean;
+  isSuperadmin: boolean; currentUser: Utilisateur | null; canSeeSalaire?: boolean; canEditFiche?: boolean;
 }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -212,9 +256,9 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
   const [fiche, setFiche] = useState<Utilisateur | null>(null);
 
   useEffect(() => {
-    if (!(isAdmin || isSuperadmin)) return;
+    if (!(canManageMembers || isSuperadmin)) return;
     api.getDeletedMembres().then(setDeleted).catch(() => {});
-  }, [isAdmin, isSuperadmin]);
+  }, [canManageMembers, isSuperadmin]);
 
   const pending = members.filter((m) => m.statut === "EN_ATTENTE");
   const suspended = members.filter((m) => m.statut === "SUSPENDU");
@@ -257,7 +301,7 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
     });
   };
 
-  const canActOn = (m: Utilisateur) => isSuperadmin && !m.roles.includes("admin") && !m.roles.includes("superadmin") && m.id !== currentUser?.id;
+  const canActOn = (m: Utilisateur) => isSuperadmin && !m.roles.includes("superadmin") && m.id !== currentUser?.id;
 
   return (
     <div style={{ maxWidth: 580 }}>
@@ -269,7 +313,7 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
         </div>
       )}
 
-      {(isAdmin || isSuperadmin) && pending.length > 0 && (
+      {(canValidate || isSuperadmin) && pending.length > 0 && (
         <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid #fed7aa", overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 20 }}>
           <div style={sectionHeader("#fff7ed", "#fed7aa", "#ea580c")}><Clock size={12} /> DEMANDES EN ATTENTE ({pending.length})</div>
           {pending.map((p) => (
@@ -288,7 +332,7 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
         </div>
       )}
 
-      {(isAdmin || isSuperadmin) && suspended.length > 0 && (
+      {(canSuspend || isSuperadmin) && suspended.length > 0 && (
         <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid #fde68a", overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 20 }}>
           <div style={sectionHeader("#fffbeb", "#fde68a", "#d97706")}>COMPTES SUSPENDUS ({suspended.length})</div>
           {suspended.map((m) => (
@@ -300,14 +344,16 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
               </div>
               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <button onClick={() => handleToggleActive(m)} disabled={busyId === m.id} style={actionBtn("success")}><Check size={13} /> Réactiver</button>
-                <button onClick={() => handleDelete(m)} disabled={busyId === m.id} style={actionBtn("danger")}><X size={13} /></button>
+                {(canManageMembers || isSuperadmin) && (
+                  <button onClick={() => handleDelete(m)} disabled={busyId === m.id} style={actionBtn("danger")}><X size={13} /></button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {(isAdmin || isSuperadmin) && deleted.length > 0 && (
+      {(canManageMembers || isSuperadmin) && deleted.length > 0 && (
         <div style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 20 }}>
           <div style={sectionHeader("var(--bg)", "var(--border)", "var(--text-3)")}>COMPTES SUPPRIMÉS ({deleted.length})</div>
           {(showAllDeleted ? deleted : deleted.slice(0, 3)).map((m) => (
@@ -347,13 +393,12 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
 
         {/* Cartes style team-tool (D-08) : rôles + permissions directement
             cochables/décochables sur la fiche du membre par le Superadmin,
-            sans passer par un écran séparé — Admin est un rôle unique
-            (comme Superadmin) : tant que quelqu'un le porte déjà, il
-            apparaît désactivé pour les autres (appliqué aussi côté serveur,
-            cf. assign_member_role). */}
+            sans passer par un écran séparé. Catalogue réduit à 2 rôles
+            (superadmin + user, 2026-08-19) — tout rôle supplémentaire visible
+            ici est un rôle personnalisé créé via /rbac, sans contrainte
+            d'unicité particulière. */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
           {active.map((m) => {
-            const adminDejaPris = active.some((a) => a.roles.includes("admin") && a.id !== m.id);
             const busy = busyId === m.id;
             const canAct = canActOn(m);
             const isSuperadminMember = m.roles.includes("superadmin");
@@ -378,14 +423,12 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
                       {roles.filter((r) => r.code !== "superadmin").map((r) => {
                         const hasRole = m.roles.includes(r.code);
-                        const lockedAdmin = r.code === "admin" && !hasRole && adminDejaPris;
-                        const disabled = !isSuperadmin || busy || lockedAdmin;
+                        const disabled = !isSuperadmin || busy;
                         return (
                           <button key={r.code} disabled={disabled} onClick={() => handleToggleRole(m, r.code)}
-                            title={lockedAdmin ? "Un Admin existe déjà — rôle unique" : undefined}
                             style={{
                               fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, cursor: disabled ? "not-allowed" : "pointer",
-                              border: "none", opacity: lockedAdmin ? 0.4 : 1,
+                              border: "none",
                               background: hasRole ? (ROLE_COLORS[r.code]?.bg || "var(--bg-hover)") : "var(--bg)",
                               color: hasRole ? (ROLE_COLORS[r.code]?.color || "var(--text-2)") : "var(--text-3)",
                             }}>

@@ -139,7 +139,8 @@ export function PerformanceView({ members }: { members: Utilisateur[] }) {
           </div>
 
           <div style={{ background: "var(--bg-card)", borderRadius: 14, border: "1px solid var(--border)", overflow: "hidden", boxShadow: "var(--shadow)" }}>
-            <div style={{ padding: "12px 16px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "2fr 3fr 1fr 1fr", gap: 8 }}>
+           <div style={{ overflowX: "auto" }}>
+            <div style={{ padding: "12px 16px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "2fr 3fr 1fr 1fr", gap: 8, minWidth: 480 }}>
               {["MEMBRE", "PAR PROJET", "TÂCHES", "COUPONS"].map((h) => (
                 <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em" }}>{h}</span>
               ))}
@@ -147,7 +148,7 @@ export function PerformanceView({ members }: { members: Utilisateur[] }) {
             {data.map((d, i) => {
               const color = memberColor(d.member);
               return (
-                <div key={d.member} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "2fr 3fr 1fr 1fr", gap: 8, alignItems: "start", background: i % 2 === 0 ? "var(--bg-card)" : "var(--bg)" }}>
+                <div key={d.member} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "2fr 3fr 1fr 1fr", gap: 8, alignItems: "start", minWidth: 480, background: i % 2 === 0 ? "var(--bg-card)" : "var(--bg)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ width: 28, height: 28, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
                       {d.member[0]?.toUpperCase()}
@@ -170,6 +171,7 @@ export function PerformanceView({ members }: { members: Utilisateur[] }) {
                 </div>
               );
             })}
+           </div>
           </div>
         </>
       )}

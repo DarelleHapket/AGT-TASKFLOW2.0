@@ -90,7 +90,7 @@ function AdminModal({ task, projectName, activityName, responsibleName, onClose 
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--border)" }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4" style={{ borderBottom: "1px solid var(--border)" }}>
         {[
           { label: "STATUT", node: <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusBg, padding: "3px 8px", borderRadius: 6 }}>{statusLabel}</span> },
           { label: "PRIORITÉ", node: <span style={{ fontSize: 11, fontWeight: 700, color: priorityColor, background: priorityBg, padding: "3px 8px", borderRadius: 6 }}>{priorityLabel}</span> },
@@ -107,7 +107,7 @@ function AdminModal({ task, projectName, activityName, responsibleName, onClose 
       <div style={{ padding: "16px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em", marginBottom: 8 }}>CONTEXTE</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
             <Info label="PROJET" value={projectName || "Aucun"} />
             <Info label="ACTIVITÉ" value={activityName || "Aucune"} />
             <div style={{ gridColumn: "1/-1", background: "var(--bg)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
@@ -122,7 +122,7 @@ function AdminModal({ task, projectName, activityName, responsibleName, onClose 
 
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em", marginBottom: 8 }}>CALENDRIER</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 8 }}>
             <Info label="DÉBUT" value={fmt(task.date_debut)} />
             <Info label="FIN PRÉVUE" value={fmt(task.date_fin)} />
             <Info label="DEADLINE" value={fmt(task.date_echeance)} color={deadlineColor} />
@@ -183,20 +183,21 @@ interface Props {
   onSave: (data: Partial<Tache> & { id: string }) => Promise<void>;
   onStatusChange: (id: string, statut: StatutTache) => void;
   onClose: () => void;
-  isAdmin: boolean;
 }
 
 export function TaskModal(props: Props) {
   // Composant "aiguilleur" sans hooks propres : la vue superviseur (lecture
-  // seule) et le formulaire éditable sont deux composants distincts, chacun
-  // appelant ses hooks de façon inconditionnelle (règle des Hooks React).
-  // L'original mélangeait les deux dans une seule fonction avec un retour
-  // anticipé avant les useState/useEffect — ça passait en Vite/CRA sans lint
-  // strict, mais Next.js le bloque à raison : rien ne garantit qu'un retour
-  // anticipé avant des hooks reste sûr si les props changent en cours de vie
-  // du composant.
-  const { isAdmin, initial, projects, activities, members, onClose } = props;
-  if (isAdmin && initial) {
+  // seule, plus riche — chemin critique PERT etc.) et le formulaire éditable
+  // sont deux composants distincts, chacun appelant ses hooks de façon
+  // inconditionnelle (règle des Hooks React). L'original mélangeait les deux
+  // dans une seule fonction avec un retour anticipé avant les useState/
+  // useEffect — ça passait en Vite/CRA sans lint strict, mais Next.js le
+  // bloque à raison. Le choix entre les deux vues suit désormais la
+  // permission calculée côté serveur pour CETTE tâche (`permission`), pas un
+  // rôle global — tout viewer en lecture seule (pas seulement un ex-"admin")
+  // profite de la vue superviseur, plus informative qu'un formulaire désactivé.
+  const { initial, projects, activities, members, onClose } = props;
+  if (initial?.permission === "read_only") {
     const projectName = projects.find((p) => p.id === initial.projet)?.nom || "";
     const activityName = activities.find((a) => a.id === initial.activite)?.nom || "";
     const responsibleName = members.find((m) => m.id === initial.responsable)?.name || "";
@@ -334,7 +335,7 @@ function EditableTaskModal({ mode, initial, tasks, members, projects, activities
       )}
 
       <div style={{ padding: "20px 28px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
           <div>
             <label style={lbl}>ID DE LA TÂCHE</label>
             <input style={fieldStyle} disabled={!isFull} value={f.id} onChange={(e) => set("id", e.target.value)} placeholder="T001" />

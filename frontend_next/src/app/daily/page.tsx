@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import type { Tache, Utilisateur } from "@/lib/types";
 
 export default function DailyPage() {
-  const { user, isLogged, isAdmin, isChef } = useAuth();
+  const { user, isLogged, isSuperadmin, hasPermission } = useAuth();
   const router = useRouter();
   const [taches, setTaches] = useState<Tache[]>([]);
   const [membres, setMembres] = useState<Utilisateur[]>([]);
@@ -32,7 +32,7 @@ export default function DailyPage() {
   return (
     <AppShell>
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
-      <DailyOrderView tasks={taches} members={membres} user={user} isAdmin={isAdmin} isChef={isChef} />
+      <DailyOrderView tasks={taches} members={membres} user={user} canViewOthers={isSuperadmin || hasPermission("operations.manage")} />
     </AppShell>
   );
 }

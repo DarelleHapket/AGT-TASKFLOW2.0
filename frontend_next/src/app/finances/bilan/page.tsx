@@ -121,7 +121,7 @@ export default function BilanPage() {
       </div>
 
       {loading ? <p style={{ fontSize: 13, color: "var(--text-3)" }}>Calcul…</p> : bilan && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, maxWidth: 560 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 14, maxWidth: 560 }}>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, boxShadow: "var(--shadow)" }}>
             <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, marginBottom: 6 }}>ENTRÉES</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: "#16a34a" }}>{bilan.entrees}</div>

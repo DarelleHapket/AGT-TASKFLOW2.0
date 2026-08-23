@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import type { Projet, Utilisateur } from "@/lib/types";
 
 export default function RapportsPage() {
-  const { user, isLogged, isAdmin, isChef, isSuperadmin } = useAuth();
+  const { user, isLogged, isSuperadmin, hasPermission } = useAuth();
   const router = useRouter();
   const [membres, setMembres] = useState<Utilisateur[]>([]);
   const [projets, setProjets] = useState<Projet[]>([]);
@@ -32,7 +32,7 @@ export default function RapportsPage() {
   return (
     <AppShell>
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
-      <ReportsView members={membres} projects={projets} user={user} isAdmin={isAdmin} isChef={isChef} isSuperadmin={isSuperadmin} />
+      <ReportsView members={membres} projects={projets} user={user} canManageOperations={hasPermission("operations.manage")} isSuperadmin={isSuperadmin} />
     </AppShell>
   );
 }

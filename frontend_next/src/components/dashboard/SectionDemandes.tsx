@@ -30,7 +30,8 @@ export function SectionDemandes({ demandes, onValidate, onGoToTeam, canValidate 
       {demandes.length === 0 ? (
         <div style={{ padding: "16px 0", textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>Aucune demande en attente.</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 420 }}>
           <thead>
             <tr>
               <th style={thStyle}>Nom</th>
@@ -58,6 +59,7 @@ export function SectionDemandes({ demandes, onValidate, onGoToTeam, canValidate 
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

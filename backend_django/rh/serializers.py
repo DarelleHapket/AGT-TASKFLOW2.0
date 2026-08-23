@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
-    Candidat, Competence, Conge, Contrat, Disponibilite, Employe, Equipe, Formation,
+    Candidat, Competence, Conge, Contrat, Disponibilite, Employe, Equipe, FichePaie, Formation,
     InscriptionFormation, NoteFrais, OffreEmploi, Poste, Profil, Remuneration,
     Responsabilite, Signalement, TypeContrat,
 )
@@ -88,6 +88,19 @@ class EmployeSerializer(serializers.ModelSerializer):
         return obj.profil.utilisateur.display_name()
 
 
+class EmployeListeSerializer(serializers.ModelSerializer):
+    """Annuaire léger (BF-02 côté Finances) — jamais de champ salarial ici,
+    contrairement à EmployeSerializer (BNF-02/BNF-04)."""
+    nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Employe
+        fields = ["id", "nom"]
+
+    def get_nom(self, obj):
+        return obj.profil.utilisateur.display_name()
+
+
 class DisponibiliteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Disponibilite
@@ -160,3 +173,10 @@ class NoteFraisSerializer(serializers.ModelSerializer):
 
     def get_employe_nom(self, obj):
         return obj.employe.profil.utilisateur.display_name()
+
+
+class FichePaieSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FichePaie
+        fields = ["id", "periode", "montant", "statut", "date_generation"]
+        read_only_fields = fields

@@ -11,12 +11,9 @@ import { SectionDemandes } from "@/components/dashboard/SectionDemandes";
 import { SectionMembresRoles } from "@/components/dashboard/SectionMembresRoles";
 import { SectionDatabase } from "@/components/dashboard/SectionDatabase";
 import { SectionMesProjets } from "@/components/dashboard/SectionMesProjets";
+import { ROLE_LABELS } from "@/components/rbac/RBACView";
 import { useAuth } from "@/lib/auth";
-import type { Projet, Tache, Utilisateur } from "@/lib/types";
-
-const ROLE_LABELS: Record<string, string> = {
-  superadmin: "Superadmin", admin: "Admin", chef_projet: "Chef de projet", membre: "Membre",
-};
+import type { MouvementFinancier, Projet, Tache, Utilisateur } from "@/lib/types";
 
 export default function DashboardPage() {
   const { user, isLogged, isSuperadmin, hasPermission } = useAuth();
@@ -27,7 +24,9 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [rhStats, setRhStats] = useState({ postes: 0, equipes: 0 });
   const [soldeMois, setSoldeMois] = useState<string | null>(null);
+  const [mouvementsRecents, setMouvementsRecents] = useState<MouvementFinancier[]>([]);
   const [stockTotal, setStockTotal] = useState<number | null>(null);
+  const [alertesOuvertes, setAlertesOuvertes] = useState(0);
 
   useEffect(() => {
     if (!isLogged) router.replace("/login");
@@ -48,7 +47,7 @@ export default function DashboardPage() {
   }, [canRh]);
 
   useEffect(() => {
-    if (canMateriel) api.getStock().then((s) => setStockTotal(s.total)).catch(() => {});
+    if (canMateriel) api.getStock().then((s) => { setStockTotal(s.total); setAlertesOuvertes(s.alertes_ouvertes); }).catch(() => {});
   }, [canMateriel]);
 
   useEffect(() => {
@@ -56,15 +55,21 @@ export default function DashboardPage() {
     const now = new Date();
     const date_from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
     const date_to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-    api.getBilan({ date_from, date_to }).then((b) => setSoldeMois(b.solde)).catch(() => {});
+    api.getBilan({ date_from, date_to }).then((b) => { setSoldeMois(b.solde); setMouvementsRecents(b.derniers_mouvements); }).catch(() => {});
   }, [canFinances]);
 
   if (!user) return null;
 
-  const role = user.roles[0] || "membre";
+  const role = user.roles[0] || "user";
   const canSeeGlobalWidgets = hasPermission("membres.write") || isSuperadmin;
   const canManageMembers = hasPermission("membres.write") || isSuperadmin;
   const canManageRoles = isSuperadmin;
+  // Capacité "chef de projet" = permission projets.write (catalogue réduit à
+  // 2 rôles, 2026-08-19) — plus un nom de rôle "chef_projet", qui n'existe
+  // plus. Bug trouvé le 2026-08-23 : ce fichier comparait encore role ===
+  // "chef_projet" directement, jamais vrai depuis la migration -> widget et
+  // section "Mes projets" invisibles pour tout le monde.
+  const isChefProjet = hasPermission("projets.write");
   const canExportDb = hasPermission("database.export");
   const canImportDb = hasPermission("database.import");
 
@@ -106,7 +111,7 @@ export default function DashboardPage() {
 
       {canSeeGlobalWidgets ? (
         <WidgetsGlobaux membersActifs={activeMembers.length} demandesEnAttente={enAttente.length} projetsCount={projets.length} rolesActifs={rolesActifsCount} />
-      ) : role === "chef_projet" ? (
+      ) : isChefProjet ? (
         <WidgetsChef mesProjets={myProjects.length} monEquipe={membres.length} tachesEnCours={taches.filter((t) => t.statut === "in_progress").length} difficultesSignalees={0} />
       ) : (
         <WidgetsMembre
@@ -119,10 +124,31 @@ export default function DashboardPage() {
       )}
 
       {canSeeGlobalWidgets && (
-        <WidgetsRessources canRh={canRh} canFinances={canFinances} canMateriel={canMateriel} postes={rhStats.postes} equipes={rhStats.equipes} soldeMois={soldeMois} stockTotal={stockTotal} />
+        <WidgetsRessources canRh={canRh} canFinances={canFinances} canMateriel={canMateriel} postes={rhStats.postes} equipes={rhStats.equipes} soldeMois={soldeMois} stockTotal={stockTotal} alertesOuvertes={alertesOuvertes} />
       )}
 
-      {!canSeeGlobalWidgets && role === "chef_projet" && (
+      {canSeeGlobalWidgets && canFinances && mouvementsRecents.length > 0 && (
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden", marginBottom: 16 }}>
+          <div style={{ padding: "10px 14px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em" }}>
+            FINANCES — MOUVEMENTS RÉCENTS
+          </div>
+          {mouvementsRecents.map((m) => (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{m.type_nom}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 8 }}>
+                  {m.niveau === "projet" ? m.projet_nom : m.niveau === "employe" ? m.employe_nom : "Entreprise"}
+                </span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 800, color: m.sens === "entree" ? "#16a34a" : "#ef4444" }}>
+                {m.sens === "entree" ? "+" : "-"}{m.montant}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!canSeeGlobalWidgets && isChefProjet && (
         <SectionMesProjets projects={myProjects} allMembers={membres} onGetMembers={getMembresProjet} onAddMember={addMembreProjet} onUpdateMember={updateMembreProjet} onRemoveMember={removeMembreProjet} />
       )}
 

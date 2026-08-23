@@ -29,7 +29,7 @@ export default function TachesPage() {
 }
 
 function TachesPageInner() {
-  const { isLogged, isAdmin } = useAuth();
+  const { isLogged } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Tache[]>([]);
@@ -58,9 +58,9 @@ function TachesPageInner() {
     Promise.all([api.getTaches(), api.getProjets(), api.getActivites(), api.getMembres()])
       .then(([t, p, a, m]) => {
         setTasks(t.tasks); setProjects(p); setActivities(a);
-        // Admin (lecture seule) et Superadmin ne travaillent pas sur les
-        // projets : ils ne doivent pas apparaître comme responsable possible.
-        setMembers(m.filter((x) => x.statut === "ACTIF" && !x.roles.includes("admin") && !x.roles.includes("superadmin")));
+        // Superadmin ne travaille pas sur les projets : ne doit pas
+        // apparaître comme responsable possible.
+        setMembers(m.filter((x) => x.statut === "ACTIF" && !x.roles.includes("superadmin")));
       })
       .catch((e) => setError(api.errorMessage(e, "Impossible de charger les tâches")))
       .finally(() => setLoading(false));
@@ -118,7 +118,7 @@ function TachesPageInner() {
           onAdd={() => setModal({ mode: "add" })}
           onEdit={(t) => setModal({ mode: "edit", task: t })}
           onDelete={onDelete}
-          onStatusChange={onStatusChange} isAdmin={isAdmin}
+          onStatusChange={onStatusChange}
         />
       )}
 
@@ -126,7 +126,7 @@ function TachesPageInner() {
         <TaskModal
           mode={modal.mode} initial={modal.task ?? null} tasks={tasks} members={members}
           projects={projects} activities={activities} onSave={save} onStatusChange={onStatusChange}
-          onClose={() => setModal(null)} isAdmin={isAdmin}
+          onClose={() => setModal(null)}
         />
       )}
     </AppShell>

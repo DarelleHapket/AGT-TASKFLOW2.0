@@ -14,4 +14,6 @@ urlpatterns = [
     path("difficultes/creer", views.create_difficulty),
     path("difficultes/<int:pk>", views.delete_difficulty),
     path("projets/<int:pid>/membres/<int:mid>", views.membre_projet_detail),
+    path("projets/<int:pid>/membres/<int:mid>/permissions", views.membre_projet_permissions_detail),
+    path("projets/<int:pid>/membres/<int:mid>/permissions/<str:code>", views.set_membre_projet_permission),
 ] + router.urls

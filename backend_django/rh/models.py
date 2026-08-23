@@ -110,6 +110,37 @@ class Remuneration(models.Model):
         ordering = ["-cree_le"]
 
 
+class StatutFichePaie(models.TextChoices):
+    GENEREE = "generee", "Générée"
+    CONSULTEE = "consultee", "Consultée"
+
+
+class FichePaie(models.Model):
+    """BF-54 : une fiche de paie par (Contrat, mois), générée par le cron
+    mensuel de sortie salariale (rh/services.py::generer_paie_mensuelle).
+    Jamais créée à la main. `contrat` porte la contrainte d'unicité (pas
+    `remuneration`) : le cron tourne chaque jour (idempotent) — si la
+    rémunération change en cours de mois (augmentation), il ne faut pas
+    regénérer une deuxième fiche pour ce même mois avec la nouvelle
+    Remuneration. `remuneration` reste la traçabilité de quel montant a
+    servi à cette fiche précise (BNF-07 : historique jamais modifié)."""
+    contrat = models.ForeignKey(Contrat, on_delete=models.CASCADE, related_name="fiches_paie")
+    remuneration = models.ForeignKey(Remuneration, on_delete=models.CASCADE, related_name="fiches_paie")
+    mouvement_financier = models.OneToOneField(
+        "finances.MouvementFinancier", on_delete=models.SET_NULL, null=True, blank=True, related_name="fiche_paie"
+    )
+    periode = models.DateField()  # premier jour du mois couvert
+    montant = models.DecimalField(max_digits=12, decimal_places=2)
+    statut = models.CharField(max_length=20, choices=StatutFichePaie.choices, default=StatutFichePaie.GENEREE)
+    date_generation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-periode"]
+        constraints = [
+            models.UniqueConstraint(fields=["contrat", "periode"], name="fiche_paie_unique_par_mois")
+        ]
+
+
 class StatutDisponibilite(models.TextChoices):
     DISPONIBLE = "disponible", "Disponible"
     INDISPONIBLE = "indisponible", "Indisponible"

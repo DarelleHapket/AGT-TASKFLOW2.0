@@ -5,7 +5,6 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from projets.acces import is_admin_role
 from projets.models import Tache
 
 from .models import Besoin, NEED_STATUSES, NEED_TYPES, Note, OrdreJournalier
@@ -60,11 +59,11 @@ def _can_edit_day(user, membre_id):
 
 
 def _can_view_day(user, membre_id):
-    """Le membre voit la sienne ; admin/chef/superadmin peuvent consulter celle
-    d'un membre (lecture seule)."""
+    """Le membre voit la sienne ; superadmin ou quiconque a la permission
+    operations.manage peut consulter celle d'un membre (lecture seule)."""
     if str(user.id) == str(membre_id):
         return True
-    return is_admin_role(user) or user.is_superadmin() or "chef_projet" in user.roles_codes()
+    return user.is_superadmin() or user.peut("operations.manage")
 
 
 @api_view(["GET"])
@@ -142,9 +141,9 @@ def performance(request):
     if date_to:
         qs = qs.filter(date_completion__lte=f"{date_to}T23:59:59")
 
-    if is_admin_role(user) or user.is_superadmin():
+    if user.is_superadmin():
         allowed_ids = None
-    elif "chef_projet" in user.roles_codes():
+    elif user.peut("operations.manage"):
         allowed_ids = set(
             Tache.objects.filter(projet__membres__utilisateur=user, projet__membres__role="owner")
             .values_list("responsable_id", flat=True)

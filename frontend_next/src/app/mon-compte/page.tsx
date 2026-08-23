@@ -12,7 +12,7 @@ import { KeyRound, UserRound, Wallet, Pencil, FileDown, CalendarDays, Receipt } 
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
-import type { Competence, Conge, Contrat, Employe, NoteFrais, Profil, Remuneration, StatutDemande } from "@/lib/types";
+import type { Competence, Conge, Employe, FichePaie, NoteFrais, Profil, StatutDemande } from "@/lib/types";
 
 const PERIODICITE_LABEL: Record<string, string> = { mensuelle: "mois", hebdomadaire: "semaine", journaliere: "jour" };
 const AVATAR_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#8b5cf6", "#f97316", "#06b6d4", "#84cc16", "#ef4444", "#3b82f6"];
@@ -31,9 +31,12 @@ function StatutPill({ statut }: { statut: StatutDemande }) {
   );
 }
 
-// Fiche de paie — PDF généré côté client, jamais stocké côté serveur (même
+const MOIS_LABEL = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+
+// Fiche de paie — PDF généré côté client à partir d'une FichePaie persistée
+// (BF-54, générée par le cron mensuel), jamais stocké côté serveur (même
 // pattern que le bilan financier, BF-29 / Document d'Analyse §11).
-function genererFichePaie(nomEmploye: string, contrat: Contrat, remuneration: Remuneration) {
+function genererFichePaiePDF(nomEmploye: string, fiche: FichePaie) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const margin = 40;
   let y = margin;
@@ -45,10 +48,9 @@ function genererFichePaie(nomEmploye: string, contrat: Contrat, remuneration: Re
 
   const rows: [string, string][] = [
     ["Employé", nomEmploye],
-    ["Type de contrat", contrat.type_contrat_nom],
-    ["Début du contrat", new Date(contrat.date_debut).toLocaleDateString("fr-FR")],
-    ["Rémunération", `${remuneration.montant} / ${PERIODICITE_LABEL[remuneration.periodicite] || remuneration.periodicite}`],
-    ["En vigueur depuis", new Date(remuneration.cree_le).toLocaleDateString("fr-FR")],
+    ["Période", MOIS_LABEL.format(new Date(fiche.periode))],
+    ["Montant", fiche.montant],
+    ["Générée le", new Date(fiche.date_generation).toLocaleDateString("fr-FR")],
   ];
   rows.forEach(([label, valeur]) => {
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20, 20, 20);
@@ -60,7 +62,7 @@ function genererFichePaie(nomEmploye: string, contrat: Contrat, remuneration: Re
   y += 14;
   doc.setFontSize(9); doc.setTextColor(120, 120, 120);
   doc.text("Document généré depuis l'espace salarié — à valider par le service RH avant tout usage officiel.", margin, y);
-  doc.save(`fiche_de_paie_${nomEmploye.replace(/\s+/g, "_")}.pdf`);
+  doc.save(`fiche_de_paie_${nomEmploye.replace(/\s+/g, "_")}_${fiche.periode}.pdf`);
 }
 
 export default function MonComptePage() {
@@ -88,6 +90,8 @@ export default function MonComptePage() {
   const [fraisMsg, setFraisMsg] = useState<string | null>(null);
   const [savingFrais, setSavingFrais] = useState(false);
 
+  const [fichesPaie, setFichesPaie] = useState<FichePaie[]>([]);
+
   const [editingInfos, setEditingInfos] = useState(false);
   const [nom, setNom] = useState("");
   const [couleur, setCouleur] = useState("");
@@ -110,6 +114,7 @@ export default function MonComptePage() {
         setProfil(p);
         if (p.est_employe) {
           api.getMonSalaire().then(setEmploye).catch(() => setEmploye(null));
+          api.getMesFichesPaie().then(setFichesPaie).catch(() => setFichesPaie([]));
           rechargerConges(); rechargerFrais();
         }
       })
@@ -280,24 +285,37 @@ export default function MonComptePage() {
               </div>
               {profil.est_employe && (
                 <div style={{ paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Wallet size={14} color="var(--text-3)" />
-                      {employe && contratActuel && remunerationActuelle ? (
-                        <span style={{ fontSize: 13, color: "var(--text)" }}>
-                          <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
-                          <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
-                      )}
-                    </div>
-                    {employe && contratActuel && remunerationActuelle && (
-                      <button onClick={() => genererFichePaie(user.name, contratActuel, remunerationActuelle)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, color: "var(--text-2)", fontWeight: 600 }}>
-                        <FileDown size={13} /> Fiche de paie
-                      </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Wallet size={14} color="var(--text-3)" />
+                    {employe && contratActuel && remunerationActuelle ? (
+                      <span style={{ fontSize: 13, color: "var(--text)" }}>
+                        <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
+                        <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
                     )}
+                  </div>
+
+                  <div style={{ marginTop: 14 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>MES FICHES DE PAIE</span>
+                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 8 }}>
+                      {fichesPaie.length === 0 && (
+                        <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>Aucune fiche de paie générée pour l&apos;instant.</p>
+                      )}
+                      {fichesPaie.map((f) => (
+                        <div key={f.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: "var(--text)", textTransform: "capitalize" }}>{MOIS_LABEL.format(new Date(f.periode))}</div>
+                            <div style={{ color: "var(--text-3)", marginTop: 2 }}>{f.montant}</div>
+                          </div>
+                          <button onClick={() => genererFichePaiePDF(user.name, f)}
+                            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, color: "var(--text-2)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            <FileDown size={13} /> PDF
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {employe && employe.contrats.length > 0 && (
@@ -357,7 +375,7 @@ export default function MonComptePage() {
               {conges.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune demande de congé.</p>}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8, marginBottom: 8 }}>
               <div>
                 <label style={lbl}>DÉBUT</label>
                 <input style={inp} type="date" value={congeForm.date_debut} onChange={(e) => setCongeForm({ ...congeForm, date_debut: e.target.value })} />
@@ -407,7 +425,7 @@ export default function MonComptePage() {
               {notesFrais.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune note de frais.</p>}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8, marginBottom: 8 }}>
               <div>
                 <label style={lbl}>MONTANT</label>
                 <input style={inp} type="number" min={0} step="0.01" value={fraisForm.montant} onChange={(e) => setFraisForm({ ...fraisForm, montant: e.target.value })} />

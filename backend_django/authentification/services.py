@@ -5,8 +5,6 @@ from rest_framework.permissions import BasePermission
 
 from .models import AttributionRole, PermissionEffective, Permission, Role
 
-PRINCIPAL_ROLES = {"superadmin", "admin", "chef_projet", "membre"}
-
 
 def assign_role(user, role_code, assigned_by=None):
     """Attribue un rôle : copie ses permissions par défaut (source='role').

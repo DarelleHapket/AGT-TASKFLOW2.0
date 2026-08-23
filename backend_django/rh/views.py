@@ -4,19 +4,21 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from authentification.models import StatutCompte, User
 from authentification.services import HasPerm
 
 from notifications.services import notify
 
 from .models import (
-    Candidat, Competence, Conge, Contrat, Disponibilite, Employe, Equipe, Formation,
+    Candidat, Competence, Conge, Contrat, Disponibilite, Employe, Equipe, FichePaie, Formation,
     InscriptionFormation, NoteFrais, OffreEmploi, Periodicite, Poste, Profil, Remuneration,
-    Responsabilite, Signalement, StatutCandidature, StatutDemande, StatutInscriptionFormation, TypeContrat,
+    Responsabilite, Signalement, StatutCandidature, StatutDemande, StatutFichePaie, StatutInscriptionFormation,
+    TypeContrat,
 )
 from .serializers import (
     CandidatSerializer, CompetenceSerializer, CongeSerializer, ContratSerializer,
-    DisponibiliteSerializer, EmployeSerializer, EquipeSerializer, FormationSerializer,
-    InscriptionFormationSerializer, NoteFraisSerializer, OffreEmploiSerializer, PosteSerializer,
+    DisponibiliteSerializer, EmployeListeSerializer, EmployeSerializer, EquipeSerializer, FichePaieSerializer,
+    FormationSerializer, InscriptionFormationSerializer, NoteFraisSerializer, OffreEmploiSerializer, PosteSerializer,
     ProfilSerializer, RemunerationSerializer, ResponsabiliteSerializer, SignalementSerializer,
     TypeContratSerializer,
 )
@@ -106,11 +108,24 @@ def profil_par_utilisateur(request):
     return Response(ProfilSerializer(profil).data)
 
 
-@api_view(["POST"])
-@permission_classes([HasPerm("rh.employes.gerer")])
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def employes(request):
+    """GET : annuaire léger des employés (id + nom, aucune donnée salariale —
+    BNF-02/BNF-04), ouvert à tout authentifié — sert notamment à choisir la
+    cible d'un mouvement financier de niveau "employé" (BF-02, Finances).
+    POST : délègue à creer_employe (rh.employes.gerer)."""
+    if request.method == "GET":
+        qs = Employe.objects.select_related("profil__utilisateur")
+        return Response(EmployeListeSerializer(qs, many=True).data)
+    return creer_employe(request)
+
+
 def creer_employe(request):
     """UC « Créer un employé et son contrat » (Document d'Analyse §4) — crée
     employé + contrat + première rémunération en une seule transaction."""
+    if not (request.user.is_superadmin() or request.user.peut("rh.employes.gerer")):
+        return Response({"error": "Permission requise : rh.employes.gerer"}, status=status.HTTP_403_FORBIDDEN)
     profil_id = request.data.get("profil")
     profil = Profil.objects.filter(pk=profil_id).first()
     if not profil:
@@ -130,10 +145,33 @@ def creer_employe(request):
     with transaction.atomic():
         employe = Employe.objects.create(profil=profil, date_embauche=date_embauche)
         contrat = Contrat.objects.create(employe=employe, type_contrat=type_contrat, date_debut=date_debut)
-        remuneration = Remuneration.objects.create(contrat=contrat, montant=montant, periodicite=periodicite)
-        from finances.services import generer_mouvement_salarial
-        generer_mouvement_salarial(remuneration)
+        Remuneration.objects.create(contrat=contrat, montant=montant, periodicite=periodicite)
+        # Pas de sortie salariale immédiate ici : BF-26/BF-54 (révisé) — cf.
+        # rh/services.py::generer_paie_mensuelle (cron mensuel).
 
+    return Response(EmployeSerializer(employe).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([HasPerm("rh.employes.gerer")])
+def changer_remuneration(request, pk):
+    """BF-04 : gestion de la rémunération d'un employé déjà en poste — la
+    création (creer_employe) ne couvrait que la toute première rémunération à
+    l'embauche, il manquait un moyen d'en enregistrer une nouvelle ensuite
+    (augmentation, changement de périodicité). BNF-07 : jamais une édition de
+    l'historique — un nouveau montant crée une nouvelle Remuneration, la
+    précédente reste intacte."""
+    employe = Employe.objects.filter(pk=pk).first()
+    if not employe:
+        return Response({"error": "Employé introuvable."}, status=status.HTTP_404_NOT_FOUND)
+    contrat = employe.contrats.first()
+    if not contrat:
+        return Response({"error": "Cet employé n'a aucun contrat."}, status=status.HTTP_400_BAD_REQUEST)
+    montant = request.data.get("montant")
+    if montant is None:
+        return Response({"error": "montant est requis."}, status=status.HTTP_400_BAD_REQUEST)
+    periodicite = request.data.get("periodicite") or contrat.remunerations.first().periodicite
+    Remuneration.objects.create(contrat=contrat, montant=montant, periodicite=periodicite)
     return Response(EmployeSerializer(employe).data, status=status.HTTP_201_CREATED)
 
 
@@ -155,6 +193,22 @@ def salaire_employe(request, pk):
     if not employe:
         return Response({"error": "Employé introuvable."}, status=status.HTTP_404_NOT_FOUND)
     return Response(EmployeSerializer(employe).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mes_fiches_paie(request):
+    """UC « Consulter et télécharger sa fiche de paie » — Membre, self-service
+    uniquement (même logique que mon_salaire, BNF-09). Consulter la liste
+    marque les fiches nouvellement générées comme consultées."""
+    profil = Profil.objects.filter(utilisateur=request.user).first()
+    if not profil or not hasattr(profil, "employe"):
+        return Response({"error": "Aucun statut d'employé rattaché à votre profil."}, status=status.HTTP_404_NOT_FOUND)
+    fiches = list(FichePaie.objects.filter(contrat__employe=profil.employe))
+    FichePaie.objects.filter(id__in=[f.id for f in fiches if f.statut == StatutFichePaie.GENEREE]).update(
+        statut=StatutFichePaie.CONSULTEE
+    )
+    return Response(FichePaieSerializer(fiches, many=True).data)
 
 
 class DisponibiliteViewSet(viewsets.ModelViewSet):
@@ -233,22 +287,54 @@ class InscriptionFormationViewSet(viewsets.ModelViewSet):
 
 
 class SignalementViewSet(viewsets.ModelViewSet):
+    """BNF-18 assoupli le 2026-08-18 (décision produit) : un signalement reste
+    invisible aux AUTRES membres, mais son auteur voit et gère désormais son
+    propre historique (consulter, supprimer) — même logique que Congé/NoteFrais
+    (_DemandeSalarieMixin ci-dessous). Seuls Admin/Superadmin voient TOUS les
+    signalements et les traitent (rh.signalements.traiter)."""
     serializer_class = SignalementSerializer
 
     def get_permissions(self):
-        if self.action == "create":
-            return [IsAuthenticated()]
-        return [HasPerm("rh.signalements.traiter")()]
+        if self.action in ("update", "partial_update"):
+            return [HasPerm("rh.signalements.traiter")()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
-        """BNF-18 : visible uniquement par Admin et Superadmin — un membre ne
-        voit même pas la liste de ses propres signalements après création
-        (dépôt à sens unique, cohérent avec le canal de remontée décrit au
-        Document d'Analyse §4)."""
-        return Signalement.objects.select_related("auteur")
+        user = self.request.user
+        qs = Signalement.objects.select_related("auteur")
+        if user.is_superadmin() or user.peut("rh.signalements.traiter"):
+            return qs
+        return qs.filter(auteur=user)
 
     def perform_create(self, serializer):
-        serializer.save(auteur=self.request.user)
+        """Notifie quiconque peut traiter un signalement (permission
+        rh.signalements.traiter, ou superadmin) — même motif que
+        authentification/views.py::register (register_request) — pour que la
+        cloche les alerte sans qu'ils aient à revenir régulièrement sur
+        /rh/signalements."""
+        signalement = serializer.save(auteur=self.request.user)
+        destinataires = [
+            u for u in User.objects.filter(statut=StatutCompte.ACTIF, is_active=True)
+            if u.is_superadmin() or u.peut("rh.signalements.traiter")
+        ]
+        for admin in destinataires:
+            notify(
+                admin, "signalement",
+                f"Nouveau signalement : {signalement.auteur.display_name()}",
+                signalement.description,
+                expediteur=signalement.auteur,
+            )
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == 200:
+            obj = self.get_object()
+            notify(
+                obj.auteur, "signalement_traite",
+                "Votre signalement a été traité", obj.description,
+                expediteur=request.user,
+            )
+        return response
 
 
 class _DemandeSalarieMixin:

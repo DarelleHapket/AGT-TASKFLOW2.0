@@ -108,15 +108,29 @@ function canSeeItem(item: SidebarItem, hasPermission: (code: string) => boolean)
   return hasPermission(item.permission);
 }
 
-export function Sidebar({ hasPermission }: { hasPermission: (code: string) => boolean }) {
+interface SidebarProps {
+  hasPermission: (code: string) => boolean;
+  open: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ hasPermission, open, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <div style={{
-      width: 240, background: "var(--bg-card)", borderRight: "1px solid var(--border)",
-      height: "100vh", display: "flex", flexDirection: "column", padding: "20px 0",
-      flexShrink: 0, position: "sticky", top: 0, overflowY: "auto",
-    }}>
+    <>
+      {/* Fond semi-opaque, mobile/tablette uniquement, pour fermer le tiroir au clic à côté */}
+      {open && (
+        <div onClick={onClose} className="fixed inset-0 bg-black/40 z-30 lg:hidden" />
+      )}
+      <div
+        className={`fixed inset-y-0 left-0 z-40 w-60 flex-shrink-0 -translate-x-full transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:translate-x-0 ${open ? "translate-x-0" : ""}`}
+        style={{
+          background: "var(--bg-card)", borderRight: "1px solid var(--border)",
+          height: "100vh", display: "flex", flexDirection: "column", padding: "20px 0",
+          overflowY: "auto",
+        }}
+      >
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
         padding: "0 20px 20px", fontWeight: 700, fontSize: 16,
@@ -188,7 +202,7 @@ export function Sidebar({ hasPermission }: { hasPermission: (code: string) => bo
                 return <div key={item.id} style={style}>{content}</div>;
               }
               return (
-                <Link key={item.id} href={route} style={style}>
+                <Link key={item.id} href={route} style={style} onClick={onClose}>
                   {content}
                 </Link>
               );
@@ -196,6 +210,7 @@ export function Sidebar({ hasPermission }: { hasPermission: (code: string) => bo
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 }

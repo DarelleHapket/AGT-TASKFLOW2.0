@@ -4,13 +4,13 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from authentification.models import StatutCompte, User
-from authentification.services import assign_role
+from authentification.services import assign_role, grant_permission
 from projets.models import MembreProjet, Projet, Tache
 
 from .models import Besoin, Note, OrdreJournalier
 
 
-def make_user(username, role="membre"):
+def make_user(username, role="user"):
     u = User.objects.create(username=username, statut=StatutCompte.ACTIF, is_active=True)
     assign_role(u, role)
     return u
@@ -77,7 +77,8 @@ class DailyOrderTests(TestCase):
         self.assertEqual(r.status_code, 403)
 
     def test_admin_lit_mais_ne_peut_pas_modifier(self):
-        admin = make_user("gabriel", "admin")
+        admin = make_user("gabriel", "user")
+        grant_permission(admin, "operations.manage")
         OrdreJournalier.objects.create(membre=self.moi, tache=self.tache, date=date.today())
         client = APIClient()
         client.force_authenticate(admin)
@@ -88,8 +89,8 @@ class DailyOrderTests(TestCase):
 
 class PerformanceTests(TestCase):
     def setUp(self):
-        self.chef = make_user("chef", "chef_projet")
-        self.membre = make_user("membre", "membre")
+        self.chef = make_user("chef", "user")
+        self.membre = make_user("membre", "user")
         self.projet = Projet.objects.create(nom="P")
         MembreProjet.objects.create(projet=self.projet, utilisateur=self.chef, role="owner")
         MembreProjet.objects.create(projet=self.projet, utilisateur=self.membre, role="contributor")
@@ -107,10 +108,25 @@ class PerformanceTests(TestCase):
         self.assertEqual(len(r.data), 1)
         self.assertEqual(r.data[0]["member"], "membre")
 
-    def test_admin_voit_tout(self):
-        admin = make_user("gabriel", "admin")
+    def test_superadmin_voit_tout(self):
+        """Seul superadmin garde une visibilité transversale totale (A3,
+        2026-08-19) — operations.manage donne une visibilité élargie mais
+        toujours scopée aux projets dont on est owner, pas "tout"."""
+        superadmin = make_user("gabriel", "superadmin")
         client = APIClient()
-        client.force_authenticate(admin)
+        client.force_authenticate(superadmin)
         r = client.get("/api/performance")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(len(r.data), 1)
+
+    def test_operations_manage_scope_aux_projets_dont_il_est_owner(self):
+        gestionnaire = make_user("theo", "user")
+        grant_permission(gestionnaire, "operations.manage")
+        client = APIClient()
+        client.force_authenticate(gestionnaire)
+        r = client.get("/api/performance")
+        self.assertEqual(r.status_code, 200)
+        # Pas owner de self.projet : ne voit que ses propres stats (aucune
+        # tâche terminée à son nom ici) — cohérent avec la requête
+        # projet__membres__role="owner" côté vue.
+        self.assertEqual(len(r.data), 0)

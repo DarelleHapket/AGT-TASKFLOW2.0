@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth";
 import type { Permission, Role, Utilisateur } from "@/lib/types";
 
 export default function MembresPage() {
-  const { user, isLogged, isAdmin, isSuperadmin, hasPermission } = useAuth();
+  const { user, isLogged, isSuperadmin, hasPermission } = useAuth();
   const router = useRouter();
   const [membres, setMembres] = useState<Utilisateur[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -79,7 +79,9 @@ export default function MembresPage() {
           onTogglePermission={togglePermission}
           onToggleActive={toggleActive}
           onValidate={validate}
-          isAdmin={isAdmin}
+          canValidate={hasPermission("membres.validate")}
+          canSuspend={hasPermission("membres.suspend")}
+          canManageMembers={hasPermission("membres.write")}
           isSuperadmin={isSuperadmin}
           currentUser={user}
           canSeeSalaire={hasPermission("rh.employes.gerer")}

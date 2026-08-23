@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import type { Activite, Projet } from "@/lib/types";
 
 export default function ActivitesPage() {
-  const { isLogged, isAdmin } = useAuth();
+  const { isLogged } = useAuth();
   const router = useRouter();
   const [activites, setActivites] = useState<Activite[]>([]);
   const [projets, setProjets] = useState<Projet[]>([]);
@@ -40,7 +40,7 @@ export default function ActivitesPage() {
         <p style={{ fontSize: 13, color: "var(--text-3)" }}>Chargement…</p>
       ) : (
         <ActivitiesView
-          activities={activites} projects={projets} isAdmin={isAdmin}
+          activities={activites} projects={projets}
           onAdd={async (d) => { await api.createActivite(d); load(); }}
           onUpdate={async (id, d) => { await api.updateActivite(id, d); load(); }}
           onDelete={async (id) => { await api.deleteActivite(id); load(); }}

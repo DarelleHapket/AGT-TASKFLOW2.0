@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Materiel, MouvementMateriel, TypeMateriel
+from .models import AlerteMateriel, Materiel, MouvementMateriel, TypeMateriel
 
 
 class TypeMaterielSerializer(serializers.ModelSerializer):
@@ -39,3 +39,23 @@ class MouvementMaterielSerializer(serializers.ModelSerializer):
         if data.get("projet") and data.get("employe"):
             raise serializers.ValidationError("Une affectation cible un projet OU un employé, pas les deux.")
         return data
+
+
+class AlerteMaterielSerializer(serializers.ModelSerializer):
+    materiel_nom = serializers.CharField(source="materiel.nom", read_only=True)
+    cree_par_nom = serializers.SerializerMethodField()
+    traitee_par_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AlerteMateriel
+        fields = [
+            "id", "materiel", "materiel_nom", "type_alerte", "message", "statut",
+            "cree_le", "cree_par_nom", "traitee_le", "traitee_par_nom",
+        ]
+        read_only_fields = ["statut", "cree_le", "traitee_le"]
+
+    def get_cree_par_nom(self, obj):
+        return obj.cree_par.display_name() if obj.cree_par else None
+
+    def get_traitee_par_nom(self, obj):
+        return obj.traitee_par.display_name() if obj.traitee_par else None

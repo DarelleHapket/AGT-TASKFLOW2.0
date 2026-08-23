@@ -22,7 +22,9 @@ urlpatterns = [
     path("rh/profils/moi", views.mon_profil),
     path("rh/profils/par-utilisateur", views.profil_par_utilisateur),
     path("rh/profils/<int:pk>", views.profil_detail),
-    path("rh/employes", views.creer_employe),
+    path("rh/employes", views.employes),
     path("rh/employes/moi/salaire", views.mon_salaire),
     path("rh/employes/<int:pk>/salaire", views.salaire_employe),
+    path("rh/employes/<int:pk>/remuneration", views.changer_remuneration),
+    path("rh/fiches-paie/moi", views.mes_fiches_paie),
 ] + router.urls

@@ -12,10 +12,10 @@ Correction 2026-08-10 : `backend/` (Flask) et `frontend/` (Vite/React), ainsi
 que `docker-compose.yml` (qui les référençait), ont été **supprimés du
 dépôt** — plus aucune stack en parallèle. La seule stack existante :
 
-| | Stack actuelle (seule) |
-|---|---|
-| Backend | `backend_django/` — Django + DRF + Postgres |
-| Frontend | `frontend_next/` — Next.js + TypeScript |
+|             | Stack actuelle (seule)                                                                                                                                     |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend     | `backend_django/` — Django + DRF + Postgres                                                                                                                |
+| Frontend    | `frontend_next/` — Next.js + TypeScript                                                                                                                    |
 | Déploiement | `docker-compose.django.yml` (nom de projet `agt-django`), lancé manuellement — cf. [`BASCULE_PRODUCTION.md`](./BASCULE_PRODUCTION.md) pour le runbook prod |
 
 ---
@@ -35,9 +35,11 @@ utiliser ce `-p` pour retomber sur la même stack/volume).
 
 Après une modification de code, rebuild le service concerné (`api` pour le
 backend, `web` pour le frontend, les deux si le doute) :
+
 ```bash
 docker compose -f docker-compose.django.yml --env-file .env.django -p agt-django up -d --build web
 ```
+
 Les migrations Django s'appliquent automatiquement au démarrage du
 conteneur `api` (`entrypoint.sh`) — pas besoin de les lancer à la main.
 
@@ -52,23 +54,24 @@ python3 manage.py runserver 8000
 cd frontend_next
 npm run dev
 ```
+
 Next.js choisit un port libre à partir de 3000 si non précisé — regarder la
 ligne `- Local: http://localhost:XXXX` affichée au démarrage.
 
 ### Liens
 
-| Lien | Contenu |
-|---|---|
-| `http://localhost:4100` | Application (via Docker, `-p agt-django`) |
-| `http://localhost:8000/api/docs/` | **Swagger UI** — documentation interactive de toute l'API |
-| `http://localhost:8000/api/redoc/` | Redoc — même doc, présentation en lecture seule |
-| `http://localhost:8000/api/schema/` | Schéma OpenAPI brut (JSON) |
+| Lien                                | Contenu                                                   |
+| ----------------------------------- | --------------------------------------------------------- |
+| `http://localhost:4100`             | Application (via Docker, `-p agt-django`)                 |
+| `http://localhost:8000/api/docs/`   | **Swagger UI** — documentation interactive de toute l'API |
+| `http://localhost:8000/api/redoc/`  | Redoc — même doc, présentation en lecture seule           |
+| `http://localhost:8000/api/schema/` | Schéma OpenAPI brut (JSON)                                |
 
 ### Comptes de test (base locale)
 
-| Email | Mot de passe | Rôle | Sert à tester |
-|---|---|---|---|
-| `superadmin@ag-technologies.tech` | `Test@2026Superadmin` | Superadmin | Identifiants réels seedés par `.env.django` (`SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD`) — vérifié le 2026-08-10, seul compte actif dans la base Postgres de la stack `agt-django` |
+| Email                             | Mot de passe          | Rôle       | Sert à tester                                                                                                                                                                    |
+| --------------------------------- | --------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `superadmin@ag-technologies.tech` | `TestSuperadmin2026!` | Superadmin | Identifiants réels seedés par `.env.django` (`SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD`) — vérifié le 2026-08-10, seul compte actif dans la base Postgres de la stack `agt-django` |i
 
 Correction 2026-08-10 : l'entrée précédente de ce tableau (`SuperAdmin@agt.com` /
 `AGT2026!`) ne correspond à aucun compte de la base Postgres actuelle — vérifié
@@ -92,15 +95,15 @@ Source : `documents/CahierDeChargeGlobal.pdf` + les documents d'analyse/
 conception (`documents/Document_*_v1.*.md`, versions corrigées faisant foi
 sur les PDF correspondants). 6 modules, un par semaine de stage.
 
-| # | Module | Périmètre résumé | État |
-|---|---|---|---|
-| 0 | Améliorer l'existant | Consolider projets/activités/tâches/PERT-Gantt déjà en prod, corriger les bugs connus | ✅ Fait (bugs B01/B02/B04/B07/B09/B10/B11 corrigés, cf. historique de commits) |
-| 1 | Rôles et permissions (RBAC + IBAC) | Rôles multiples par utilisateur, permissions copiées puis modifiables individuellement, superadmin unique auto-créé | ✅ Fait — `authentification/` (backend), `/rbac` (catalogue rôles+permissions, créer/supprimer) et `/membres` (bascule directe des rôles/permissions par membre, groupée par module) côté frontend |
-| 2 | Gestion du matériel | Types de matériel, stock, mouvements (achat/affectation/retour/rebut) | ✅ Fait — `materiel/` (backend), `/materiel`, `/materiel/mouvements` |
-| 3 | Profils et ressources humaines | Profil (poste/compétences), employés, contrats, salaires, disponibilité, recrutement, formations, signalements | ✅ Fait — `rh/` (backend), `/rh`, `/rh/recrutement`, `/rh/signalements`, section « Mon profil » sur `/mon-compte`, fiche membre sur `/membres`. **Hors CDC, ajouté le 2026-08-10** : congés et notes de frais (espace salarié self-service — poser/annuler sur `/mon-compte`, valider/refuser sur `/rh`), fiche de paie PDF téléchargeable |
-| 4 | Finances | Mouvements d'argent immuables, lien auto salaire→finances, bilan, prévisions, rapports PDF/TXT | ✅ Fait — `finances/` (backend), `/finances`, `/finances/bilan`, `/finances/previsions`, génération de rapport |
-| 5 | Documentation | Documents liés à n'importe quel élément, classement, dashboard complet | ❌ Pas commencé |
-| S6 | Tests et mise en ligne finale | Tests BF-00 à BF-37 par rôle, corrections, démonstration | 🔶 Partiel — tests automatisés + manuels faits pour modules 0/1/2/3/4 (voir §4), pas de démonstration finale ni bascule prod |
+| #   | Module                             | Périmètre résumé                                                                                                    | État                                                                                                                                                                                                                                                                                                                                       |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0   | Améliorer l'existant               | Consolider projets/activités/tâches/PERT-Gantt déjà en prod, corriger les bugs connus                               | ✅ Fait (bugs B01/B02/B04/B07/B09/B10/B11 corrigés, cf. historique de commits)                                                                                                                                                                                                                                                             |
+| 1   | Rôles et permissions (RBAC + IBAC) | Rôles multiples par utilisateur, permissions copiées puis modifiables individuellement, superadmin unique auto-créé | ✅ Fait — `authentification/` (backend), `/rbac` (catalogue rôles+permissions, créer/supprimer) et `/membres` (bascule directe des rôles/permissions par membre, groupée par module) côté frontend                                                                                                                                         |
+| 2   | Gestion du matériel                | Types de matériel, stock, mouvements (achat/affectation/retour/rebut)                                               | ✅ Fait — `materiel/` (backend), `/materiel`, `/materiel/mouvements`                                                                                                                                                                                                                                                                       |
+| 3   | Profils et ressources humaines     | Profil (poste/compétences), employés, contrats, salaires, disponibilité, recrutement, formations, signalements      | ✅ Fait — `rh/` (backend), `/rh`, `/rh/recrutement`, `/rh/signalements`, section « Mon profil » sur `/mon-compte`, fiche membre sur `/membres`. **Hors CDC, ajouté le 2026-08-10** : congés et notes de frais (espace salarié self-service — poser/annuler sur `/mon-compte`, valider/refuser sur `/rh`). **Révisé le 2026-08-17** : fiche de paie — historique mensuel persisté (`FichePaie`) sur `/mon-compte`, généré par un cron mensuel (pas un bouton PDF unique comme avant) |
+| 4   | Finances                           | Mouvements d'argent immuables, lien auto salaire→finances, bilan, prévisions, rapports PDF/TXT                      | ✅ Fait — `finances/` (backend), `/finances`, `/finances/bilan`, `/finances/previsions`, génération de rapport. **Révisé le 2026-08-17** : sortie salariale automatique déclenchée par un cron mensuel (service `cron` dans `docker-compose.django.yml`), plus par la création d'un contrat |
+| 5   | Documentation                      | Documents liés à n'importe quel élément, classement, dashboard complet                                              | ❌ Pas commencé                                                                                                                                                                                                                                                                                                                            |
+| S6  | Tests et mise en ligne finale      | Tests BF-00 à BF-37 par rôle, corrections, démonstration                                                            | 🔶 Partiel — tests automatisés + manuels faits pour modules 0/1/2/3/4 (voir §4), pas de démonstration finale ni bascule prod                                                                                                                                                                                                               |
 
 **Hors plan initial, déjà fusionné dans cette stack** : l'outil interne
 `team-tool` (PERT/arbre de tâches d'équipe, sauvegardes BD) — porté dans

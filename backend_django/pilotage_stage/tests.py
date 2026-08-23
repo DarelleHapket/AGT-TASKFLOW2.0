@@ -7,7 +7,7 @@ from authentification.services import assign_role, grant_permission
 from .models import Branch, Edge, Node, PertStatut, PertTask, SousTache, Tache
 
 
-def make_user(username, role="membre"):
+def make_user(username, role="user"):
     u = User.objects.create(username=username, statut=StatutCompte.ACTIF, is_active=True)
     assign_role(u, role)
     return u
@@ -46,8 +46,8 @@ class TacheVisibilityTests(TestCase):
     def setUp(self):
         self.branch, self.start, self.work, self.valid = make_tronc()
         self.lead = make_user("gabriel", "superadmin")
-        self.darelle = make_user("darelle", "membre")
-        self.josue = make_user("josue", "membre")
+        self.darelle = make_user("darelle", "user")
+        self.josue = make_user("josue", "user")
         self.tache_darelle = Tache.objects.create(
             titre="T-darelle", branch=self.branch, assignee=self.darelle,
             created_by=self.lead, validateur=self.lead, current_node=self.start,
@@ -77,7 +77,7 @@ class AvancerTests(TestCase):
     def setUp(self):
         self.branch, self.start, self.work, self.valid = make_tronc()
         self.lead = make_user("gabriel", "superadmin")
-        self.darelle = make_user("darelle", "membre")
+        self.darelle = make_user("darelle", "user")
         self.tache = Tache.objects.create(
             titre="T", branch=self.branch, assignee=self.darelle,
             created_by=self.lead, validateur=self.lead, current_node=self.start,
@@ -128,8 +128,8 @@ class SousTacheTests(TestCase):
     def setUp(self):
         self.branch, self.start, _, _ = make_tronc()
         self.lead = make_user("gabriel", "superadmin")
-        self.darelle = make_user("darelle", "membre")
-        self.josue = make_user("josue", "membre")
+        self.darelle = make_user("darelle", "user")
+        self.josue = make_user("josue", "user")
         self.tache = Tache.objects.create(
             titre="T", branch=self.branch, assignee=self.darelle, created_by=self.lead, current_node=self.start,
         )
@@ -151,7 +151,7 @@ class PertPilotageTests(TestCase):
     def setUp(self):
         self.statut = PertStatut.objects.create(cle="concevoir", label="à concevoir")
         self.lead = make_user("gabriel", "superadmin")
-        self.membre = make_user("darelle", "membre")
+        self.membre = make_user("darelle", "user")
 
     def test_membre_lit_mais_ne_peut_pas_editer(self):
         t = PertTask.objects.create(num=1, name="Tache 1", statut=self.statut)

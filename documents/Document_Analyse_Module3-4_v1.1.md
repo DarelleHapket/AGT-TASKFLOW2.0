@@ -8,7 +8,7 @@
 | **Encadrant** | NOMO BODIANGA Gabriel |
 | **Base** | `CahierAnalyseModule3_4_ERP.pdf` (v1.0, Hapket Darelle) |
 | **Semaine** | S3 (Profils & RH) et S4 (Finances) |
-| **Version** | 1.1 — révise et complète la v1.0 du cahier PDF |
+| **Version** | 1.2 — révise 1.1 (BF-26 en cron mensuel, nouvelle entité `FichePaie` — BF-54) |
 | **Statut** | Document d'analyse — la conception suit dans un document séparé (`Document_Conception_Module3-4_v1.0.md`) |
 
 ---
@@ -23,6 +23,7 @@ Le cahier v1.0 (PDF) pose une base solide et cohérente : le choix de traiter le
 4. **Le CDC global contredit sa propre section 4.4 sur la question « tout membre est-il un employé ? »** La section 2 (Acteurs) énonce « Règle de base : tout membre est aussi un employé », sans exception. Mais BF-19 exige une action explicite (« créer un employé ») et BF-49 (recrutement) ne crée l'employé qu'à la validation d'une candidature — ce qui n'a de sens que si un membre peut exister **sans** être encore employé (ex. un compte en attente, un profil créé mais pas encore sous contrat). Proposition d'amendement du CDC en section 8.
 5. **BNF-09 du CDC global, pris au pied de la lettre, empêcherait un employé de voir son propre salaire** (« Les salaires ne sont visibles que par le superadmin et l'admin »). Le cahier v1.0 corrige déjà cela localement (« BNF-09 révisé »). Ce document propose de faire remonter la correction dans le CDC lui-même plutôt que de la garder comme dérogation propre au module. Voir section 8.
 6. **Ajout hors périmètre initial (2026-08-10)** : congés et notes de frais (espace salarié self-service). Ni le CDC v1.0 ni ce cahier ne prévoyaient ces deux fonctionnalités — ajoutées à la demande explicite du donneur d'ordre, une fois « consulter et télécharger sa fiche de paie » reconnu comme une attente RH de base (cf. point 5 ci-dessus, même logique de confidentialité étendue). Modèles `Conge` et `NoteFrais`, symétriques : un employé pose sa demande (statut `en_attente`), peut l'annuler tant qu'elle n'est pas traitée ; Admin/Superadmin la valide ou la refuse avec un commentaire (permissions `rh.conges.gerer` / `rh.notes_frais.gerer`, même règle d'attribution que le reste du catalogue RH — cf. §4 de `Document_Conception_Module3-4_v1.0.md`, Membre et Chef de projet n'en obtiennent aucune). Aucun solde de congés calculé, aucun justificatif de dépense joint — périmètre volontairement minimal, à étendre si le besoin se confirme. CDC global et cahier v1.0 à amender formellement pour intégrer ces deux BF.
+7. **Révision du 2026-08-17 : BF-26 passe d'un déclenchement synchrone à un cron mensuel, et une nouvelle entité `FichePaie` apparaît (BF-54).** Le cahier v1.1 (point 2 ci-dessus) modélisait la sortie salariale comme déclenchée par la création/mise à jour d'une `Remuneration` (§5.2 tel qu'initialement écrit). Cette section décrit désormais un **cron mensuel** qui parcourt les contrats actifs : plus fidèle à un système de paie réel (une sortie par mois, pas par événement contractuel), et nécessaire pour faire vivre la nouvelle fiche de paie mensuelle. L'unicité est garantie par `(Contrat, période)` et non `(Remuneration, période)` : une augmentation de salaire en cours de mois ne doit jamais générer une deuxième sortie/fiche pour ce même mois — piège identifié en revue d'implémentation. Détails en §5.2 (révisée) et §6. Un point du brouillon source de cette révision a été examiné et **rejeté** : la fusion du statut d'inscription directement dans la classe `Formation`. Le statut (*prévue*/*en cours*/*terminée*) est une information par **paire** (employé, formation) — deux employés inscrits à la même formation peuvent avoir des statuts différents au même instant — donc `InscriptionFormation` reste une classe-association séparée, inchangée depuis le point 2 du cahier v1.0 (cf. §6, correctif « `InscriptionFormation` explicitée comme classe-association »).
 
 Le reste du cahier v1.0 (BF-46 à BF-53, BNF-17/18, les cas d'utilisation métier, la décomposition en deux parties) reste valide et sert de socle à ce document.
 
@@ -152,34 +153,38 @@ flowchart LR
 | **Postcondition** | L'inscription existe, traçable ; si terminée, le profil de l'employé reflète les nouvelles compétences. |
 | **Règle métier** | BF-52 : l'ajout de compétences au profil est une conséquence automatique du passage au statut *terminée*, jamais une saisie manuelle séparée — évite une désynchronisation entre formation suivie et compétences déclarées. |
 
-### 5.2 Cas d'utilisation système : Enregistrement automatique d'une sortie salariale *(corrigé — cross-module)*
+### 5.2 Cas d'utilisation système : Génération mensuelle de la paie *(révisé le 2026-08-17 — cross-module, cron)*
 
-Le cahier v1.0 montre une bulle « Enregistrer automatiquement une sortie salariale » sans acteur relié sur le diagramme du Module 4, avec la remarque : *« Ce n'est pas un cas d'utilisation actionné par un humain, c'est une conséquence système directe de BF-26. »* Une bulle UML sans acteur ni relation `<<include>>`/`<<extend>>` n'est pas un diagramme valide — cette section corrige la modélisation sans changer le comportement métier.
+Le cahier v1.0 montrait une bulle « Enregistrer automatiquement une sortie salariale » sans acteur relié ; le cahier v1.1 l'a corrigée en la reliant à un acteur Système déclenché par la création/mise à jour d'une `Remuneration`. Cette section révise à nouveau le déclencheur : ce n'est plus un événement synchrone sur `Remuneration`, mais un **cron mensuel** qui parcourt tous les contrats actifs — plus proche d'un système de paie réel, et nécessaire pour porter la nouvelle fiche de paie mensuelle (BF-54, §6). Le comportement métier de fond (sortie salariale automatique, jamais saisie à la main) ne change pas.
 
 ```mermaid
 flowchart LR
-    admin((Admin))
     systeme{{Système}}
 
-    subgraph Module3b["Module 3"]
-        UC_contrat[Créer un employé et son contrat]
-    end
-    subgraph Module4b["Module 4"]
-        UC_mouv_auto[Enregistrer automatiquement<br/>un mouvement financier -- sortie salariale]
+    subgraph Module34["Module 3 + Module 4"]
+        UC_paie[Générer la paie du mois<br/>mouvement financier + fiche de paie -- BF-26/BF-54]
     end
 
-    admin --> UC_contrat
-    UC_contrat -.include.-> UC_mouv_auto
-    systeme --> UC_mouv_auto
+    systeme -- "cron mensuel (idempotent)" --> UC_paie
 ```
 
 | | |
 |---|---|
-| **Acteur principal** | Système (déclenché par la création d'une `Remuneration`, jamais actionné directement par un humain) |
-| **Précondition** | Une `Remuneration` vient d'être créée ou mise à jour (Module 3, UC « Créer un employé et son contrat » ou renouvellement de contrat). |
-| **Scénario nominal** | 1. Le système détecte la création/mise à jour d'une `Remuneration`.<br>2. Il crée automatiquement un `MouvementFinancier` de sens *sortie*, niveau *employé*, montant = celui de la `Remuneration`.<br>3. Ce mouvement est pris en compte dans le prochain bilan (BF-26). |
-| **Postcondition** | Le mouvement financier existe, lié à la rémunération d'origine, immuable comme tout mouvement (BNF-10). |
-| **Règle métier** | BF-26 / BNF-12 : le lien salaire → finances est automatique, l'information n'est saisie qu'une seule fois (dans `Remuneration`), jamais ressaisie côté Finances. |
+| **Acteur principal** | Système (cron mensuel — service dédié, exécution quotidienne, idempotente ; plus aucun déclenchement synchrone à la création/mise à jour d'une `Remuneration`) |
+| **Précondition** | Au moins un `Contrat` est actif (`dateFin` nulle ou dans le futur). |
+| **Scénario nominal** | 1. Pour chaque contrat actif, le système vérifie si une `FichePaie` existe déjà pour ce contrat sur le mois en cours.<br>2. Si non : il prend la `Remuneration` la plus récente du contrat, crée un `MouvementFinancier` (sens *sortie*, niveau *employé*, montant = celui de la `Remuneration`), puis une `FichePaie` liée (statut *générée*).<br>3. Ce mouvement est pris en compte dans le prochain bilan (BF-26). |
+| **Postcondition** | Le mouvement financier et la fiche de paie existent, liés l'un à l'autre et à la rémunération d'origine ; le mouvement est immuable comme tout mouvement (BNF-10). |
+| **Règle métier** | BF-26/BF-54 : l'unicité porte sur **`(Contrat, période)`**, jamais `(Remuneration, période)` — une augmentation de salaire en cours de mois ne doit jamais générer une deuxième sortie/fiche pour ce même mois, quel que soit le nombre de passages du cron dans le mois. |
+
+### 5.3 Cas d'utilisation : Consulter et télécharger sa fiche de paie *(nouveau — BF-54)*
+
+| | |
+|---|---|
+| **Acteur principal** | Tout utilisateur employé (Membre, Chef de projet, Admin, Superadmin) |
+| **Précondition** | L'utilisateur est connecté et possède un employé rattaché à son profil. |
+| **Scénario nominal** | 1. L'utilisateur consulte la liste de ses fiches de paie (une par mois où la paie a été générée, BF-26/BF-54).<br>2. La consultation marque les fiches nouvellement générées comme *consultées*.<br>3. Il télécharge le PDF d'une fiche (généré côté client à partir des données consultées, même principe que le bilan financier — BF-29). |
+| **Postcondition** | L'utilisateur a vu ses propres fiches de paie, jamais celles d'un autre employé. |
+| **Règle métier** | Même logique de confidentialité que « Consulter son propre salaire » (BNF-09 révisé, §4) : self-service strict, aucune permission RH n'ouvre dans ce périmètre l'accès aux fiches de paie d'un autre employé. |
 
 ## 6. Diagramme de classes métier (corrigé)
 
@@ -293,6 +298,18 @@ classDiagram
         OUVERT
         TRAITE
     }
+    class FichePaie {
+        -id : int
+        -periode : date
+        -montant : decimal
+        -statut : StatutFichePaie
+        -dateGeneration : date (auto)
+    }
+    class StatutFichePaie {
+        <<enumeration>>
+        GENEREE
+        CONSULTEE
+    }
 
     Utilisateur "1" -- "1" Profil : possède
     Profil "1" -- "0..1" Employe : devient -- BF-19
@@ -313,6 +330,8 @@ classDiagram
     InscriptionFormation "0..*" -- "1" Formation
     InscriptionFormation ..> Competence : ajoute au profil si terminée -- BF-52
     Utilisateur "1" -- "0..*" Signalement : émet
+    Contrat "1" -- "0..*" FichePaie : génère -- BF-54, une par mois
+    FichePaie "0..*" -- "1" Remuneration : au montant de
 ```
 
 **Correctifs vs cahier v1.0 :**
@@ -321,6 +340,8 @@ classDiagram
 - **`Responsabilite` sortie comme classe à part entière**, avec sa propre relation vers `Poste` (1 poste → plusieurs responsabilités, BF-17) et vers `Competence` (une responsabilité demande certaines compétences) — le cahier v1.0 la traite comme un simple attribut de `Poste`, ce qui empêchait de représenter fidèlement « une responsabilité demande certaines compétences » comme une relation propre.
 - **`InscriptionFormation` explicitée comme classe-association** (pas juste une flèche directe Employé↔Formation), pour porter son propre statut (BF-51) sans le confondre avec le statut d'une candidature.
 - Le reste (Poste, OffreEmploi, Candidat, TypeContrat, Contrat, Remuneration, Disponibilite) reprend fidèlement la structure du cahier v1.0.
+
+**Ajout du 2026-08-17 : `FichePaie` (BF-54).** Relation portée par `Contrat`, pas par `Remuneration` — c'est délibéré et diffère d'un premier brouillon de correction envisagé : la contrainte d'unicité « une fiche par mois » doit tenir même si la `Remuneration` change en cours de mois (augmentation), donc la relation qui porte la contrainte doit être stable sur toute la durée du contrat. `Remuneration` reste référencée sur `FichePaie` pour tracer quel montant a servi à générer cette fiche précise (BNF-07 : l'historique des rémunérations n'est jamais modifié). `FichePaie` référence aussi, hors de ce diagramme, le `MouvementFinancier` (Module 4) qu'elle accompagne — cf. §11, qui documente cette dépendance croisée entre les deux modules.
 
 ---
 
@@ -467,11 +488,15 @@ classDiagram
     class Utilisateur {
         -id : int
     }
+    class FichePaie {
+        -id : int
+    }
 
     TypeMouvementFinancier "1" -- "0..*" MouvementFinancier : catégorise
     MouvementFinancier "0..1" -- "0..1" Projet : concerne -- si niveau=PROJET
     MouvementFinancier "0..1" -- "0..1" Employe : concerne -- si niveau=EMPLOYE
     MouvementFinancier "0..1" -- "0..1" Remuneration : origine -- si généré par BF-26
+    MouvementFinancier "0..1" -- "0..1" FichePaie : accompagne -- si généré par BF-54
     Prevision "0..1" -- "0..1" Projet : porte sur -- si niveau=PROJET
     Prevision "0..1" -- "0..1" Employe : porte sur -- si niveau=EMPLOYE
     RapportFinancier "0..*" -- "1" Utilisateur : généré par
@@ -483,6 +508,7 @@ classDiagram
 - **Multiplicités optionnelles explicitées sur `MouvementFinancier` et `Prevision`** (`0..1` vers `Projet` et vers `Employe`) avec la règle de cohérence : ces deux liens dépendent de `niveau` (`NiveauFinancier`) et sont mutuellement exclusifs — si `niveau = ENTREPRISE`, les deux sont vides ; si `niveau = PROJET`, seul `Projet` est renseigné ; si `niveau = EMPLOYE`, seul `Employe` est renseigné. Cette invariante n'apparaissait pas dans le cahier v1.0.
 - **Lien `MouvementFinancier ↔ Remuneration` explicite** (`0..1`, renseigné uniquement pour les mouvements générés automatiquement par BF-26) — traçabilité directe entre une sortie salariale et la rémunération qui l'a déclenchée, nécessaire pour l'audit et pour éviter un double comptage si un contrat est corrigé.
 - **`RapportFinancier` reste une entité de traçabilité** (qui a généré quel rapport, quand, sous quel format), pas le contenu du PDF/TXT lui-même — cohérent avec BF-29 (« en réutilisant le système déjà présent dans TaskFlow », où le PDF/TXT est généré côté client, jamais stocké côté serveur).
+- **Ajout du 2026-08-17 : lien `MouvementFinancier ↔ FichePaie` (`0..1` des deux côtés, Module 3 §6).** Renseigné uniquement pour les mouvements générés par le cron mensuel (BF-54) — un mouvement saisi manuellement par Admin n'a pas de fiche associée. **Cette relation rend la dépendance entre modules bidirectionnelle** : Finances référençait déjà `Remuneration` et `Employe` (Module 3 → Module 4 dans le sens de la lecture des données), et référence maintenant aussi `FichePaie` en retour ; RH (via `FichePaie.mouvementFinancier`) référence symétriquement `MouvementFinancier`. Techniquement sans problème (clés étrangères inter-applications résolues par les migrations), mais le diagramme de paquets à sens unique Finances→RH (`Document_Conception_Module3-4_v1.0.md`) ne reflète plus cette réalité — corrigé dans ce document de conception.
 
 ## 12. Conclusion des parties I et II
 

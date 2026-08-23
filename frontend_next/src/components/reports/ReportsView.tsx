@@ -211,9 +211,9 @@ function generateProjectPDF(data: RapportProjet) {
   doc.save(`Rapport_projet_${p.name.replace(/\s+/g, "_")}_${data.date_from}_${data.date_to}.pdf`);
 }
 
-export function ReportsView({ members, projects = [], isAdmin, isChef, isSuperadmin }: {
+export function ReportsView({ members, projects = [], canManageOperations, isSuperadmin }: {
   members: Utilisateur[]; projects: Projet[]; user: Utilisateur | null;
-  isAdmin: boolean; isChef: boolean; isSuperadmin: boolean;
+  canManageOperations: boolean; isSuperadmin: boolean;
 }) {
   const [period, setPeriod] = useState("week");
   const [dateFrom, setDateFrom] = useState("");
@@ -226,8 +226,8 @@ export function ReportsView({ members, projects = [], isAdmin, isChef, isSuperad
   const [projPreview, setProjPreview] = useState<RapportProjet | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canProjectReport = isAdmin || isChef || isSuperadmin;
-  const availableProjects = (isAdmin || isSuperadmin) ? projects : projects.filter((p) => p.user_role === "owner");
+  const canProjectReport = canManageOperations || isSuperadmin;
+  const availableProjects = isSuperadmin ? projects : projects.filter((p) => p.user_role === "owner");
 
   const invalidate = () => { if (preview) setPreview(null); if (projPreview) setProjPreview(null); };
   const changePeriod = (v: string) => { setPeriod(v); invalidate(); };
@@ -277,7 +277,7 @@ export function ReportsView({ members, projects = [], isAdmin, isChef, isSuperad
       </div>
 
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, marginBottom: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 20, marginBottom: 20 }}>
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", display: "block", marginBottom: 8, letterSpacing: ".08em" }}>PÉRIODE</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -382,7 +382,7 @@ export function ReportsView({ members, projects = [], isAdmin, isChef, isSuperad
             {projPreview.project.chef_name ? `Chef : ${projPreview.project.chef_name} · ` : ""}
             {projPreview.date_from && projPreview.date_to ? `${formatDate(projPreview.date_from)} → ${formatDate(projPreview.date_to)}` : ""}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
+          <div className="grid grid-cols-2 sm:grid-cols-3" style={{ gap: 8, marginBottom: 16 }}>
             {[
               { label: "Tâches", val: projPreview.summary.total_tasks, color: "var(--text)" },
               { label: "Terminées", val: projPreview.summary.total_done, color: "#22c55e" },
@@ -437,7 +437,7 @@ export function ReportsView({ members, projects = [], isAdmin, isChef, isSuperad
                 </div>
                 <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{m.name}</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
+              <div className="grid grid-cols-2 sm:grid-cols-3" style={{ gap: 8, marginBottom: 12 }}>
                 {[
                   { label: "Assignées", val: m.summary.total_assigned, color: "var(--text)" },
                   { label: "Terminées", val: m.summary.total_done, color: "#22c55e" },

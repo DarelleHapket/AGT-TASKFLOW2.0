@@ -301,6 +301,9 @@ export const getMesFichesPaie = () => req<FichePaie[]>("GET", "/rh/fiches-paie/m
 export const getTypesMouvement = () => req<TypeMouvementFinancier[]>("GET", "/finances/types-mouvement");
 export const createTypeMouvement = (data: { nom: string; description?: string; sens: SensMouvement }) =>
   req<TypeMouvementFinancier>("POST", "/finances/types-mouvement", data);
+export const updateTypeMouvement = (id: number, data: { nom?: string; description?: string; sens?: SensMouvement }) =>
+  req<TypeMouvementFinancier>("PATCH", `/finances/types-mouvement/${id}`, data);
+export const deleteTypeMouvement = (id: number) => req<void>("DELETE", `/finances/types-mouvement/${id}`);
 export const getMouvements = () => req<MouvementFinancier[]>("GET", "/finances/mouvements");
 export const createMouvement = (data: { type_mouvement: number; montant: string; niveau: NiveauFinancier; projet?: number; employe?: number }) =>
   req<MouvementFinancier>("POST", "/finances/mouvements", data);
@@ -319,9 +322,15 @@ export const creerRapportFinancier = (data: { format: "pdf" | "txt"; periode_deb
 export const getTypesMateriel = () => req<TypeMateriel[]>("GET", "/materiel/types");
 export const createTypeMateriel = (data: { nom: string; description?: string }) =>
   req<TypeMateriel>("POST", "/materiel/types", data);
+export const updateTypeMateriel = (id: number, data: { nom?: string; description?: string }) =>
+  req<TypeMateriel>("PATCH", `/materiel/types/${id}`, data);
+export const deleteTypeMateriel = (id: number) => req<void>("DELETE", `/materiel/types/${id}`);
 export const getInventaire = () => req<Materiel[]>("GET", "/materiel/inventaire");
 export const createMateriel = (data: { nom: string; description?: string; type: number; date_achat: string; projet?: number }) =>
   req<Materiel>("POST", "/materiel/inventaire", data);
+export const updateMateriel = (id: number, data: { nom?: string; description?: string; type?: number; projet?: number | null }) =>
+  req<Materiel>("PATCH", `/materiel/inventaire/${id}`, data);
+export const deleteMateriel = (id: number) => req<void>("DELETE", `/materiel/inventaire/${id}`);
 export const getStock = () => req<Stock>("GET", "/materiel/stock");
 export const getMouvementsMateriel = () => req<MouvementMateriel[]>("GET", "/materiel/mouvements");
 export const createMouvementMateriel = (data: { materiel: number; type_mouvement: SensMouvementMateriel; quantite: number; projet?: number; employe?: number; commentaire?: string }) =>

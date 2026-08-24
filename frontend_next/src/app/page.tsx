@@ -11,18 +11,26 @@ const MUTED = "#64748b";
 const ACCENT = "#6366f1";
 
 export default function Home() {
-  const { isLogged } = useAuth();
+  const { isLogged, initializing } = useAuth();
   const router = useRouter();
 
+  // `isLogged` est optimiste (true) tant que `initializing` — le temps de lire
+  // le token dans localStorage (cf. lib/auth.tsx) — pour éviter un flash vers
+  // /login sur les pages protégées. Cette page fait l'inverse (redirige vers
+  // /dashboard si connecté) : il ne faut donc PAS se fier à `isLogged` avant
+  // que l'état réel soit résolu, sinon tout visiteur non connecté est
+  // optimistiquement renvoyé vers /dashboard, qui le rebalance vers /login —
+  // la page d'accueil n'est alors jamais vue (bug trouvé le 2026-08-24).
   useEffect(() => {
-    if (isLogged) router.replace("/dashboard");
-  }, [isLogged, router]);
+    if (!initializing && isLogged) router.replace("/dashboard");
+  }, [initializing, isLogged, router]);
 
+  if (initializing) return null;
   if (isLogged) return null;
 
   return (
     <AuthLayout>
-      <div className="w-full lg:w-[480px] p-6 lg:p-10" style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
+      <div className="w-full lg:w-[480px] p-6 lg:p-10" style={{ flex: 1, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
         <div style={{
           width: "100%", background: "rgba(255,255,255,0.72)", border: "1px solid rgba(0,176,195,0.18)",
           borderRadius: 24, padding: 40, backdropFilter: "blur(24px)", boxShadow: "0 32px 80px rgba(0,100,130,0.12)",

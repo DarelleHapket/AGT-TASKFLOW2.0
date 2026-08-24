@@ -95,7 +95,7 @@ export default function MouvementsMaterielPage() {
           </button>
         )}
       </div>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal daté — achat, affectation, retour, hors service, consommation — immuable une fois enregistré</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Journal daté (achat, affectation, retour, hors service, consommation), immuable une fois enregistré</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 

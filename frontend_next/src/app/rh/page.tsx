@@ -220,7 +220,7 @@ export default function RhPage() {
                     </select>
                     {empMembre && empDejaEmploye && (
                       <span style={{ fontSize: 11, color: "var(--danger)" }}>
-                        Ce membre est déjà employé — modifiez son contrat/salaire depuis sa fiche sur la page Membres plutôt que d&apos;en recréer un.
+                        Ce membre est déjà employé. Modifiez son contrat/salaire depuis sa fiche sur la page Membres plutôt que d&apos;en recréer un.
                       </span>
                     )}
                     <select style={inp} value={empType} onChange={(e) => setEmpType(e.target.value)}>
@@ -283,7 +283,7 @@ export default function RhPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div>
                         <div style={{ fontWeight: 700, color: "var(--text)" }}>{n.employe_nom}</div>
-                        <div style={{ marginTop: 2 }}>{n.montant} — {n.motif}</div>
+                        <div style={{ marginTop: 2 }}>{n.montant} · {n.motif}</div>
                         <div style={{ color: "var(--text-3)", marginTop: 2 }}>{new Date(n.date_depense).toLocaleDateString("fr-FR")}</div>
                       </div>
                       <StatutPill statut={n.statut} />

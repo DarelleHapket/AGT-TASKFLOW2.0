@@ -18,6 +18,7 @@ const SESSION_EXPIRED_KEY = "agt_session_expired";
 interface AuthState {
   user: Utilisateur | null;
   isLogged: boolean;
+  initializing: boolean;
   isSuperadmin: boolean;
   hasPermission: (code: string) => boolean;
   login: (token: string, user: Utilisateur) => void;
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthState = {
     user,
     isLogged: initializing ? true : !!user,
+    initializing,
     isSuperadmin,
     hasPermission: (code) => isSuperadmin || permissions.includes(code),
     login,

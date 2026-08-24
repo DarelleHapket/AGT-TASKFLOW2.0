@@ -210,7 +210,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             // moment tout en gardant le rappel visible tant que ce n'est pas fait.
             <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, fontSize: 12, color: "#ea580c", display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <AlertTriangle size={14} /> Vous utilisez un mot de passe temporaire — pensez à le changer.
+                <AlertTriangle size={14} /> Vous utilisez un mot de passe temporaire, pensez à le changer.
               </span>
               <button onClick={() => router.push("/mon-compte")} style={{ background: "none", border: "1px solid #fed7aa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#ea580c", fontWeight: 700, fontSize: 11 }}>
                 Changer maintenant

@@ -41,7 +41,7 @@ function genererFichePaiePDF(nomEmploye: string, fiche: FichePaie) {
   const margin = 40;
   let y = margin;
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(40, 40, 90);
-  doc.text("Fiche de paie — AGT Technologies", margin, y); y += 24;
+  doc.text("Fiche de paie AGT Technologies", margin, y); y += 24;
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90, 90, 90);
   doc.text(`Émise le ${new Date().toLocaleDateString("fr-FR")}`, margin, y); y += 24;
   doc.setDrawColor(200); doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y); y += 24;
@@ -61,7 +61,7 @@ function genererFichePaiePDF(nomEmploye: string, fiche: FichePaie) {
   });
   y += 14;
   doc.setFontSize(9); doc.setTextColor(120, 120, 120);
-  doc.text("Document généré depuis l'espace salarié — à valider par le service RH avant tout usage officiel.", margin, y);
+  doc.text("Document généré depuis l'espace salarié, à valider par le service RH avant tout usage officiel.", margin, y);
   doc.save(`fiche_de_paie_${nomEmploye.replace(/\s+/g, "_")}_${fiche.periode}.pdf`);
 }
 
@@ -290,7 +290,7 @@ export default function MonComptePage() {
                     {employe && contratActuel && remunerationActuelle ? (
                       <span style={{ fontSize: 13, color: "var(--text)" }}>
                         <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
-                        <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
+                        <span style={{ color: "var(--text-3)", fontWeight: 400 }}> · {contratActuel.type_contrat_nom}</span>
                       </span>
                     ) : (
                       <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
@@ -326,13 +326,13 @@ export default function MonComptePage() {
                           <div key={c.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)" }}>
                             <div style={{ fontWeight: 600, color: "var(--text)" }}>
                               {c.type_contrat_nom}
-                              <span style={{ fontWeight: 400, color: "var(--text-3)" }}> — {new Date(c.date_debut).toLocaleDateString("fr-FR")}
+                              <span style={{ fontWeight: 400, color: "var(--text-3)" }}> · {new Date(c.date_debut).toLocaleDateString("fr-FR")}
                                 {c.date_fin ? ` → ${new Date(c.date_fin).toLocaleDateString("fr-FR")}` : " (en cours)"}
                               </span>
                             </div>
                             {c.remunerations.map((r) => (
                               <div key={r.id} style={{ marginTop: 2, color: "var(--text-3)" }}>
-                                {r.montant} / {PERIODICITE_LABEL[r.periodicite] || r.periodicite} — depuis le {new Date(r.cree_le).toLocaleDateString("fr-FR")}
+                                {r.montant} / {PERIODICITE_LABEL[r.periodicite] || r.periodicite} · depuis le {new Date(r.cree_le).toLocaleDateString("fr-FR")}
                               </div>
                             ))}
                           </div>
@@ -407,7 +407,7 @@ export default function MonComptePage() {
                 <div key={n.id} style={{ fontSize: 12, color: "var(--text-2)", padding: "8px 10px", background: "var(--bg)", borderRadius: 8, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <div>
                     <div style={{ fontWeight: 600, color: "var(--text)" }}>
-                      {n.montant} — {n.motif}
+                      {n.montant} · {n.motif}
                     </div>
                     <div style={{ color: "var(--text-3)", marginTop: 2 }}>{new Date(n.date_depense).toLocaleDateString("fr-FR")}</div>
                     {n.statut !== "en_attente" && n.commentaire_validation && (

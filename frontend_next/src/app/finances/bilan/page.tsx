@@ -23,14 +23,14 @@ function moisCourant() {
 
 function genererTXT(bilan: Bilan, dateFrom: string, dateTo: string) {
   const lines = [
-    "Bilan financier — AGT Technologies",
+    "Bilan financier AGT Technologies",
     `Période : ${dateFrom} -> ${dateTo}`,
     "─".repeat(40),
     `Entrées : ${bilan.entrees}`,
     `Sorties : ${bilan.sorties}`,
     `Solde   : ${bilan.solde}`,
     "",
-    "Vise la conformité OHADA — à faire vérifier par un expert-comptable avant tout usage officiel.",
+    "Vise la conformité OHADA, à faire vérifier par un expert-comptable avant tout usage officiel.",
   ];
   const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -44,7 +44,7 @@ function genererPDF(bilan: Bilan, dateFrom: string, dateTo: string) {
   const margin = 40;
   let y = margin;
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(40, 40, 90);
-  doc.text("Bilan financier — AGT Technologies", margin, y); y += 24;
+  doc.text("Bilan financier AGT Technologies", margin, y); y += 24;
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90, 90, 90);
   doc.text(`Période : ${dateFrom} -> ${dateTo}`, margin, y); y += 24;
   doc.setDrawColor(200); doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y); y += 20;
@@ -63,7 +63,7 @@ function genererPDF(bilan: Bilan, dateFrom: string, dateTo: string) {
   });
   y += 10;
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120, 120, 120);
-  doc.text("Vise la conformité OHADA — à faire vérifier par un expert-comptable avant tout usage officiel.", margin, y);
+  doc.text("Vise la conformité OHADA, à faire vérifier par un expert-comptable avant tout usage officiel.", margin, y);
   doc.save(`bilan_${dateFrom}_${dateTo}.pdf`);
 }
 
@@ -109,7 +109,7 @@ export default function BilanPage() {
   return (
     <AppShell>
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Bilan</h2>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Bilan sur une période — vise la conformité OHADA, à faire vérifier par un expert avant tout usage officiel</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Bilan sur une période. Vise la conformité OHADA, à faire vérifier par un expert avant tout usage officiel</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 

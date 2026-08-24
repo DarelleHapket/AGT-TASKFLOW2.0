@@ -20,7 +20,14 @@ async function proxy(request: NextRequest, path: string[]) {
   }
 
   const upstream = await fetch(target, init);
-  const body = await upstream.arrayBuffer();
+  // 204/205/304 doivent avoir un corps null (spec Fetch) — construire une
+  // Response avec un ArrayBuffer même vide sur ces statuts fait planter
+  // NextResponse (TypeError), transformant tout DELETE réussi (Django
+  // renvoie 204 No Content) en faux 500 côté proxy alors que la suppression
+  // a bien eu lieu en base. Bug trouvé le 2026-08-24 en testant la
+  // suppression d'un type de matériel.
+  const sansCorps = [204, 205, 304].includes(upstream.status);
+  const body = sansCorps ? null : await upstream.arrayBuffer();
   const responseHeaders = new Headers(upstream.headers);
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("transfer-encoding");

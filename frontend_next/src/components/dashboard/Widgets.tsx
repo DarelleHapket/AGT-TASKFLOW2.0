@@ -89,7 +89,7 @@ export function WidgetsRessources({ canRh, canFinances, canMateriel, postes, equ
     <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 14, marginBottom: 24 }}>
       {canMateriel ? (
         <WidgetTexte
-          label="MATÉRIEL — STOCK TOTAL"
+          label="STOCK MATÉRIEL"
           value={stockTotal !== null ? String(stockTotal) : "—"}
           sublabel={alertesOuvertes ? `${alertesOuvertes} alerte${alertesOuvertes !== 1 ? "s" : ""} ouverte${alertesOuvertes !== 1 ? "s" : ""}` : undefined}
           href="/materiel"
@@ -103,7 +103,7 @@ export function WidgetsRessources({ canRh, canFinances, canMateriel, postes, equ
         <WidgetVide label="RH" />
       )}
       {canFinances ? (
-        <WidgetTexte label="FINANCES — SOLDE DU MOIS" value={soldeMois ?? "—"} href="/finances/bilan" />
+        <WidgetTexte label="SOLDE DU MOIS" value={soldeMois ?? "—"} href="/finances/bilan" />
       ) : (
         <WidgetVide label="Finances" />
       )}

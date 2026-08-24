@@ -77,7 +77,7 @@ export default function PrevisionsPage() {
           <Plus size={14} /> Prévision
         </button>
       </div>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Montants prévus par période — comparez au réel avec &quot;Écart&quot;</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Montants prévus par période, comparez au réel avec &quot;Écart&quot;</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
@@ -127,7 +127,7 @@ export default function PrevisionsPage() {
                 {ecart === "error" && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>Impossible de calculer l&apos;écart.</div>}
                 {ecart && ecart !== "loading" && ecart !== "error" && (
                   <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>
-                    Prévu : <strong style={{ color: "var(--text)" }}>{ecart.prevu}</strong> — Réel : <strong style={{ color: "var(--text)" }}>{ecart.reel}</strong> — Écart :{" "}
+                    Prévu : <strong style={{ color: "var(--text)" }}>{ecart.prevu}</strong> · Réel : <strong style={{ color: "var(--text)" }}>{ecart.reel}</strong> · Écart :{" "}
                     <strong style={{ color: Number(ecart.ecart) < 0 ? "#ef4444" : "#16a34a" }}>{ecart.ecart}</strong>
                   </div>
                 )}

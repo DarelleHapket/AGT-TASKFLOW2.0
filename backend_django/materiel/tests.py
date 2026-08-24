@@ -247,6 +247,19 @@ class SuppressionProtegeeTests(TestCase):
         r = self.client.delete(f"/api/materiel/inventaire/{self.materiel.id}")
         self.assertEqual(r.status_code, 409)
 
+    def test_modification_materiel_toujours_possible_meme_avec_mouvements(self):
+        """Distinction à ne pas confondre avec la suppression (ci-dessus) :
+        corriger le nom d'un matériel ne touche à aucun mouvement, donc reste
+        possible à tout moment — même après le premier mouvement enregistré."""
+        r = self.client.patch(f"/api/materiel/inventaire/{self.materiel.id}", {"nom": "Imprimante corrigée"}, format="json")
+        self.assertEqual(r.status_code, 200, r.data)
+        self.materiel.refresh_from_db()
+        self.assertEqual(self.materiel.nom, "Imprimante corrigée")
+
+    def test_modification_type_materiel_toujours_possible_meme_si_utilise(self):
+        r = self.client.patch(f"/api/materiel/types/{self.type.id}", {"nom": "Imprimante laser"}, format="json")
+        self.assertEqual(r.status_code, 200, r.data)
+
 
 class AlerteManuelleTests(TestCase):
     """BF-09/BF-10 : alerte manuelle (anomalie/rappel), anti-doublon, et

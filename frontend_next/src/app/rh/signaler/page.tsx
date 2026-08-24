@@ -74,7 +74,7 @@ export default function SignalerPage() {
           <AlertTriangle size={20} /> Signaler une difficulté
         </h2>
         <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 20 }}>
-          Décrivez une difficulté ou un différend rencontré. Seuls vous, Admin et Superadmin pouvez voir ce signalement — vous recevrez une notification une fois qu&apos;il aura été traité.
+          Décrivez une difficulté ou un différend rencontré. Seuls vous, Admin et Superadmin pouvez voir ce signalement. Vous recevrez une notification une fois qu&apos;il aura été traité.
         </p>
 
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", padding: 20 }}>

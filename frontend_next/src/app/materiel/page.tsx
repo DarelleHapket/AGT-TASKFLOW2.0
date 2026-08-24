@@ -6,7 +6,7 @@ import { AccessDenied } from "@/components/AccessDenied";
 // /materiel/mouvements) + encart stock agrégé par type/projet.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, X } from "lucide-react";
 import * as api from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
@@ -90,10 +90,91 @@ export default function MaterielPage() {
     }
   }
 
+  // Types de matériel — modifier/supprimer (BF-02) : suppression bloquée
+  // par le backend si du matériel y est rattaché (message clair, pas de 500).
+  const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+  const [editTypeNom, setEditTypeNom] = useState("");
+  const [typeErr, setTypeErr] = useState<string | null>(null);
+
+  function commencerEditionType(t: TypeMateriel) {
+    setEditingTypeId(t.id); setEditTypeNom(t.nom); setTypeErr(null);
+  }
+
+  async function enregistrerEditionType() {
+    if (editingTypeId === null || !editTypeNom.trim()) return;
+    setTypeErr(null);
+    try {
+      await api.updateTypeMateriel(editingTypeId, { nom: editTypeNom.trim() });
+      setEditingTypeId(null);
+      load();
+    } catch (e) {
+      setTypeErr(api.errorMessage(e, "Modification impossible"));
+    }
+  }
+
+  async function supprimerType(t: TypeMateriel) {
+    setTypeErr(null);
+    try {
+      await api.deleteTypeMateriel(t.id);
+      load();
+    } catch (e) {
+      setTypeErr(api.errorMessage(e, `Impossible de supprimer « ${t.nom} »`));
+    }
+  }
+
+  // Matériel — modifier (toujours possible, y compris avec des mouvements :
+  // corriger un nom/une description ne touche pas l'historique) vs supprimer
+  // (bloqué par le backend si des mouvements existent — message clair).
+  const [editingMaterielId, setEditingMaterielId] = useState<number | null>(null);
+  const [editMaterielNom, setEditMaterielNom] = useState("");
+  const [editMaterielType, setEditMaterielType] = useState("");
+  const [editMaterielProjet, setEditMaterielProjet] = useState("");
+  const [materielErr, setMaterielErr] = useState<string | null>(null);
+
+  function commencerEditionMateriel(m: Materiel) {
+    setEditingMaterielId(m.id); setEditMaterielNom(m.nom); setEditMaterielType(String(m.type)); setEditMaterielProjet(m.projet ? String(m.projet) : "");
+    setMaterielErr(null);
+  }
+
+  async function enregistrerEditionMateriel() {
+    if (editingMaterielId === null || !editMaterielNom.trim() || !editMaterielType) return;
+    setMaterielErr(null);
+    try {
+      await api.updateMateriel(editingMaterielId, {
+        nom: editMaterielNom.trim(), type: Number(editMaterielType), projet: editMaterielProjet ? Number(editMaterielProjet) : null,
+      });
+      setEditingMaterielId(null);
+      load();
+    } catch (e) {
+      setMaterielErr(api.errorMessage(e, "Modification impossible"));
+    }
+  }
+
+  async function supprimerMateriel(m: Materiel) {
+    setMaterielErr(null);
+    try {
+      await api.deleteMateriel(m.id);
+      load();
+    } catch (e) {
+      setMaterielErr(api.errorMessage(e, `Impossible de supprimer « ${m.nom} »`));
+    }
+  }
+
+  // Filtre par statut (nouveau BF) : "hors service" se lit sur la quantité —
+  // un matériel dont le stock est retombé à 0 (mouvement hors service/
+  // consommation) est archivé de fait, son historique reste intact. Ce
+  // filtre évite que ces lignes ne polluent la vue par défaut.
+  const [filtreStatut, setFiltreStatut] = useState<"" | "en_stock" | "hors_service">("");
+  const inventaireAffiche = inventaire.filter((m) => {
+    if (filtreStatut === "en_stock") return m.quantite > 0;
+    if (filtreStatut === "hors_service") return m.quantite === 0;
+    return true;
+  });
+
   return (
     <AppShell>
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Matériel</h2>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Types, inventaire et stock — le détail des mouvements est sur la page Mouvements</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Types, inventaire et stock. Le détail des mouvements est sur la page Mouvements</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 
@@ -180,8 +261,27 @@ export default function MaterielPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr]" style={{ gap: 16 }}>
             <div style={card}>
               <div style={sectionHead}>TYPES DE MATÉRIEL ({types.length})</div>
+              {typeErr && <div style={{ padding: "8px 14px", fontSize: 11, color: "var(--danger)" }}>{typeErr}</div>}
               {types.map((t) => (
-                <div key={t.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t.nom}</div>
+                <div key={t.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+                  {editingTypeId === t.id ? (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input style={{ ...inp, flex: 1 }} value={editTypeNom} onChange={(e) => setEditTypeNom(e.target.value)} />
+                      <button onClick={enregistrerEditionType} style={{ ...inp, background: "var(--accent)", color: "white", border: "none", cursor: "pointer" }}>OK</button>
+                      <button onClick={() => setEditingTypeId(null)} style={{ ...inp, cursor: "pointer" }}>Annuler</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t.nom}</span>
+                      {canWrite && (
+                        <>
+                          <button onClick={() => commencerEditionType(t)} title="Modifier" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><Pencil size={13} /></button>
+                          <button onClick={() => supprimerType(t)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }}><X size={13} /></button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
               {canWrite && (
                 <div style={{ display: "flex", gap: 6, padding: 12 }}>
@@ -226,17 +326,50 @@ export default function MaterielPage() {
               )}
 
               <div style={card}>
-                <div style={sectionHead}>INVENTAIRE ({inventaire.length})</div>
-                {inventaire.map((m) => (
-                  <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{m.nom}</span>
-                      <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 8 }}>{m.type_nom}{m.projet_nom ? ` · ${m.projet_nom}` : ""}</span>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{m.quantite}</span>
+                <div style={{ ...sectionHead, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>INVENTAIRE ({inventaireAffiche.length}{filtreStatut ? ` / ${inventaire.length}` : ""})</span>
+                  <select style={{ ...inp, fontSize: 11, padding: "4px 8px" }} value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value as typeof filtreStatut)}>
+                    <option value="">Tous les statuts</option>
+                    <option value="en_stock">En stock</option>
+                    <option value="hors_service">Hors service</option>
+                  </select>
+                </div>
+                {materielErr && <div style={{ padding: "8px 14px", fontSize: 11, color: "var(--danger)" }}>{materielErr}</div>}
+                {inventaireAffiche.map((m) => (
+                  <div key={m.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+                    {editingMaterielId === m.id ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input style={inp} value={editMaterielNom} onChange={(e) => setEditMaterielNom(e.target.value)} placeholder="Nom" />
+                        <select style={inp} value={editMaterielType} onChange={(e) => setEditMaterielType(e.target.value)}>
+                          {types.map((t) => <option key={t.id} value={t.id}>{t.nom}</option>)}
+                        </select>
+                        <select style={inp} value={editMaterielProjet} onChange={(e) => setEditMaterielProjet(e.target.value)}>
+                          <option value="">Aucun projet associé</option>
+                          {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                        </select>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={enregistrerEditionMateriel} style={{ ...inp, background: "var(--accent)", color: "white", border: "none", cursor: "pointer" }}>Enregistrer</button>
+                          <button onClick={() => setEditingMaterielId(null)} style={{ ...inp, cursor: "pointer" }}>Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{m.nom}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 8 }}>{m.type_nom}{m.projet_nom ? ` · ${m.projet_nom}` : ""}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{m.quantite}</span>
+                        {canWrite && (
+                          <>
+                            <button onClick={() => commencerEditionMateriel(m)} title="Modifier" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><Pencil size={13} /></button>
+                            <button onClick={() => supprimerMateriel(m)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }}><X size={13} /></button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
-                {inventaire.length === 0 && <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>Aucun matériel enregistré.</div>}
+                {inventaireAffiche.length === 0 && <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>{filtreStatut ? "Aucun matériel pour ce statut." : "Aucun matériel enregistré."}</div>}
               </div>
             </div>
           </div>

@@ -165,7 +165,7 @@ function FicheMembreModal({ membre, canSeeSalaire, canEditFiche, onClose }: { me
                     {contratActuel && remunerationActuelle ? (
                       <span style={{ fontSize: 13, color: "var(--text)" }}>
                         <strong>{remunerationActuelle.montant}</strong> / {PERIODICITE_LABEL[remunerationActuelle.periodicite] || remunerationActuelle.periodicite}
-                        <span style={{ color: "var(--text-3)", fontWeight: 400 }}> — {contratActuel.type_contrat_nom}</span>
+                        <span style={{ color: "var(--text-3)", fontWeight: 400 }}> · {contratActuel.type_contrat_nom}</span>
                       </span>
                     ) : (
                       <span style={{ fontSize: 12, color: "var(--text-3)" }}>Rémunération non renseignée.</span>
@@ -416,7 +416,7 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
                 </div>
 
                 {isSuperadminMember ? (
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--danger)", marginBottom: 10 }}>Superadmin — accès total</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--danger)", marginBottom: 10 }}>Superadmin : accès total</div>
                 ) : (
                   <>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 5 }}>RÔLES</div>

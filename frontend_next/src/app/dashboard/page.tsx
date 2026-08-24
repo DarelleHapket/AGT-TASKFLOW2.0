@@ -130,7 +130,7 @@ export default function DashboardPage() {
       {canSeeGlobalWidgets && canFinances && mouvementsRecents.length > 0 && (
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden", marginBottom: 16 }}>
           <div style={{ padding: "10px 14px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border)", fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em" }}>
-            FINANCES — MOUVEMENTS RÉCENTS
+            MOUVEMENTS FINANCIERS RÉCENTS
           </div>
           {mouvementsRecents.map((m) => (
             <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>

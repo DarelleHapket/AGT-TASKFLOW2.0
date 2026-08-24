@@ -48,7 +48,7 @@ export default function SignalementsPage() {
   return (
     <AppShell>
       <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>Signalements</h2>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Difficultés et différends remontés par l&apos;équipe — visible uniquement par Admin/Superadmin</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Difficultés et différends remontés par l&apos;équipe, visibles uniquement par Admin/Superadmin</p>
 
       {error && (error.startsWith("Permission requise") ? <AccessDenied code={error.replace("Permission requise : ", "")} /> : <p style={{ marginBottom: 12, fontSize: 12, color: "var(--danger)" }}>{error}</p>)}
 

@@ -1,186 +1,140 @@
-## 🤝 Conventions de travail à deux (poste A backend / poste B frontend)
+# ⚡ AGT ERP (ex-AGT TaskFlow)
 
-Fichiers partagés : `docs/ia/INDEX.md`, `docs/ia/TODO.md`, `frontend/src/api/client.js`.
+ERP interne AG Technologies : projets/activités/tâches avec Gantt et PERT (chemin
+critique), RH & profils, finances, matériel, rôles et permissions (RBAC + IBAC).
 
-**Règles pour éviter les conflits Git :**
-
-- `INDEX.md` : on n'AJOUTE qu'une ligne à la fin, on ne modifie JAMAIS une ligne existante.
-  Préfixe `A-` = backend, `B-` = frontend.
-- Toujours `git pull` avant d'ajouter sa ligne, et push juste après.
-- `client.js` (contrat API) est sous la responsabilité du poste B. Le poste A
-  ne le modifie pas : il signale tout changement d'endpoint dans son rapport de session.
-- Décisions `D-xx` : numérotées en continu, communes aux deux postes.
-- Chacun sur sa branche : `feat/backend-A`, `feat/frontend-B`. Merge dans `main` par PR.
-
-# ⚡ AGT TaskFlow
-
-Outil de gestion de tâches avec diagrammes Gantt et PERT, conçu pour des équipes projet travaillant sur plusieurs projets simultanément.
+Documentation complète : [`docs/GUIDE_PROJET.md`](docs/GUIDE_PROJET.md) (état du
+cahier des charges par module, accès, comptes de test) et
+[`docs/GUIDE_FONCTIONNEL.md`](docs/GUIDE_FONCTIONNEL.md) (comment utiliser chaque
+module). Ce README est un point d'entrée rapide, pas la référence complète.
 
 ---
 
 ## 📋 Fonctionnalités
 
-| Vue           | Description                                                                      |
-| ------------- | -------------------------------------------------------------------------------- |
-| **Tâches**    | Vue groupée Projet → Activité → Tâche. Chemin critique mis en évidence en rouge. |
-| **Gantt**     | Timeline en coupons, barres colorées par responsable, flèches de dépendances.    |
-| **PERT**      | Nœuds ES/EF/LS/LF avec calcul automatique du chemin critique.                    |
-| **Projets**   | CRUD complet des projets.                                                        |
-| **Activités** | CRUD complet des activités, rattachées à un projet.                              |
-| **Équipe**    | Ajout/retrait des membres de l'équipe.                                           |
+| Module | Description |
+| --- | --- |
+| **Tâches** | Vue Liste (groupée Projet → Activité) ou Tableau (kanban par membre). |
+| **Gantt / PERT** | Timeline en coupons + diagramme réseau (chemin critique, marges ES/EF/LS/LF), toggle entre les deux vues. |
+| **Projets / Activités** | CRUD complet, rôles par projet (owner/manager/contributor). |
+| **RH & Profils** | Employés, contrats, rémunérations, disponibilité, recrutement, formations, signalements, congés et notes de frais (espace salarié self-service). |
+| **Finances** | Mouvements immuables, lien automatique salaire → finances, bilan, prévisions, rapports PDF/TXT. |
+| **Matériel** | Types, inventaire, stock agrégé, mouvements (achat/affectation/retour/rebut). |
+| **Rôles & permissions** | Multi-rôle par utilisateur (RBAC), permissions accordées/retirées individuellement (IBAC), catalogue de rôles/permissions éditable. |
+| **Mon compte** | Nom affiché, couleur d'avatar, mot de passe, fiche de paie PDF, historique de carrière. |
 
 ---
 
-## 🚀 Lancement rapide (Docker — recommandé)
+## 🚀 Lancement (Docker)
 
 ### Prérequis
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installé et lancé
+- Docker + Docker Compose
+- Un fichier `.env.django` à la racine (copier `.env.django.example` et remplir
+  `SECRET_KEY`, `POSTGRES_PASSWORD`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`)
 
-### Étapes
+### Lancer
 
 ```bash
-# 1. Cloner / décompresser le projet
-cd agt-taskflow
-
-# 2. Lancer tout le stack en une commande
-docker compose up --build
-
-# 3. Ouvrir dans le navigateur
-# Frontend : http://localhost:4000
-# API      : http://localhost:4001/api/tasks/
-
-# 🌐 Accès depuis le réseau local (collègues sur le même WiFi) :
-# Trouve ton IP locale avec : ipconfig (Windows) ou ifconfig/ip a (Linux/Mac)
-# Exemple : http://192.168.1.42:4000
+docker compose -f docker-compose.django.yml --env-file .env.django -p agt-django up -d --build
 ```
+
+`-p agt-django` fixe le nom du projet Docker Compose — à toujours utiliser pour
+retomber sur la même stack/volume (sans lui, Compose dérive un nom du dossier
+courant et peut créer une base vide en double).
+
+- Application : http://localhost:4100
+- API + Swagger : http://localhost:8000/api/docs/
+
+### Reconstruire après une modification
+
+```bash
+# backend
+docker compose -f docker-compose.django.yml --env-file .env.django -p agt-django up -d --build api
+# frontend
+docker compose -f docker-compose.django.yml --env-file .env.django -p agt-django up -d --build web
+```
+
+Les migrations Django s'appliquent automatiquement au démarrage du conteneur `api`.
 
 ### Arrêter
 
 ```bash
-docker compose down
-```
-
-### Supprimer la base de données (reset complet)
-
-```bash
-docker compose down -v
+docker compose -f docker-compose.django.yml --env-file .env.django -p agt-django down
 ```
 
 ---
 
 ## 🛠 Développement local (sans Docker)
 
-### Backend (Flask)
-
 ```bash
-cd backend
+# Terminal 1 — API Django (nécessite Postgres accessible)
+cd backend_django
+python3 manage.py runserver 8000
 
-# Créer un environnement virtuel
-python -m venv .venv
-source .venv/bin/activate      # macOS/Linux
-.venv\Scripts\activate         # Windows
-
-# Installer les dépendances
-pip install -r requirements.txt
-
-# Lancer le serveur
-python app.py
-# → http://localhost:5000
-```
-
-### Frontend (React + Vite)
-
-```bash
-cd frontend
-
-# Installer les dépendances
-npm install
-
-# Lancer en mode dev (proxy vers backend local)
+# Terminal 2 — Frontend Next.js
+cd frontend_next
 npm run dev
-# → http://localhost:4000
 ```
-
-> En mode dev, le proxy Vite redirige `/api` vers `http://localhost:4001`.
 
 ---
 
 ## 🗂 Structure du projet
 
 ```
-agt-taskflow/
-├── docker-compose.yml
-├── backend/
-│   ├── app.py              # Point d'entrée Flask
-│   ├── database.py         # Init SQLite + helpers
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── routes/
-│       ├── tasks.py
-│       ├── projects.py
-│       ├── activities.py
-│       └── members.py
-└── frontend/
-    ├── Dockerfile
-    ├── nginx.conf
-    ├── package.json
-    ├── vite.config.js
+AGT-TASKFLOW2.0/
+├── docker-compose.django.yml
+├── .env.django
+├── backend_django/
+│   ├── config/              # settings, urls racine
+│   ├── authentification/    # Utilisateur, Role, Permission, RBAC+IBAC
+│   ├── projets/             # Projets, Activités, Tâches, PERT
+│   ├── rh/                  # Profils, employés, contrats, congés, notes de frais…
+│   ├── finances/            # Mouvements, bilan, prévisions, rapports
+│   ├── materiel/            # Types, inventaire, mouvements
+│   ├── notifications/
+│   ├── operations/          # Besoins, notes, ordre journalier
+│   ├── pilotage_stage/      # Suivi interne du stage (ex-team-tool)
+│   └── administration/      # Sauvegardes BD
+└── frontend_next/
     └── src/
-        ├── App.jsx             # Shell principal
-        ├── main.jsx
-        ├── index.css           # Thème clair (variables CSS)
-        ├── api/client.js       # Toutes les requêtes API
-        ├── hooks/useData.js    # État global
-        ├── utils/pert.js       # Calcul PERT
-        └── components/
-            ├── shared/         # Badges, FilterBar
-            ├── tasks/          # TasksView, TaskModal
-            ├── gantt/          # GanttView
-            ├── pert/           # PERTView
-            ├── projects/       # ProjectsView
-            ├── activities/     # ActivitiesView
-            └── team/           # TeamView
+        ├── app/              # Routes Next.js (App Router)
+        ├── components/       # Vues par module
+        └── lib/              # api.ts (client HTTP), auth.tsx, pert.ts, types.ts
 ```
 
 ---
 
-## 📡 API REST
+## 📡 API
 
-| Méthode | Endpoint               | Description             |
-| ------- | ---------------------- | ----------------------- |
-| GET     | `/api/tasks/`          | Liste toutes les tâches |
-| POST    | `/api/tasks/`          | Créer une tâche         |
-| PUT     | `/api/tasks/<id>`      | Modifier une tâche      |
-| DELETE  | `/api/tasks/<id>`      | Supprimer une tâche     |
-| GET     | `/api/projects/`       | Liste des projets       |
-| POST    | `/api/projects/`       | Créer un projet         |
-| PUT     | `/api/projects/<id>`   | Modifier un projet      |
-| DELETE  | `/api/projects/<id>`   | Supprimer un projet     |
-| GET     | `/api/activities/`     | Liste des activités     |
-| POST    | `/api/activities/`     | Créer une activité      |
-| PUT     | `/api/activities/<id>` | Modifier une activité   |
-| DELETE  | `/api/activities/<id>` | Supprimer une activité  |
-| GET     | `/api/members/`        | Liste des membres       |
-| POST    | `/api/members/`        | Ajouter un membre       |
-| DELETE  | `/api/members/<id>`    | Retirer un membre       |
+Toute l'API REST (Django REST Framework) est documentée automatiquement via
+Swagger/Redoc — pas de table d'endpoints maintenue à la main ici :
 
----
-
-## 💡 Workflow quotidien suggéré
-
-1. **Matin** : ouvrir l'onglet **PERT** filtré par projet
-2. Identifier les tâches critiques (marge = 0, bordure rouge)
-3. Assigner via le formulaire en fonction des disponibilités
-4. **Gantt** se met à jour automatiquement
-5. En cours de journée : mettre à jour les statuts directement dans la vue **Tâches**
+| Lien | Contenu |
+| --- | --- |
+| `/api/docs/` | Swagger UI interactif |
+| `/api/redoc/` | Redoc, lecture seule |
+| `/api/schema/` | Schéma OpenAPI brut (JSON) |
 
 ---
 
 ## 🔧 Configuration
 
-| Variable  | Défaut        | Description              |
-| --------- | ------------- | ------------------------ |
-| `DB_PATH` | `taskflow.db` | Chemin de la base SQLite |
+Variables d'environnement dans `.env.django` (voir `.env.django.example`) :
+`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD`,
+`SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` (compte superadmin auto-créé au premier
+démarrage), `BACKUP_DIR`.
 
-Modifiable dans `docker-compose.yml` sous `environment`.
+---
+
+## 📚 Pour aller plus loin
+
+- [`docs/GUIDE_PROJET.md`](docs/GUIDE_PROJET.md) — état du cahier des charges par
+  module, comptes de test, dernier tour de travail.
+- [`docs/GUIDE_FONCTIONNEL.md`](docs/GUIDE_FONCTIONNEL.md) — comment utiliser
+  chaque module, réponses aux questions fréquentes.
+- [`docs/BASCULE_PRODUCTION.md`](docs/BASCULE_PRODUCTION.md) — runbook de mise en
+  production.
+- `documents/` — cahier des charges global (PDF) + documents d'analyse et de
+  conception par module (les `.md` corrigent/complètent les PDF correspondants,
+  ils font foi en cas de divergence).

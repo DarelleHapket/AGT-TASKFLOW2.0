@@ -12,6 +12,8 @@ env/
 .mypy_cache/
 instance/
 .env
+.env.django
+db.sqlite3
 
 # --- React / Vite / Node ---
 node_modules/
@@ -19,6 +21,7 @@ dist/
 dist-ssr/
 *.local
 .vite/
+rapport_agt_taskflow_*
 
 # --- Éditeurs / OS ---
 .vscode/

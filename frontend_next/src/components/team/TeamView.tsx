@@ -6,7 +6,7 @@
 // nouvel endpoint GET /membres/deleted (authentification/views.py), qui
 // n'existait pas dans une première passe de migration.
 import { useEffect, useState } from "react";
-import { Check, X, Clock, AlertTriangle, BadgeCheck, Wallet, Pencil } from "lucide-react";
+import { Check, X, Clock, AlertTriangle, BadgeCheck, Wallet, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import * as api from "@/lib/api";
 import { ConfirmDialog, type ConfirmData } from "@/components/ui/ConfirmDialog";
 import { MODULE_LABELS, ROLE_COLORS, ROLE_LABELS } from "@/components/rbac/RBACView";
@@ -251,6 +251,7 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
   const [err, setErr] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmData | null>(null);
   const [permDetail, setPermDetail] = useState<Record<number, PermissionDetail[]>>({});
+  const [expandedPermsId, setExpandedPermsId] = useState<number | null>(null);
   const [deleted, setDeleted] = useState<Utilisateur[]>([]);
   const [showAllDeleted, setShowAllDeleted] = useState(false);
   const [fiche, setFiche] = useState<Utilisateur | null>(null);
@@ -439,46 +440,56 @@ export function TeamView({ members, roles = [], permissions = [], onDelete, onTo
                     </div>
 
                     {isSuperadmin && (
-                      <>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em", marginBottom: 5 }}>PERMISSIONS DIRECTES</div>
-                        {!detail ? (
-                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>Chargement…</span>
-                        ) : permissions.length === 0 ? (
-                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>Aucune permission dans le catalogue.</span>
-                        ) : (
-                          // Regroupées par module (référentiel déjà trié module→code
-                          // côté backend) pour la lisibilité — sinon 20+ badges en vrac.
-                          Object.entries(
-                            permissions.reduce<Record<string, Permission[]>>((acc, p) => {
-                              (acc[p.module] = acc[p.module] || []).push(p);
-                              return acc;
-                            }, {})
-                          ).map(([module, modulePerms]) => (
-                            <div key={module} style={{ marginBottom: 6 }}>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", marginBottom: 3 }}>
-                                {MODULE_LABELS[module] || module}
-                              </div>
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                {modulePerms.map((p) => {
-                                  const pd = detail.find((x) => x.code === p.code);
-                                  const granted = !!pd?.granted;
-                                  return (
-                                    <button key={p.code} disabled={busy} onClick={() => handleTogglePermission(m, p.code, granted)} title={p.description}
-                                      style={{
-                                        fontSize: 10.5, fontWeight: granted ? 700 : 400, padding: "3px 10px", borderRadius: 20, cursor: busy ? "not-allowed" : "pointer",
-                                        border: `1px solid ${granted ? "var(--accent)" : "var(--border)"}`,
-                                        background: granted ? "var(--accent)" : "transparent",
-                                        color: granted ? "white" : "var(--text-3)",
-                                      }}>
-                                      {p.code}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))
+                      <div style={{ marginBottom: 10 }}>
+                        <button
+                          onClick={() => setExpandedPermsId((v) => (v === m.id ? null : m.id))}
+                          style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 10, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".05em" }}
+                        >
+                          {expandedPermsId === m.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                          PERMISSIONS DIRECTES{detail ? ` (${detail.filter((d) => d.granted).length})` : ""}
+                        </button>
+                        {expandedPermsId === m.id && (
+                          <div style={{ marginTop: 6 }}>
+                            {!detail ? (
+                              <span style={{ fontSize: 11, color: "var(--text-3)" }}>Chargement…</span>
+                            ) : permissions.length === 0 ? (
+                              <span style={{ fontSize: 11, color: "var(--text-3)" }}>Aucune permission dans le catalogue.</span>
+                            ) : (
+                              // Regroupées par module (référentiel déjà trié module→code
+                              // côté backend) pour la lisibilité — sinon 20+ badges en vrac.
+                              Object.entries(
+                                permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+                                  (acc[p.module] = acc[p.module] || []).push(p);
+                                  return acc;
+                                }, {})
+                              ).map(([module, modulePerms]) => (
+                                <div key={module} style={{ marginBottom: 6 }}>
+                                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", marginBottom: 3 }}>
+                                    {MODULE_LABELS[module] || module}
+                                  </div>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                    {modulePerms.map((p) => {
+                                      const pd = detail.find((x) => x.code === p.code);
+                                      const granted = !!pd?.granted;
+                                      return (
+                                        <button key={p.code} disabled={busy} onClick={() => handleTogglePermission(m, p.code, granted)} title={p.description}
+                                          style={{
+                                            fontSize: 10.5, fontWeight: granted ? 700 : 400, padding: "3px 10px", borderRadius: 20, cursor: busy ? "not-allowed" : "pointer",
+                                            border: `1px solid ${granted ? "var(--accent)" : "var(--border)"}`,
+                                            background: granted ? "var(--accent)" : "transparent",
+                                            color: granted ? "white" : "var(--text-3)",
+                                          }}>
+                                          {p.code}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         )}
-                      </>
+                      </div>
                     )}
                   </>
                 )}

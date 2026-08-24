@@ -34,22 +34,22 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
             <div style={{ width: 44, height: 44, borderRadius: 14, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 28px rgba(99,102,241,0.35)" }}>
               <Zap size={22} color="white" fill="white" />
             </div>
-            <span style={{ fontSize: 18, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>AGT TaskFlow</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>AGT ERP</span>
           </div>
 
           <h1 style={{ fontSize: 52, fontWeight: 800, color: NAVY, lineHeight: 1.1, letterSpacing: "-0.03em", margin: "0 0 20px" }}>
-            Pilotez vos<br />
-            <span style={{ background: "linear-gradient(90deg, #6366f1, #00B4C8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>projets</span>{" "}avec<br />précision.
+            Pilotez votre<br />
+            <span style={{ background: "linear-gradient(90deg, #6366f1, #00B4C8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>entreprise</span>{" "}avec<br />précision.
           </h1>
 
           <p style={{ fontSize: 16, color: SLATE, lineHeight: 1.7, maxWidth: 380, margin: 0 }}>
-            Outil de pilotage interne d&apos;AG Technologies. Tâches, Gantt, PERT et performances en temps réel.
+            ERP interne d&apos;AG Technologies : projets, RH, finances et matériel, centralisés en un seul endroit.
           </p>
 
           <div style={{ display: "flex", gap: 40, marginTop: 56 }}>
             {[
               { val: "100%", label: "Usage interne" },
-              { val: "3h", label: "Par coupon" },
+              { val: "24/7", label: "Disponible" },
               { val: "∞", label: "Productivité" },
             ].map(({ val, label }) => (
               <div key={label}>

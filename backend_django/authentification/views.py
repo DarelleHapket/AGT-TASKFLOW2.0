@@ -8,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from notifications.services import notify
 
-from .models import Permission, PermissionEffective, Role, StatutCompte, User
+from .models import AttributionRole, Permission, PermissionEffective, Role, StatutCompte, User
 from .serializers import PermissionSerializer, RegisterSerializer, RoleSerializer, UserSerializer
 from .services import HasPerm, IsSuperadmin, assign_role, grant_permission, revoke_permission, revoke_role
 
@@ -197,6 +197,11 @@ def assign_member_role(request, pk):
     role_code = request.data.get("role")
     if not Role.objects.filter(code=role_code).exists():
         return Response({"error": "Rôle inconnu"}, status=status.HTTP_400_BAD_REQUEST)
+    # Le rôle "admin" est unique, comme "superadmin" — un seul titulaire à la
+    # fois (décision produit du 2026-08-24, uniquement pour ce rôle précis :
+    # les autres rôles personnalisés restent cumulables sans limite).
+    if role_code == "admin" and AttributionRole.objects.filter(role__code="admin").exclude(user=target).exists():
+        return Response({"error": "Le rôle « admin » ne peut être attribué qu'à une seule personne à la fois."}, status=status.HTTP_400_BAD_REQUEST)
     assign_role(target, role_code, assigned_by=request.user)
     return Response(UserSerializer(target).data, status=status.HTTP_201_CREATED)
 

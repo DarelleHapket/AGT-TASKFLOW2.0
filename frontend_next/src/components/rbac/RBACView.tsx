@@ -9,7 +9,7 @@
 // Membres), adapté au modèle IBAC plus riche d'AGT (un retrait direct prime
 // toujours sur un rôle qui accorderait la même permission).
 import { Fragment, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import * as api from "@/lib/api";
 import type { Permission, PermissionDetail, Role, Utilisateur } from "@/lib/types";
 
@@ -26,6 +26,8 @@ function RoleCatalog({ roles, permissions, onReload }: { roles: Role[]; permissi
   const [newRole, setNewRole] = useState("");
   const [newPerm, setNewPerm] = useState({ verbe: "", ressource: "" });
   const [error, setError] = useState<string | null>(null);
+  const [expandedRoleId, setExpandedRoleId] = useState<number | null>(null);
+  const [expandedPermModule, setExpandedPermModule] = useState<string | null>(null);
 
   async function creerRole() {
     if (!newRole.trim()) return;
@@ -78,23 +80,49 @@ function RoleCatalog({ roles, permissions, onReload }: { roles: Role[]; permissi
                     <button onClick={() => supprimerRole(r)} title="Supprimer ce rôle" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><X size={14} /></button>
                   )}
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {permissions.map((p) => {
-                    const active = r.permissions.some((x) => x.id === p.id);
-                    return (
-                      <button key={p.id} onClick={() => basculerPermRole(r, p.id)} title={p.description}
-                        style={{
-                          fontSize: 11, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
-                          border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                          background: active ? "var(--accent)" : "transparent",
-                          color: active ? "white" : "var(--text-3)", fontWeight: active ? 700 : 400,
-                        }}>
-                        {p.code}
-                      </button>
-                    );
-                  })}
-                  {permissions.length === 0 && <span style={{ fontSize: 11, color: "var(--text-3)" }}>Aucune permission dans le catalogue.</span>}
-                </div>
+                <button
+                  onClick={() => setExpandedRoleId((v) => (v === r.id ? null : r.id))}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}
+                >
+                  {expandedRoleId === r.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  {r.permissions.length} permission{r.permissions.length !== 1 ? "s" : ""}
+                </button>
+                {expandedRoleId === r.id && (
+                  <div style={{ marginTop: 8 }}>
+                    {permissions.length === 0 ? (
+                      <span style={{ fontSize: 11, color: "var(--text-3)" }}>Aucune permission dans le catalogue.</span>
+                    ) : (
+                      Object.entries(
+                        permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+                          (acc[p.module] = acc[p.module] || []).push(p);
+                          return acc;
+                        }, {})
+                      ).map(([module, modulePerms]) => (
+                        <div key={module} style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", marginBottom: 4 }}>
+                            {MODULE_LABELS[module] || module}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {modulePerms.map((p) => {
+                              const active = r.permissions.some((x) => x.id === p.id);
+                              return (
+                                <button key={p.id} onClick={() => basculerPermRole(r, p.id)} title={p.description}
+                                  style={{
+                                    fontSize: 11, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
+                                    border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                                    background: active ? "var(--accent)" : "transparent",
+                                    color: active ? "white" : "var(--text-3)", fontWeight: active ? 700 : 400,
+                                  }}>
+                                  {p.code}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -107,10 +135,30 @@ function RoleCatalog({ roles, permissions, onReload }: { roles: Role[]; permissi
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", margin: "0 0 8px" }}>Permissions (catalogue)</h3>
           <div style={{ ...rbacCard, padding: 12 }}>
-            {permissions.map((p) => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
-                <span style={{ color: "var(--text)" }}>{p.code} <span style={{ color: "var(--text-3)" }}>({p.module})</span></span>
-                <button onClick={() => supprimerPermission(p)} title="Supprimer cette permission" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><X size={13} /></button>
+            {Object.entries(
+              permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+                (acc[p.module] = acc[p.module] || []).push(p);
+                return acc;
+              }, {})
+            ).map(([module, modulePerms]) => (
+              <div key={module} style={{ borderBottom: "1px solid var(--border)" }}>
+                <button
+                  onClick={() => setExpandedPermModule((v) => (v === module ? null : module))}
+                  style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", background: "none", border: "none", cursor: "pointer", padding: "8px 0", fontSize: 12, fontWeight: 700, color: "var(--text)", textAlign: "left" }}
+                >
+                  {expandedPermModule === module ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  {MODULE_LABELS[module] || module} ({modulePerms.length})
+                </button>
+                {expandedPermModule === module && (
+                  <div style={{ paddingBottom: 6 }}>
+                    {modulePerms.map((p) => (
+                      <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0 6px 16px", fontSize: 12 }}>
+                        <span style={{ color: "var(--text)" }}>{p.code}</span>
+                        <button onClick={() => supprimerPermission(p)} title="Supprimer cette permission" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}><X size={13} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {permissions.length === 0 && <p style={{ fontSize: 12, color: "var(--text-3)" }}>Aucune permission.</p>}
@@ -235,10 +283,15 @@ export function RBACView({ members, roles, permissions, onReload }: {
               const isSuperadminMember = memberRoles.includes("superadmin");
               // Catalogue réduit à 2 rôles par défaut (superadmin + user,
               // 2026-08-19) — superadmin a déjà un accès total, jamais
-              // proposable en plus. Tout autre rôle listé ici est un rôle
-              // personnalisé créé par le Superadmin, sans contrainte
-              // d'unicité particulière.
-              const availableToAdd = roles.filter((r) => !memberRoles.includes(r.code) && r.code !== "superadmin");
+              // proposable en plus. Tout autre rôle personnalisé reste
+              // cumulable sans limite, SAUF "admin" : rôle unique décidé le
+              // 2026-08-24 (comme superadmin, un seul titulaire à la fois) —
+              // retiré du menu pour tout membre qui ne l'a pas déjà tant
+              // qu'un autre le porte (le backend refuse aussi, en filet).
+              const adminDejaAttribue = members.some((x) => x.id !== m.id && x.roles.includes("admin"));
+              const availableToAdd = roles.filter((r) =>
+                !memberRoles.includes(r.code) && r.code !== "superadmin" && !(r.code === "admin" && adminDejaAttribue)
+              );
               const memberDetail = detail[m.id];
               const permsByModule = (memberDetail || []).reduce<Record<string, PermissionDetail[]>>((acc, p) => {
                 (acc[p.module] = acc[p.module] || []).push(p);

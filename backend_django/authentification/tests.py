@@ -137,6 +137,49 @@ class MembresApiTests(TestCase):
         self.assertTrue(chef.peut("projets.write"))
 
 
+class RoleAdminUniqueTests(TestCase):
+    """Décision produit du 2026-08-24 : le rôle "admin" (personnalisé, créé
+    via /rbac) est unique, un seul titulaire à la fois — comme "superadmin",
+    mais uniquement pour ce rôle précis, pas les autres rôles personnalisés."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.superadmin = User.objects.create(username="rootadmin", is_superuser=True)
+        self.client.force_authenticate(self.superadmin)
+        Role.objects.create(code="admin")
+        self.premier = User.objects.create(username="premieradmin", statut=StatutCompte.ACTIF, is_active=True)
+        assign_role(self.premier, "user")
+        assign_role(self.premier, "admin")
+        self.second = User.objects.create(username="secondadmin", statut=StatutCompte.ACTIF, is_active=True)
+        assign_role(self.second, "user")
+
+    def test_attribution_admin_a_un_deuxieme_titulaire_refusee(self):
+        r = self.client.post(f"/api/rbac/membres/{self.second.id}/roles", {"role": "admin"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.second.refresh_from_db()
+        self.assertNotIn("admin", self.second.roles_codes())
+
+    def test_reattribution_au_meme_titulaire_ne_pose_pas_probleme(self):
+        """Idempotence : réattribuer "admin" à celui qui l'a déjà ne doit pas
+        être bloqué par la contrainte d'unicité."""
+        r = self.client.post(f"/api/rbac/membres/{self.premier.id}/roles", {"role": "admin"}, format="json")
+        self.assertEqual(r.status_code, 201)
+
+    def test_apres_retrait_admin_redevient_attribuable(self):
+        revoke_role(self.premier, "admin")
+        r = self.client.post(f"/api/rbac/membres/{self.second.id}/roles", {"role": "admin"}, format="json")
+        self.assertEqual(r.status_code, 201, r.data)
+        self.second.refresh_from_db()
+        self.assertIn("admin", self.second.roles_codes())
+
+    def test_autres_roles_personnalises_restent_cumulables(self):
+        Role.objects.create(code="comptable")
+        r1 = self.client.post(f"/api/rbac/membres/{self.premier.id}/roles", {"role": "comptable"}, format="json")
+        r2 = self.client.post(f"/api/rbac/membres/{self.second.id}/roles", {"role": "comptable"}, format="json")
+        self.assertEqual(r1.status_code, 201)
+        self.assertEqual(r2.status_code, 201)
+
+
 class DeletedMembersHistoryTests(TestCase):
     """Historique des comptes supprimés (A-08, Flask) — port de GET /members/deleted,
     manquant lors de la première migration (TeamView.jsx en avait besoin pour sa
